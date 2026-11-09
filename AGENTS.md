@@ -35,3 +35,20 @@ Core expectations:
 These shared skill instructions supplement project-specific rules in this `AGENTS.md`; keep more specific project rules authoritative for this repository.
 
 <!-- ant-ready-start-skills:end -->
+
+## Fork 开发、上游同步与发布规则
+
+本节适用于整个仓库，放在共享规则自动生成区域之外。后续同步上游时保留本节，并按需要整合上游规则。
+
+- `origin` 是本项目 `zuchengchen/Ant-Browser`，`upstream` 是 `https://github.com/black-ant/Ant-Browser.git`。`master` 是包含上游代码和本项目定制功能的产品主线；默认推送到 `origin`，不向 `upstream` 推送。
+- 日常独立开发和上游同步都不要求创建 PR，不增加同步 PR 或强制 PR 审批流程。提交、推送与发布仍按用户当前任务的授权范围执行。
+- 上游同步入口为 `bash scripts/sync-upstream.sh`，只查看更新用 `--check`；按正式版本同步用 `--ref refs/tags/<上游标签>` 或完整提交 SHA。默认目标为上游 `master`，优先按上游正式版本安排同步。
+- 合并前必须处于干净的 `master`，没有未完成的 merge/rebase/cherry-pick，且已包含 `origin/master`。脚本使用 `merge --no-ff --no-commit`，不自动提交、推送、发布或创建 PR。
+- 保留完整的上游合并历史和本项目定制；不通过 reset、强推、squash、重写已共享主线历史或整批选择 ours/theirs 来完成同步。冲突逐项处理，无法确认语义时保留现场并说明问题。
+- 合并提交保留脚本生成的 `Upstream-Repository`、`Upstream-Ref`、`Upstream-Commit` 信息。检查变更、解决冲突并通过适用的 Go 测试和前端构建后，用 `git commit --no-edit` 完成合并，再按任务授权 `git push origin master`。无新提交时不制造空同步提交。
+- 每次同步检查本项目维护的差异：本节规则、同步脚本、更新源、发布标签及解析、发布仓库参数，以及既有两套代理连接栈约束。涉及代理路径的变更不得引入跨栈自动回退。
+- 上游 fetch 默认使用 `--no-tags`。需要某个上游标签时仅显式获取该 ref；不把上游标签批量复制到本项目，不使用 `git push --tags` 或 `git push --mirror` 做同步。
+- 本项目更新源和产品链接指向 `zuchengchen/Ant-Browser`。自有发布标签使用 `czc-vX.Y.Z`，只发布明确选定的标签；不覆盖已经发布的标签。包内版本为数字 `X.Y.Z`，必须与 `wails.json`、`frontend/package.json`、`frontend/package-lock.json` 的根版本及根 package 版本一致。
+- 上游基线与本项目发行版本分别记录；同一上游基线需要再次发布时递增本项目版本，并在发行说明注明上游版本/提交。合并上游不自动打标签或发布。
+- 本项目直接从已验证的主线提交构建发行包。`tools/public-release/` 是上游遗留快照工具，不作为本 fork 的常规同步或发布入口，避免聚合快照取代真实的合并历史。
+- 详细操作及验证命令见 `docs/upstream-sync.md`。新增开发保持提交边界清晰，优先用独立模块和少量接入点承载定制，减少后续上游合并冲突。

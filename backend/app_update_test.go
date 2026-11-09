@@ -10,7 +10,7 @@ import (
 func TestCheckForUpdatesDetectsNewRelease(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.Header().Set("Content-Type", "application/json")
-		_, _ = writer.Write([]byte(`{"tag_name":"v1.9.0","html_url":"https://example.com/release"}`))
+		_, _ = writer.Write([]byte(`{"tag_name":"czc-v1.9.0","html_url":"https://example.com/release"}`))
 	}))
 	defer server.Close()
 
@@ -99,6 +99,8 @@ func TestCompareUpdateVersionsHandlesPrerelease(t *testing.T) {
 		{left: "1.8.0-beta.1", right: "1.8.0", want: -1},
 		{left: "1.8.0", right: "1.8.1", want: -1},
 		{left: "1.9.0", right: "1.8.1", want: 1},
+		{left: "1.9.0", right: "czc-v1.9.0", want: 0},
+		{left: "1.9.0", right: "czc-v1.9.1", want: -1},
 	}
 
 	for _, item := range cases {

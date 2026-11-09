@@ -4,14 +4,12 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: Optional package version override, for example 1.9.0
+        description: Optional expected version; must match committed metadata, for example 1.9.0
         required: false
         type: string
   push:
     tags:
-      - "v*"
-      - "V*"
-      - "[0-9]*"
+      - "czc-v*"
 
 permissions:
   contents: write
@@ -42,6 +40,11 @@ jobs:
         with:
           go-version-file: go.mod
 
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
@@ -58,19 +61,11 @@ jobs:
       - name: Resolve package version
         id: version
         shell: bash
+        env:
+          EXPECTED_VERSION: ${{ inputs.version }}
         run: |
           set -euo pipefail
-          version="${{ inputs.version }}"
-          if [[ -z "$version" && "$GITHUB_REF_NAME" =~ ^[vV]?([0-9]+\.[0-9]+\.[0-9]+) ]]; then
-            version="${BASH_REMATCH[1]}"
-          fi
-          if [[ -z "$version" ]]; then
-            version="$(node -p "require('./wails.json').info.productVersion" 2>/dev/null || true)"
-          fi
-          if [[ -z "$version" ]]; then
-            echo "::error::无法从 ref '$GITHUB_REF_NAME' 解析版本号，请在 workflow_dispatch 中显式传 version"
-            exit 1
-          fi
+          version="$(python scripts/resolve-release-version.py --ref-type "$GITHUB_REF_TYPE" --ref-name "$GITHUB_REF_NAME" --version "$EXPECTED_VERSION")"
           echo "value=$version" >> "$GITHUB_OUTPUT"
           echo "package version: $version"
 
@@ -109,7 +104,7 @@ jobs:
 
   release:
     name: Publish GitHub Release
-    if: startsWith(github.ref, 'refs/tags/')
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/czc-v')
     needs: build
     runs-on: ubuntu-24.04
 
@@ -123,6 +118,7 @@ jobs:
       - name: Upload release assets
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
           TAG_NAME: ${{ github.ref_name }}
         run: |
           set -euo pipefail

@@ -1,5 +1,7 @@
 Public release tools.
 
+本目录保留上游的聚合快照工具，不用于本 fork 的常规同步或发布。请使用 [Fork 开发与上游同步](../../docs/upstream-sync.md) 中的本地 merge 和 `czc-vX.Y.Z` 标签发布流程，以保留完整提交历史。
+
 - `publish-public.bat`: one-click publish to public `master`
 - `publish-public.ps1`: manual entrypoint
 

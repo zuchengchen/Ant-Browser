@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	latestReleaseAPIURL = "https://api.github.com/repos/black-ant/Ant-Browser/releases/latest"
+	latestReleaseAPIURL = "https://api.github.com/repos/zuchengchen/Ant-Browser/releases/latest"
 	updateCheckTimeout  = 5 * time.Second
 )
 
@@ -26,8 +26,8 @@ type updateCheckResult struct {
 }
 
 type githubLatestRelease struct {
-	TagName     string `json:"tag_name"`
-	HTMLURL     string `json:"html_url"`
+	TagName string `json:"tag_name"`
+	HTMLURL string `json:"html_url"`
 }
 
 // CheckForUpdates 检查 GitHub Releases 中的最新稳定版本。
@@ -99,6 +99,7 @@ func checkForUpdates(ctx context.Context, currentVersion string, endpoint string
 
 func normalizeUpdateVersion(value string) string {
 	version := strings.TrimSpace(value)
+	version = strings.TrimPrefix(version, "czc-")
 	version = strings.TrimPrefix(version, "v")
 	version = strings.TrimPrefix(version, "V")
 	if metadataIndex := strings.Index(version, "+"); metadataIndex >= 0 {

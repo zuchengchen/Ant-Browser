@@ -60,6 +60,7 @@ publish/output/
 # Internal docs / scratch files
 docs/*
 !docs/feature-difference-approval.md
+!docs/upstream-sync.md
 DEPLOYMENT_GUIDE.md
 plan.md
 pic/

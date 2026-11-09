@@ -2,9 +2,11 @@
 
 > 面向多账号隔离、代理绑定和本地环境管理的桌面浏览器工具（Windows / Linux / macOS unsigned）。
 
-[![Release](https://img.shields.io/github/v/release/black-ant/Ant-Browser?sort=semver)](https://github.com/black-ant/Ant-Browser/releases)
-[![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20macOS-blue)](https://github.com/black-ant/Ant-Browser/releases)
-[![Issues](https://img.shields.io/github/issues/black-ant/Ant-Browser)](https://github.com/black-ant/Ant-Browser/issues)
+[![Release](https://img.shields.io/github/v/release/zuchengchen/Ant-Browser)](https://github.com/zuchengchen/Ant-Browser/releases)
+[![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20macOS-blue)](https://github.com/zuchengchen/Ant-Browser/releases)
+[![Issues](https://img.shields.io/github/issues/zuchengchen/Ant-Browser)](https://github.com/zuchengchen/Ant-Browser/issues)
+
+本仓库是 [black-ant/Ant-Browser](https://github.com/black-ant/Ant-Browser) 的独立维护分支，在自己的 `master` 上开发并通过本地 merge 同步上游，不需要同步 PR。更新源与发行包使用本仓库，自有发布标签为 `czc-vX.Y.Z`。操作说明见 [Fork 开发与上游同步](docs/upstream-sync.md)。
 
 当前版本：`1.9.0` · 2026-10-14
 
@@ -196,6 +198,8 @@ Ant Browser 适合以下场景：
 
 ## Star History
 
+以下展示上游项目的 Star History。
+
 <a href="https://www.star-history.com/?repos=black-ant%2Fant-browser&type=date&legend=top-left">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=black-ant/ant-browser&type=date&theme=dark&legend=top-left" />
@@ -217,7 +221,7 @@ Ant Browser 适合以下场景：
 
 ### 下载与运行
 
-1. 前往 Releases 页面下载最新版本：<https://github.com/black-ant/Ant-Browser/releases>
+1. 前往本项目 Releases 页面下载最新版本：<https://github.com/zuchengchen/Ant-Browser/releases>
 2. 安装版直接运行 `AntBrowser-Setup-*.exe`
 3. 便携版解压后运行 `ant-chrome.exe`
 4. Linux 包下载后可直接安装 `ant-browser_<version>_<arch>.deb`，或解压 `tar.gz` 后运行 `ant-chrome`
@@ -408,16 +412,17 @@ Windows 升级或卸载旧版本时，安装器会先将旧安装目录中的 `b
 
 ## 开发与发布文档
 
+- Fork 开发、上游同步与独立发布：[`docs/upstream-sync.md`](docs/upstream-sync.md)
 - Windows 开发与发布：[`bat/README.md`](bat/README.md)
 - Linux 打包：[`publish/linux/README.md`](publish/linux/README.md)
 - macOS unsigned 打包：[`publish/mac/README.md`](publish/mac/README.md)
-- 公共发布快照：[`tools/public-release/README.md`](tools/public-release/README.md)
+- 上游遗留公共快照工具（不用于本 fork 常规发布）：[`tools/public-release/README.md`](tools/public-release/README.md)
 - 代理协议与连接栈：[`docs/audits/vpn-protocol-audit-report.md`](docs/audits/vpn-protocol-audit-report.md)
 
 ## 支持与反馈
 
-- Releases：<https://github.com/black-ant/Ant-Browser/releases>
-- Issues：<https://github.com/black-ant/Ant-Browser/issues>
+- Releases：<https://github.com/zuchengchen/Ant-Browser/releases>
+- Issues：<https://github.com/zuchengchen/Ant-Browser/issues>
 - 感谢以下社区的支持：<https://linux.do/>
 
 ## License
