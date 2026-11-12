@@ -7,12 +7,12 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"ant-chrome/backend/internal/config"
+	"ant-chrome/backend/internal/testutil"
 )
 
 func loadRealProxyYAMLSamples(t *testing.T) []string {
@@ -30,15 +30,10 @@ func loadRealProxyYAMLSamples(t *testing.T) []string {
 
 func newXrayManagerForTest(t *testing.T) *XrayManager {
 	t.Helper()
-	abs, err := filepath.Abs(filepath.Join("..", "..", "..", "bin", "xray.exe"))
-	if err != nil {
-		t.Fatalf("resolve xray path: %v", err)
-	}
-	if _, err := os.Stat(abs); err != nil {
-		t.Skipf("本机无 xray.exe（%s），跳过真实内核端到端", abs)
-	}
-	t.Setenv("XRAY_BINARY_PATH", abs)
-	return NewXrayManager(config.DefaultConfig(), t.TempDir())
+	t.Setenv("XRAY_BINARY_PATH", testutil.CopyBundledRuntime(t, "xray"))
+	manager := NewXrayManager(config.DefaultConfig(), t.TempDir())
+	t.Cleanup(manager.StopAll)
+	return manager
 }
 
 func newSpeedTestTargetForTest(t *testing.T) *SpeedTestConfig {
@@ -136,6 +131,7 @@ func TestRepairHandlesZeroIndentFields(t *testing.T) {
 		t.Fatal("应生成出站配置")
 	}
 }
+
 // 端到端（真实内核）：畸形节点修复后应真实启动 xray 桥接（而非卡在 yaml 解析），
 // 合法节点（js-yaml 真实形态）同样应正常进入桥接启动环节。
 func TestEndToEndMalformedNodeStartsRealBridge(t *testing.T) {
@@ -151,11 +147,21 @@ func TestEndToEndMalformedNodeStartsRealBridge(t *testing.T) {
 	for name, src := range map[string]string{"畸形修复后": malformed, "合法真实形态": legal} {
 		t.Run(name, func(t *testing.T) {
 			proxies := []config.BrowserProxy{{ProxyId: "e2e-" + name, ProxyConfig: src}}
+			address, key, err := xrayMgr.AcquireBridge(src, proxies, proxies[0].ProxyId)
+			if err != nil {
+				t.Fatalf("真实 Xray 桥接启动失败: %v", err)
+			}
+			defer xrayMgr.ReleaseBridge(key)
+			if !strings.HasPrefix(address, "socks5://127.0.0.1:") || key == "" {
+				t.Fatalf("无效桥接: address=%q key=%q", address, key)
+			}
 			result := SpeedTestWithConnector("e2e-"+name, proxies, xrayMgr, nil, nil, nil, config.BrowserConnectorXray, target)
 			if strings.Contains(result.Error, "yaml:") || strings.Contains(result.Error, "indicator") {
 				t.Fatalf("仍卡在 yaml 解析: %s", result.Error)
 			}
-			// 死端口预期超时（说明已真实进入内核启动+请求环节）
+			if result.Ok || result.Engine != "xray" || result.Error == "" {
+				t.Fatalf("死端口应在 Xray 请求阶段失败: %+v", result)
+			}
 			t.Logf("ok=%v engine=%s error=%s", result.Ok, result.Engine, result.Error)
 		})
 	}
@@ -165,8 +171,8 @@ func TestEndToEndMalformedNodeStartsRealBridge(t *testing.T) {
 func TestRepairHandlesStrippedTopLevelIndentWithNested(t *testing.T) {
 	samples := map[string]string{
 		"reality嵌套保留4空格": "- client-fingerprint: chrome\nflow: xtls-rprx-vision\nname: test\nport: 443\nreality-opts:\n    public-key: Q0VeH\n    short-id: 82f\nserver: 1.2.3.4\ntype: vless\nuuid: d342d11e-d424-4583-b36e-524ab1f0afa4",
-		"深层嵌套保留4/8空格":  "- alterId: 0\nname: test\nnetwork: ws\nport: 2086\nserver: 1.2.3.4\ntype: vmess\nuuid: 1111\nws-opts:\n    headers:\n        Host: www.bing.com\n    path: /p",
-		"嵌套序列项alpn":     "- alpn:\n    - h3\nfast-open: true\nname: test\npassword: pwd\nport: 21874\nserver: 1.2.3.4\ntype: hysteria2",
+		"深层嵌套保留4/8空格":    "- alterId: 0\nname: test\nnetwork: ws\nport: 2086\nserver: 1.2.3.4\ntype: vmess\nuuid: 1111\nws-opts:\n    headers:\n        Host: www.bing.com\n    path: /p",
+		"嵌套序列项alpn":      "- alpn:\n    - h3\nfast-open: true\nname: test\npassword: pwd\nport: 21874\nserver: 1.2.3.4\ntype: hysteria2",
 	}
 	for name, src := range samples {
 		t.Run(name, func(t *testing.T) {

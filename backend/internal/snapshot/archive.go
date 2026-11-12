@@ -143,10 +143,16 @@ func UnzipToWithLimits(src, dest string, limits UnzipLimits) error {
 			copyReader = io.LimitReader(rc, int64(copyLimit)+1)
 		}
 		written, copyErr := io.Copy(out, copyReader)
-		rc.Close()
-		out.Close()
+		readCloseErr := rc.Close()
+		writeCloseErr := out.Close()
 		if copyErr != nil {
 			return copyErr
+		}
+		if readCloseErr != nil {
+			return readCloseErr
+		}
+		if writeCloseErr != nil {
+			return writeCloseErr
 		}
 		if limits.MaxSingleFileBytes > 0 && uint64(written) > limits.MaxSingleFileBytes {
 			return fmt.Errorf("解压后文件过大(%s): %d > %d", memberName, written, limits.MaxSingleFileBytes)

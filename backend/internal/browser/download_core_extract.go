@@ -15,7 +15,8 @@ import (
 )
 
 type archiveEntryMeta struct {
-	Name string
+	Name  string
+	IsDir bool
 }
 
 type archiveProgress struct {
@@ -80,13 +81,20 @@ func extractZipArchiveAndStripRoot(archivePath, dest string, progressCb func(int
 	}
 	metas := make([]archiveEntryMeta, 0, len(reader.File))
 	for _, file := range reader.File {
-		metas = append(metas, archiveEntryMeta{Name: file.Name})
+		name := normalizeArchiveEntryName(file.Name)
+		if name != "." {
+			if _, err := safeArchiveTargetPath(dest, name); err != nil {
+				return err
+			}
+		}
+		metas = append(metas, archiveEntryMeta{Name: file.Name, IsDir: file.FileInfo().IsDir()})
 	}
 	rootPrefix, hasCommonRoot := detectCommonArchiveRoot(metas)
-	if err := os.MkdirAll(dest, 0o755); err != nil {
+	if err := prepareArchiveDestination(dest); err != nil {
 		return err
 	}
 
+	links := make(map[string]string)
 	progress := archiveProgress{total: len(reader.File)}
 	for _, file := range reader.File {
 		progress.report(progressCb)
@@ -99,28 +107,54 @@ func extractZipArchiveAndStripRoot(archivePath, dest string, progressCb func(int
 			return err
 		}
 		if file.FileInfo().IsDir() {
-			if err := os.MkdirAll(targetPath, file.Mode().Perm()); err != nil {
+			delete(links, cleanName)
+			if err := ensureArchiveDirectory(dest, targetPath, file.Mode().Perm()); err != nil {
 				return err
 			}
 			continue
 		}
-		if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
+		if err := ensureArchiveDirectory(dest, filepath.Dir(targetPath), 0o755); err != nil {
 			return err
 		}
 		rc, err := file.Open()
 		if err != nil {
 			return fmt.Errorf("读取压缩包文件失败 %s: %w", file.Name, err)
 		}
-		if err := writeReaderToFile(targetPath, rc, file.Mode().Perm()); err != nil {
-			return err
+		if file.Mode()&os.ModeSymlink != 0 {
+			// ZIP symlink bodies hold their relative target, not regular file data.
+			target, readErr := io.ReadAll(io.LimitReader(rc, maxArchiveLinkTarget+1))
+			closeErr := rc.Close()
+			if readErr != nil {
+				return readErr
+			}
+			if closeErr != nil {
+				return closeErr
+			}
+			if len(target) > maxArchiveLinkTarget {
+				return fmt.Errorf("符号链接目标过长: %s", file.Name)
+			}
+			links[cleanName] = string(target)
+			continue
 		}
+		delete(links, cleanName)
+		writeErr := writeReaderToFile(targetPath, rc, file.Mode().Perm())
+		closeErr := rc.Close()
+		if writeErr != nil {
+			return writeErr
+		}
+		if closeErr != nil {
+			return closeErr
+		}
+	}
+	if err := createArchiveSymlinks(dest, links); err != nil {
+		return err
 	}
 	progressCb(100, "解压完成！")
 	return nil
 }
 
 func extractTarArchiveAndStripRoot(archivePath, dest string, progressCb func(int, string)) error {
-	if err := os.MkdirAll(dest, 0o755); err != nil {
+	if err := prepareArchiveDestination(dest); err != nil {
 		return err
 	}
 
@@ -138,6 +172,7 @@ func extractTarArchiveAndStripRoot(archivePath, dest string, progressCb func(int
 	reader := tar.NewReader(stream)
 	entryCount := 0
 	topLevels := make(map[string]struct{})
+	links := make(map[string]string)
 	for {
 		header, err := reader.Next()
 		if err == io.EOF {
@@ -163,19 +198,20 @@ func extractTarArchiveAndStripRoot(archivePath, dest string, progressCb func(int
 		}
 		switch header.Typeflag {
 		case tar.TypeDir:
-			if err := os.MkdirAll(targetPath, header.FileInfo().Mode().Perm()); err != nil {
+			delete(links, cleanName)
+			if err := ensureArchiveDirectory(dest, targetPath, header.FileInfo().Mode().Perm()); err != nil {
 				return err
 			}
 		case tar.TypeSymlink:
-			if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
+			if err := ensureArchiveDirectory(dest, filepath.Dir(targetPath), 0o755); err != nil {
 				return err
 			}
-			_ = os.Remove(targetPath)
-			if err := os.Symlink(header.Linkname, targetPath); err != nil {
-				return fmt.Errorf("创建符号链接失败 %s: %w", cleanName, err)
-			}
+			// Defer links until all writes and root stripping finish. Archive
+			// entries must never redirect a later extraction write.
+			links[cleanName] = header.Linkname
 		case tar.TypeReg, tar.TypeRegA:
-			if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
+			delete(links, cleanName)
+			if err := ensureArchiveDirectory(dest, filepath.Dir(targetPath), 0o755); err != nil {
 				return err
 			}
 			if err := writeReaderToFile(targetPath, reader, header.FileInfo().Mode().Perm()); err != nil {
@@ -186,7 +222,18 @@ func extractTarArchiveAndStripRoot(archivePath, dest string, progressCb func(int
 	if entryCount == 0 {
 		return fmt.Errorf("空的压缩包")
 	}
-	if err := stripSingleExtractedRoot(dest, topLevels); err != nil {
+	strippedRoot, err := stripSingleExtractedRoot(dest, topLevels)
+	if err != nil {
+		return err
+	}
+	if strippedRoot != "" {
+		strippedLinks := make(map[string]string, len(links))
+		for name, target := range links {
+			strippedLinks[strings.TrimPrefix(name, strippedRoot+"/")] = target
+		}
+		links = strippedLinks
+	}
+	if err := createArchiveSymlinks(dest, links); err != nil {
 		return err
 	}
 	progressCb(100, "解压完成！")
@@ -235,8 +282,11 @@ func detectCommonArchiveRoot(entries []archiveEntryMeta) (string, bool) {
 	for _, entry := range entries {
 		cleanName := normalizeArchiveEntryName(entry.Name)
 		parts := strings.SplitN(cleanName, "/", 2)
-		if len(parts) == 0 || parts[0] == "" {
+		if cleanName == "." || cleanName == "" {
 			continue
+		}
+		if len(parts) == 1 && !entry.IsDir {
+			return "", false
 		}
 		if rootPrefix == "" {
 			rootPrefix = parts[0] + "/"
@@ -275,9 +325,9 @@ func topLevelArchiveName(name string) string {
 	return parts[0]
 }
 
-func stripSingleExtractedRoot(dest string, topLevels map[string]struct{}) error {
+func stripSingleExtractedRoot(dest string, topLevels map[string]struct{}) (string, error) {
 	if len(topLevels) != 1 {
-		return nil
+		return "", nil
 	}
 	var rootName string
 	for name := range topLevels {
@@ -285,61 +335,74 @@ func stripSingleExtractedRoot(dest string, topLevels map[string]struct{}) error 
 	}
 	rootPath, err := safeArchiveTargetPath(dest, rootName)
 	if err != nil {
-		return err
+		return "", err
 	}
-	info, err := os.Stat(rootPath)
-	if err != nil || !info.IsDir() {
-		return nil
+	info, err := os.Lstat(rootPath)
+	if os.IsNotExist(err) {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	if !info.IsDir() {
+		return "", nil
 	}
 	entries, err := os.ReadDir(rootPath)
 	if err != nil {
-		return err
+		return "", err
 	}
 	for _, entry := range entries {
 		source := filepath.Join(rootPath, entry.Name())
 		target := filepath.Join(dest, entry.Name())
-		if _, err := os.Stat(target); err == nil {
-			return fmt.Errorf("剥离顶层目录失败，目标已存在: %s", target)
+		if _, err := os.Lstat(target); err == nil {
+			return "", fmt.Errorf("剥离顶层目录失败，目标已存在: %s", target)
 		} else if err != nil && !os.IsNotExist(err) {
-			return err
+			return "", err
 		}
 		if err := os.Rename(source, target); err != nil {
-			return err
+			return "", err
 		}
 	}
-	return os.Remove(rootPath)
+	if err := os.Remove(rootPath); err != nil {
+		return "", err
+	}
+	return rootName, nil
 }
 
 func normalizeArchiveEntryName(name string) string {
 	cleanName := filepath.ToSlash(strings.TrimSpace(name))
-	cleanName = strings.TrimPrefix(cleanName, "/")
 	return filepath.ToSlash(filepath.Clean(cleanName))
 }
 
 func safeArchiveTargetPath(dest, cleanName string) (string, error) {
-	if cleanName == "." || strings.HasPrefix(cleanName, "../") || cleanName == ".." || filepath.IsAbs(cleanName) {
+	if cleanName == "." || !filepath.IsLocal(filepath.FromSlash(cleanName)) {
 		return "", fmt.Errorf("非法文件路径: %s", cleanName)
 	}
-	targetPath := filepath.Join(dest, filepath.FromSlash(cleanName))
-	destClean := filepath.Clean(dest)
-	targetClean := filepath.Clean(targetPath)
-	if targetClean != destClean && !strings.HasPrefix(targetClean, destClean+string(os.PathSeparator)) {
-		return "", fmt.Errorf("非法文件路径: %s", cleanName)
-	}
-	return targetPath, nil
+	return filepath.Join(dest, filepath.FromSlash(cleanName)), nil
 }
 
 func writeReaderToFile(targetPath string, reader io.Reader, mode os.FileMode) error {
-	outFile, err := os.OpenFile(targetPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, mode)
+	// Replace the entry instead of truncating it, so a pre-existing file
+	// symlink or hard link cannot redirect writes outside the destination.
+	outFile, err := os.CreateTemp(filepath.Dir(targetPath), ".archive-*")
 	if err != nil {
 		return fmt.Errorf("打开解压文件写入失败 %s: %w", targetPath, err)
 	}
+	tempPath := outFile.Name()
+	defer os.Remove(tempPath)
 	_, copyErr := io.Copy(outFile, reader)
+	chmodErr := outFile.Chmod(mode)
 	closeErr := outFile.Close()
 	if copyErr != nil {
 		return fmt.Errorf("写入文件流失败 %s: %w", targetPath, copyErr)
 	}
-	return closeErr
+	if chmodErr != nil {
+		return chmodErr
+	}
+	if closeErr != nil {
+		return closeErr
+	}
+	return os.Rename(tempPath, targetPath)
 }
 
 func (p *archiveProgress) report(progressCb func(int, string)) {

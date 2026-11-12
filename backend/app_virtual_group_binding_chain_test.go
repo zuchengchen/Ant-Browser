@@ -5,17 +5,20 @@ package backend
 // （实体匹配失败 → 虚拟分组解析 → 成员选择 → 配置校验 → 内核解析 → 返回代理地址）。
 
 import (
+	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"ant-chrome/backend/internal/browser"
 	"ant-chrome/backend/internal/config"
 	"ant-chrome/backend/internal/database"
 	"ant-chrome/backend/internal/proxy"
+	"ant-chrome/backend/internal/testutil"
 )
 
 func newVirtualGroupIntegrationApp(t *testing.T, memberConfigs map[string]string) *App {
@@ -52,12 +55,39 @@ func newVirtualGroupIntegrationApp(t *testing.T, memberConfigs map[string]string
 
 func newLocalHTTPProxy(t *testing.T) *httptest.Server {
 	t.Helper()
-	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusNoContent)
-	}))
-	t.Cleanup(target.Close)
-	upstream := &http.Client{}
+	upstream := &http.Client{Timeout: 5 * time.Second}
+	t.Cleanup(upstream.CloseIdleConnections)
 	proxy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Xray's HTTP outbound tunnels TCP through CONNECT, including HTTP targets.
+		if r.Method == http.MethodConnect {
+			remote, err := net.DialTimeout("tcp", r.Host, 5*time.Second)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusBadGateway)
+				return
+			}
+			defer remote.Close()
+			client, buffered, err := w.(http.Hijacker).Hijack()
+			if err != nil {
+				return
+			}
+			defer client.Close()
+			if _, err := buffered.WriteString("HTTP/1.1 200 Connection Established\r\n\r\n"); err != nil {
+				return
+			}
+			if err := buffered.Flush(); err != nil {
+				return
+			}
+			done := make(chan struct{})
+			go func() {
+				_, _ = io.Copy(remote, buffered)
+				_ = remote.Close()
+				close(done)
+			}()
+			_, _ = io.Copy(client, remote)
+			_ = client.Close()
+			<-done
+			return
+		}
 		outReq := r.Clone(r.Context())
 		outReq.RequestURI = ""
 		resp, err := upstream.Do(outReq)
@@ -226,14 +256,7 @@ func TestVirtualGroupBindingStartChainWithBridgeMember(t *testing.T) {
 	if testing.Short() {
 		t.Skip("short mode")
 	}
-	abs, err := filepath.Abs(filepath.Join("..", "bin", "xray.exe"))
-	if err != nil {
-		t.Fatalf("resolve xray path: %v", err)
-	}
-	if _, statErr := os.Stat(abs); statErr != nil {
-		t.Skipf("本机无 xray.exe（%s），跳过桥接链路验证", abs)
-	}
-	t.Setenv("XRAY_BINARY_PATH", abs)
+	t.Setenv("XRAY_BINARY_PATH", testutil.CopyBundledRuntime(t, "xray"))
 
 	proxyA := newLocalHTTPProxy(t)
 	// 认证 HTTP 代理必须走 xray 桥接
@@ -263,7 +286,39 @@ func TestVirtualGroupBindingStartChainWithBridgeMember(t *testing.T) {
 	if !strings.HasPrefix(proxyURL, "socks5://127.0.0.1:") {
 		t.Fatalf("桥接返回地址异常: %s", proxyURL)
 	}
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	t.Cleanup(target.Close)
+	client, err := buildClientForProxyURL(t, proxyURL, 5*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(client.CloseIdleConnections)
+	response, err := client.Get(target.URL)
+	if err != nil {
+		t.Fatalf("真实 Xray 桥接请求失败: %v", err)
+	}
+	_, readErr := io.Copy(io.Discard, response.Body)
+	response.Body.Close()
+	if readErr != nil || response.StatusCode != http.StatusNoContent {
+		t.Fatalf("桥接请求结果: status=%d read error=%v", response.StatusCode, readErr)
+	}
 	app.releaseProxyBridgeRef(ref)
+	app.xrayMgr.ReclaimBridgeIfIdle(ref.Key)
+	// Process.Kill returns before the OS necessarily closes its sockets.
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		connection, err := net.DialTimeout("tcp", strings.TrimPrefix(proxyURL, "socks5://"), 100*time.Millisecond)
+		if err != nil {
+			break
+		}
+		connection.Close()
+		if time.Now().After(deadline) {
+			t.Fatal("释放桥接后 SOCKS 监听端口仍然开放")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 	t.Logf("桥接成员链路 OK: %s (engine=%s)", proxyURL, ref.Engine)
 }
 

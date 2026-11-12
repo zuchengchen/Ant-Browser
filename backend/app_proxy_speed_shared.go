@@ -20,7 +20,8 @@ func (a *App) testSharedProxySpeed(proxyID string, forceRefresh bool) ProxyTestR
 	return a.testSharedProxySpeedWithOptions(proxyID, forceRefresh, proxies, a.defaultProxyConnectorType(), a.proxySpeedTestConfig())
 }
 
-// resolveVirtualGroupProxyTarget 当 proxyID 是虚拟分组时，挑选一个成员代理（ID 与配置）。
+// resolveVirtualGroupProxyTarget 为校验、预热和探测读取虚拟分组的候选成员。
+// 不推进启动游标、不写入 sticky 选点；真正启动由 startWithVirtualGroupMembers 提交。
 // 实体代理 ID 与未知 ID 返回 false，调用方按原有逻辑继续处理。
 func (a *App) resolveVirtualGroupProxyTarget(proxyID string, proxies []BrowserProxy) (string, string, bool) {
 	if proxyID == "" {
@@ -35,8 +36,10 @@ func (a *App) resolveVirtualGroupProxyTarget(proxyID string, proxies []BrowserPr
 	if !ok {
 		return "", "", false
 	}
-	if memberID, memberConfig, picked := a.pickVirtualGroupStartProxy(group, proxies, "virtual-target"); picked {
-		return memberID, memberConfig, true
+	candidates := a.pickVirtualGroupStartProxies(group, proxies, "virtual-target")
+	if !candidates.empty() {
+		member := candidates.ordered[0]
+		return strings.TrimSpace(member.ProxyId), strings.TrimSpace(member.ProxyConfig), true
 	}
 	// 全员降级时选点会返回空，但手动测速必须仍可用，否则用户无法把节点测回来。
 	resolved := browser.ResolveProxyVirtualGroup(group, proxies)

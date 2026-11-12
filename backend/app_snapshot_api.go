@@ -117,33 +117,7 @@ func (a *App) BrowserSnapshotList(profileId string) ([]SnapshotInfo, error) {
 
 // BrowserSnapshotRestore 恢复快照
 func (a *App) BrowserSnapshotRestore(profileId, snapshotId string) error {
-	profile, err := a.getProfileForSnapshot(profileId)
-	if err != nil {
-		return err
-	}
-	if profile.Running {
-		return fmt.Errorf("请先停止实例再恢复快照")
-	}
-
-	snapDir, err := a.snapshotDir(profileId)
-	if err != nil {
-		return err
-	}
-
-	metaPath, zipPath, err := snapshot.FindFiles(snapDir, snapshotId)
-	if err != nil {
-		return err
-	}
-	_ = metaPath
-
-	userDataDir := a.browserMgr.ResolveUserDataDir(profile)
-	if err := os.RemoveAll(userDataDir); err != nil {
-		return fmt.Errorf("清空用户数据目录失败: %w", err)
-	}
-	if err := os.MkdirAll(userDataDir, 0o755); err != nil {
-		return err
-	}
-	return snapshot.UnzipTo(zipPath, userDataDir)
+	return a.restoreBrowserSnapshot(profileId, snapshotId, prepareSnapshotRestore)
 }
 
 // BrowserSnapshotDelete 删除快照

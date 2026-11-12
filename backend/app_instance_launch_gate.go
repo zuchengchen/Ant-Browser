@@ -14,26 +14,28 @@ import (
 // markProfileStoppedLocked（全部停止路径的总汇：手动停止/状态巡检/备份恢复/关机）。
 type instanceLaunchGate struct {
 	mu        sync.Mutex
-	admitted  map[string]int // profileId -> 获准且未释放的占用数
-	releaseCh chan struct{}  // 关闭以唤醒排队中的启动请求
-	waiting   int            // 当前排队中的启动请求数
+	admitted  map[string]*instanceLaunchAdmission // 每个实例只占一个名额
+	releaseCh chan struct{}                       // 关闭以唤醒排队中的启动请求
+	waiting   int                                 // 当前排队中的启动请求数
+}
+
+// Each admitted lifetime has its own identity. A delayed failure/repeated
+// release from an earlier start must not release a later start of the profile.
+type instanceLaunchAdmission struct {
+	profileID  string
+	references int // 同实例并发请求共享名额，各自失败时只撤销自己的引用
 }
 
 func newLaunchGate() *instanceLaunchGate {
 	return &instanceLaunchGate{
-		admitted:  map[string]int{},
+		admitted:  map[string]*instanceLaunchAdmission{},
 		releaseCh: make(chan struct{}),
 	}
 }
 
+// occupied and broadcast require g.mu.
 func (g *instanceLaunchGate) occupied() int {
-	total := 0
-	for _, n := range g.admitted {
-		if n > 0 {
-			total += n
-		}
-	}
-	return total
+	return len(g.admitted)
 }
 
 func (g *instanceLaunchGate) broadcast() {
@@ -41,15 +43,30 @@ func (g *instanceLaunchGate) broadcast() {
 	g.releaseCh = make(chan struct{})
 }
 
-func (g *instanceLaunchGate) release(profileId string) {
+func (g *instanceLaunchGate) release(profileID string) {
 	g.mu.Lock()
-	if n := g.admitted[profileId]; n > 1 {
-		g.admitted[profileId] = n - 1
-	} else {
-		delete(g.admitted, profileId)
+	defer g.mu.Unlock()
+	if _, exists := g.admitted[profileID]; exists {
+		delete(g.admitted, profileID)
+		g.broadcast()
 	}
-	g.broadcast()
-	g.mu.Unlock()
+}
+
+func (g *instanceLaunchGate) releaseAdmission(admission *instanceLaunchAdmission) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.admitted[admission.profileID] == admission {
+		admission.references--
+		if admission.references == 0 {
+			delete(g.admitted, admission.profileID)
+			g.broadcast()
+		}
+	}
+}
+
+func (g *instanceLaunchGate) releaseFunc(admission *instanceLaunchAdmission) func() {
+	var once sync.Once
+	return func() { once.Do(func() { g.releaseAdmission(admission) }) }
 }
 
 func (a *App) instanceLaunchLimit() int {
@@ -70,15 +87,17 @@ func (a *App) launchGate() *instanceLaunchGate {
 }
 
 // releaseInstanceLaunchSlot 供停止路径调用：实例停止即归还名额并唤醒排队请求。
-func (a *App) releaseInstanceLaunchSlot(profileId string) {
-	if a == nil || a.instanceGate == nil {
+func (a *App) releaseInstanceLaunchSlot(profileID string) {
+	if a == nil {
 		return
 	}
-	a.instanceGate.release(profileId)
+	// Stop and first-start calls can race. Both must synchronize with Once
+	// before reading the lazily initialized pointer.
+	a.launchGate().release(profileID)
 }
 
 // acquireInstanceLaunchSlot 返回名额释放函数。
-// queued=true 表示该请求经历 过排队（前端据此提示"已进入启动队列"）。
+// queued=true 表示该请求经历过排队（前端据此提示"已进入启动队列"）。
 // 同一实例重复的启动请求不重复占名额（启动逻辑内部会按"已在运行"处理）。
 func (a *App) acquireInstanceLaunchSlot(profileId string) (release func(), queued bool) {
 	gate := a.launchGate()
@@ -90,35 +109,46 @@ func (a *App) acquireInstanceLaunchSlot(profileId string) (release func(), queue
 	queued = false
 	for {
 		gate.mu.Lock()
-		if gate.admitted[profileId] > 0 {
+		if admission := gate.admitted[profileId]; admission != nil {
+			admission.references++
+			if queued {
+				gate.waiting--
+			}
 			gate.mu.Unlock()
-			return noop, queued
+			return gate.releaseFunc(admission), queued
 		}
 		if gate.occupied() < limit {
-			gate.admitted[profileId]++
+			admission := &instanceLaunchAdmission{profileID: profileId, references: 1}
+			gate.admitted[profileId] = admission
 			if queued {
 				gate.waiting--
 			}
 			gate.mu.Unlock()
 			a.emitRuntimeEvent("instance:launch:admitted", map[string]interface{}{"profileId": profileId})
-			return func() { gate.release(profileId) }, queued
+			return gate.releaseFunc(admission), queued
 		}
-		if !queued {
+		newlyQueued := !queued
+		if newlyQueued {
 			queued = true
 			gate.waiting++
-			gate.mu.Unlock()
+		}
+		// Keep the notification channel from the state we just observed. A
+		// release after unlocking closes this channel even if no waiter has
+		// reached its select yet, so that wake-up cannot be lost.
+		position := gate.waiting
+		releaseCh := gate.releaseCh
+		gate.mu.Unlock()
+		if newlyQueued {
 			a.emitRuntimeEvent("instance:launch:queued", map[string]interface{}{
 				"profileId": profileId,
-				"position":  gate.waiting,
+				"position":  position,
 				"limit":     limit,
 			})
-		} else {
-			gate.mu.Unlock()
 		}
 		select {
-		case <-gate.releaseCh:
+		case <-releaseCh:
 		case <-time.After(300 * time.Millisecond):
-			// 轮询兜底：limit 被调大等外部变化也能及时放行。
+			// 定期复查名额状态；正常释放通过 releaseCh 立即唤醒。
 		}
 	}
 }

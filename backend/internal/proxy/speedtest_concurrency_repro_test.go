@@ -9,13 +9,13 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"ant-chrome/backend/internal/config"
+	"ant-chrome/backend/internal/testutil"
 )
 
 const reproVlessUUID = "3b9410a0-7f6e-4c1e-8a2d-000000000000"
@@ -70,6 +70,7 @@ func reproBatchSpeed(t *testing.T, proxyConfigs []string, concurrency int, cfg *
 		})
 	}
 	results := make([]TestResult, len(proxies))
+	bridgeErrors := make([]error, len(proxies))
 	jobs := make(chan int, len(proxies))
 	var wg sync.WaitGroup
 	start := time.Now()
@@ -78,7 +79,25 @@ func reproBatchSpeed(t *testing.T, proxyConfigs []string, concurrency int, cfg *
 		go func() {
 			defer wg.Done()
 			for idx := range jobs {
-				results[idx] = SpeedTestWithConnector(proxies[idx].ProxyId, proxies, xrayMgr, nil, nil, nil, config.BrowserConnectorXray, cfg)
+				func() {
+					if xrayMgr != nil {
+						address, key, err := xrayMgr.AcquireBridge(proxies[idx].ProxyConfig, proxies, proxies[idx].ProxyId)
+						if err != nil {
+							bridgeErrors[idx] = err
+							return
+						}
+						defer xrayMgr.ReclaimBridgeIfIdle(key)
+						defer xrayMgr.ReleaseBridge(key)
+						if !strings.HasPrefix(address, "socks5://127.0.0.1:") || key == "" {
+							bridgeErrors[idx] = fmt.Errorf("invalid bridge: address=%q key=%q", address, key)
+							return
+						}
+					}
+					results[idx] = SpeedTestWithConnector(proxies[idx].ProxyId, proxies, xrayMgr, nil, nil, nil, config.BrowserConnectorXray, cfg)
+					if xrayMgr != nil && (results[idx].Engine != "xray" || (!results[idx].Ok && results[idx].Error == "")) {
+						bridgeErrors[idx] = fmt.Errorf("speed test did not use Xray: %+v", results[idx])
+					}
+				}()
 			}
 		}()
 	}
@@ -88,12 +107,13 @@ func reproBatchSpeed(t *testing.T, proxyConfigs []string, concurrency int, cfg *
 	close(jobs)
 	wg.Wait()
 	elapsed = time.Since(start)
-	for _, r := range results {
+	for i, r := range results {
 		if r.Ok {
 			okCount++
 		}
-		if containsAny(r.Error, []string{"xray 启动失败", "sing-box 启动失败", "mihomo 启动失败", "未找到 xray 可执行文件", "未找到 sing-box 可执行文件"}) {
+		if bridgeErrors[i] != nil {
 			startFailures++
+			t.Logf("bridge %d failed: %v", i, bridgeErrors[i])
 		}
 	}
 	return
@@ -120,18 +140,13 @@ func indexOf(s, sub string) int {
 }
 
 func reproXrayManager(t *testing.T) *XrayManager {
-	bin := filepath.Join("..", "..", "..", "bin", "xray.exe")
-	abs, err := filepath.Abs(bin)
-	if err != nil {
-		t.Fatalf("resolve xray path: %v", err)
-	}
-	if _, err := os.Stat(abs); err != nil {
-		t.Skipf("本机无 xray.exe（%s），跳过桥接场景", abs)
-	}
-	t.Setenv("XRAY_BINARY_PATH", abs)
+	t.Helper()
+	t.Setenv("XRAY_BINARY_PATH", testutil.CopyBundledRuntime(t, "xray"))
 	cfg := config.DefaultConfig()
 	// AppRoot 指向临时目录，桥接运行时文件不落到包目录。
-	return NewXrayManager(cfg, t.TempDir())
+	manager := NewXrayManager(cfg, t.TempDir())
+	t.Cleanup(manager.StopAll)
+	return manager
 }
 
 // 场景 A：本地 HTTP 代理，可全部测通。并发 5 vs 20 应当全部成功。
@@ -188,6 +203,9 @@ func TestReproBatchSpeedVlessBridgeConcurrency(t *testing.T) {
 	t.Logf("并发5 : 成功 %d/%d, 桥接启动失败 %d, 耗时 %s", ok5, total, startFail5, elapsed5)
 	t.Logf("并发20: 成功 %d/%d, 桥接启动失败 %d, 耗时 %s", ok20, total, startFail20, elapsed20)
 
+	if ok5 != 0 || ok20 != 0 {
+		t.Errorf("死端口不应测速成功: concurrency5=%d concurrency20=%d", ok5, ok20)
+	}
 	if startFail5 > 0 {
 		t.Errorf("并发 5 出现桥接启动失败 %d 条", startFail5)
 	}

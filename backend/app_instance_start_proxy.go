@@ -35,14 +35,14 @@ func (a *App) resolveBrowserStartProxy(input browserStartInput, profile *Browser
 		var err error
 		temporaryProxyID := input.TemporaryProxyID
 		temporaryProxyConfig := input.TemporaryProxyConfig
-		// 一次性代理也可以是虚拟分组（启动码/API 传参场景），按策略解析到成员。
-		if strings.TrimSpace(temporaryProxyConfig) == "" {
-			if memberID, memberConfig, picked := a.resolveVirtualGroupProxyTarget(strings.TrimSpace(temporaryProxyID), proxies); picked {
-				temporaryProxyID = memberID
-				temporaryProxyConfig = memberConfig
+		resolvedProxyID, resolvedProxyConfig, err = resolveTemporaryBrowserStartProxy(temporaryProxyID, temporaryProxyConfig, proxies)
+		// 一次性虚拟分组与固定绑定共用真正的启动路径：保留健康过滤和失败重试，
+		// 仅在成员代理成功取得后提交游标。实体 ID 和显式配置仍按原规则解析。
+		if err != nil && strings.TrimSpace(temporaryProxyConfig) == "" {
+			if group, ok := a.findProxyVirtualGroupByID(temporaryProxyID); ok {
+				return a.startWithVirtualGroupMembers(group, profile, proxies, connectorType)
 			}
 		}
-		resolvedProxyID, resolvedProxyConfig, err = resolveTemporaryBrowserStartProxy(temporaryProxyID, temporaryProxyConfig, proxies)
 		if err != nil {
 			startErr := fmt.Errorf("实例启动失败：%s", err.Error())
 			profile.LastError = startErr.Error()

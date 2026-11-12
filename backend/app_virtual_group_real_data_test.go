@@ -16,6 +16,7 @@ import (
 	"ant-chrome/backend/internal/config"
 	"ant-chrome/backend/internal/database"
 	"ant-chrome/backend/internal/proxy"
+	"ant-chrome/backend/internal/testutil"
 	xproxy "golang.org/x/net/proxy"
 )
 
@@ -35,8 +36,8 @@ func newRealDataApp(t *testing.T, dbPath string) *App {
 	}
 
 	cfg := config.DefaultConfig()
-	cfg.Browser.XrayBinaryPath = mustAbsIfExists(t, filepath.Join("..", "bin", "xray.exe"))
-	cfg.Browser.SingBoxBinaryPath = mustAbsIfExists(t, filepath.Join("..", "bin", "sing-box.exe"))
+	cfg.Browser.XrayBinaryPath = testutil.CopyBundledRuntime(t, "xray")
+	cfg.Browser.SingBoxBinaryPath = testutil.CopyBundledRuntime(t, "sing-box")
 	if mieru := os.Getenv("MIERU_BINARY_PATH"); mieru != "" {
 		cfg.Browser.MieruBinaryPath = mieru
 	} else if _, err := os.Stat(`D:\tmp-mieru\mieru.exe`); err == nil {
@@ -58,18 +59,6 @@ func newRealDataApp(t *testing.T, dbPath string) *App {
 		app.mieruMgr.Stop()
 	})
 	return app
-}
-
-func mustAbsIfExists(t *testing.T, rel string) string {
-	t.Helper()
-	abs, err := filepath.Abs(rel)
-	if err != nil {
-		return ""
-	}
-	if _, err := os.Stat(abs); err != nil {
-		return ""
-	}
-	return abs
 }
 
 func buildClientForProxyURL(t *testing.T, proxyURL string, timeout time.Duration) (*http.Client, error) {
