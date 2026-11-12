@@ -1,0 +1,442 @@
+{
+  "diagnostic_only": true,
+  "formal_samples": false,
+  "source": {
+    "diagnostic_only": true,
+    "formal_samples": false,
+    "render_proof_version": 2,
+    "results": "/tmp/ant-linux-perf-cntr19l1/agents/frontend/formal-v2/rc1/results.json",
+    "results_sha256": "4f16b3c246040393a827246a532a2c83df540afbf752401f4fdd15a7a16811e6",
+    "prepared_manifest": "/tmp/ant-linux-perf-cntr19l1/agents/frontend/formal-v2/receipt-calibration/inputs.json",
+    "prepared_manifest_sha256": "4dce99059bfe1e76aa381033afe5c3bf633e6255dd2fc00479d5cc6f95efd671",
+    "producer_script_sha256": "a14cb4fb18cb2bd89a3678d95b29abeef57326b56dc4c9125443ea3492716867",
+    "catalog_script_sha256": "0276898a88d5b5cb1ca3db7c51b5b8ab170069d0b429a16f5a4074f342a0ebf9",
+    "binary": "/tmp/ant-linux-perf-cntr19l1/diagnostics/proxy-stream/build/build/build/bin/ant-chrome",
+    "binary_sha256": "ef7bc43f540002c4a47d8d823acc63cbb1a6ee6e5039424913ed1120d3a5328e",
+    "seed": "/tmp/ant-linux-perf-cntr19l1/diagnostics/proxy-stream/build/seed",
+    "seed_sha256": "c642cebb3075ab7c10d92f66cac9e943c3d1d4f0abf4ab86092ab2d3ce1ec66c",
+    "raw_artifacts": {
+      "c100-0/application.log": "4d9b4bd1b54cf010a4f25ee02d90b1128f67764701ae7c9dd5a0b107ceafa680",
+      "c100-0/event-refresh.json": "c6e41da781b914a77855b58ed5ae8b8a96a7467f2a8f1f288406ebf87d42e580",
+      "c100-0/lifecycle.json": "2af4fe0e1104c9cf6fdf6a2d43dd5005e1b98eb14adc17152b836859efe59c43",
+      "c100-0/operations.log": "2fbe90ac727734de78b61272ac313ab333573c9a1c9403ef99bda01ab019f1b5",
+      "c100-0/runtime/linuxperf-gui-events.jsonl": "deee3fed9d21f53f0e0421b9a414ea2e73085de7dc8c4cc4edebaa37ecc78e8b",
+      "c100-0/seed.log": "9d48665ff7c8af595b71c697f2236e144a31fbb36a0c048b6d19da83359766ac",
+      "display-lifecycle.json": "749c4885ea76243831dd32fd33062922cb117c04b734b2eea2bed0dc3924e039",
+      "r1-0/application.log": "434800acb1d47e851a7b50105b570c79c182ca5c397ab60a8e067275b4c36690",
+      "r1-0/browser-starts.json": "99da888471cda7602729d87ce1177d6f2a8cb294ce90307aae382b7501995376",
+      "r1-0/instance-actions.json": "dd4cd3e7c6f183b76a9fdaedcb4a9a50be37bd653f63f3bd8c8cede94eab6691",
+      "r1-0/lifecycle.json": "9fbe11967a5c63e5b30727bcf2a1c1b7749498151c915d8041e53ec89ad92e78",
+      "r1-0/operations.log": "8f24ed1ef28a818aecab72cbb7fb62acfdf97b46cfdab8ed62bf443bbf5d2d64",
+      "r1-0/resources.json": "99178e44fd27e7d32bdc3e8d5cf7f63e2d17e79c7aeb2003c267bc4f23a2e531",
+      "r1-0/runtime/linuxperf-gui-events.jsonl": "9859c0d1b7a45fa52710dcd4608c9fecba86e3e76178b7dc0cfe834e3c8f281c",
+      "r1-0/seed.log": "fef4bafe88e64e1ac18e47c91f1fc90dc7d24524423118c5d7f67f04383ad839",
+      "xvfb.log": "3396ea4287ee60f3da22a69a2e91669ef3757459c02e1dcd2c5a82da7d179b9e"
+    },
+    "owned_identities": [
+      [
+        "1230063",
+        8670919
+      ],
+      [
+        "1230074",
+        8670928
+      ],
+      [
+        "1230131",
+        8670940
+      ],
+      [
+        "1230140",
+        8670942
+      ],
+      [
+        "1230141",
+        8670942
+      ],
+      [
+        "1230142",
+        8670942
+      ],
+      [
+        "1230146",
+        8670943
+      ],
+      [
+        "1230359",
+        8671320
+      ],
+      [
+        "1230416",
+        8671332
+      ],
+      [
+        "1230425",
+        8671333
+      ],
+      [
+        "1230426",
+        8671334
+      ],
+      [
+        "1230427",
+        8671334
+      ],
+      [
+        "1230431",
+        8671335
+      ],
+      [
+        "1230528",
+        8671513
+      ],
+      [
+        "1230530",
+        8671515
+      ],
+      [
+        "1230532",
+        8671515
+      ],
+      [
+        "1230536",
+        8671515
+      ],
+      [
+        "1230537",
+        8671516
+      ],
+      [
+        "1230539",
+        8671518
+      ],
+      [
+        "1230563",
+        8671523
+      ],
+      [
+        "1230565",
+        8671523
+      ],
+      [
+        "1230609",
+        8671526
+      ],
+      [
+        "1230631",
+        8671531
+      ],
+      [
+        "1230641",
+        8671533
+      ],
+      [
+        "1230662",
+        8671535
+      ],
+      [
+        "1230663",
+        8671535
+      ]
+    ],
+    "remaining_owned": []
+  },
+  "metrics": {
+    "runtime.1.application_ready": {
+      "samples": [
+        1857.352664
+      ],
+      "unit": "ms",
+      "core": true,
+      "improvement_eligible": true,
+      "minimum_samples": 10,
+      "absolute_noise": 0
+    },
+    "runtime.1.instance_ready": {
+      "samples": [
+        1766.095659
+      ],
+      "unit": "ms",
+      "core": true,
+      "improvement_eligible": true,
+      "minimum_samples": 10,
+      "absolute_noise": 0
+    },
+    "runtime.1.goroutines": {
+      "samples": [
+        28
+      ],
+      "unit": "count",
+      "core": false,
+      "improvement_eligible": false,
+      "minimum_samples": 10,
+      "absolute_noise": 0
+    },
+    "runtime.1.app.cpu": {
+      "samples": [
+        0.0
+      ],
+      "unit": "seconds",
+      "core": true,
+      "improvement_eligible": false,
+      "minimum_samples": 10,
+      "absolute_noise": 0.02
+    },
+    "runtime.1.app.pss": {
+      "samples": [
+        185070592.0
+      ],
+      "unit": "bytes",
+      "core": true,
+      "improvement_eligible": false,
+      "minimum_samples": 10,
+      "absolute_noise": 4096
+    },
+    "runtime.1.app.rss": {
+      "samples": [
+        464785408.0
+      ],
+      "unit": "bytes",
+      "core": false,
+      "improvement_eligible": false,
+      "minimum_samples": 10,
+      "absolute_noise": 0
+    },
+    "runtime.1.app.fds": {
+      "samples": [
+        67.0
+      ],
+      "unit": "count",
+      "core": false,
+      "improvement_eligible": false,
+      "minimum_samples": 10,
+      "absolute_noise": 0
+    },
+    "runtime.1.app.processes": {
+      "samples": [
+        1.0
+      ],
+      "unit": "count",
+      "core": false,
+      "improvement_eligible": false,
+      "minimum_samples": 10,
+      "absolute_noise": 0
+    },
+    "runtime.1.webview.cpu": {
+      "samples": [
+        0.0
+      ],
+      "unit": "seconds",
+      "core": true,
+      "improvement_eligible": false,
+      "minimum_samples": 10,
+      "absolute_noise": 0.02
+    },
+    "runtime.1.webview.pss": {
+      "samples": [
+        227258368.0
+      ],
+      "unit": "bytes",
+      "core": true,
+      "improvement_eligible": false,
+      "minimum_samples": 10,
+      "absolute_noise": 4096
+    },
+    "runtime.1.webview.rss": {
+      "samples": [
+        560943104.0
+      ],
+      "unit": "bytes",
+      "core": false,
+      "improvement_eligible": false,
+      "minimum_samples": 10,
+      "absolute_noise": 0
+    },
+    "runtime.1.webview.fds": {
+      "samples": [
+        77.0
+      ],
+      "unit": "count",
+      "core": false,
+      "improvement_eligible": false,
+      "minimum_samples": 10,
+      "absolute_noise": 0
+    },
+    "runtime.1.webview.processes": {
+      "samples": [
+        4.0
+      ],
+      "unit": "count",
+      "core": false,
+      "improvement_eligible": false,
+      "minimum_samples": 10,
+      "absolute_noise": 0
+    },
+    "runtime.1.browser.cpu": {
+      "samples": [
+        0.02999853035699857
+      ],
+      "unit": "seconds",
+      "core": true,
+      "improvement_eligible": false,
+      "minimum_samples": 10,
+      "absolute_noise": 0.02
+    },
+    "runtime.1.browser.pss": {
+      "samples": [
+        431994880.0
+      ],
+      "unit": "bytes",
+      "core": true,
+      "improvement_eligible": false,
+      "minimum_samples": 10,
+      "absolute_noise": 4096
+    },
+    "runtime.1.browser.rss": {
+      "samples": [
+        1275783168.0
+      ],
+      "unit": "bytes",
+      "core": false,
+      "improvement_eligible": false,
+      "minimum_samples": 10,
+      "absolute_noise": 0
+    },
+    "runtime.1.browser.fds": {
+      "samples": [
+        463.0
+      ],
+      "unit": "count",
+      "core": false,
+      "improvement_eligible": false,
+      "minimum_samples": 10,
+      "absolute_noise": 0
+    },
+    "runtime.1.browser.processes": {
+      "samples": [
+        13.0
+      ],
+      "unit": "count",
+      "core": false,
+      "improvement_eligible": false,
+      "minimum_samples": 10,
+      "absolute_noise": 0
+    },
+    "runtime.1.proxy.cpu": {
+      "samples": [
+        0.0
+      ],
+      "unit": "seconds",
+      "core": true,
+      "improvement_eligible": false,
+      "minimum_samples": 10,
+      "absolute_noise": 0.02
+    },
+    "runtime.1.proxy.pss": {
+      "samples": [
+        0.0
+      ],
+      "unit": "bytes",
+      "core": true,
+      "improvement_eligible": false,
+      "minimum_samples": 10,
+      "absolute_noise": 4096
+    },
+    "runtime.1.proxy.rss": {
+      "samples": [
+        0.0
+      ],
+      "unit": "bytes",
+      "core": false,
+      "improvement_eligible": false,
+      "minimum_samples": 10,
+      "absolute_noise": 0
+    },
+    "runtime.1.proxy.fds": {
+      "samples": [
+        0.0
+      ],
+      "unit": "count",
+      "core": false,
+      "improvement_eligible": false,
+      "minimum_samples": 10,
+      "absolute_noise": 0
+    },
+    "runtime.1.proxy.processes": {
+      "samples": [
+        0.0
+      ],
+      "unit": "count",
+      "core": false,
+      "improvement_eligible": false,
+      "minimum_samples": 10,
+      "absolute_noise": 0
+    },
+    "runtime.1.other.cpu": {
+      "samples": [
+        0.0
+      ],
+      "unit": "seconds",
+      "core": true,
+      "improvement_eligible": false,
+      "minimum_samples": 10,
+      "absolute_noise": 0.02
+    },
+    "runtime.1.other.pss": {
+      "samples": [
+        4832256.0
+      ],
+      "unit": "bytes",
+      "core": true,
+      "improvement_eligible": false,
+      "minimum_samples": 10,
+      "absolute_noise": 4096
+    },
+    "runtime.1.other.rss": {
+      "samples": [
+        7454720.0
+      ],
+      "unit": "bytes",
+      "core": false,
+      "improvement_eligible": false,
+      "minimum_samples": 10,
+      "absolute_noise": 0
+    },
+    "runtime.1.other.fds": {
+      "samples": [
+        7.0
+      ],
+      "unit": "count",
+      "core": false,
+      "improvement_eligible": false,
+      "minimum_samples": 10,
+      "absolute_noise": 0
+    },
+    "runtime.1.other.processes": {
+      "samples": [
+        1.0
+      ],
+      "unit": "count",
+      "core": false,
+      "improvement_eligible": false,
+      "minimum_samples": 10,
+      "absolute_noise": 0
+    },
+    "runtime.1.stop": {
+      "samples": [
+        242.536126
+      ],
+      "unit": "ms",
+      "core": true,
+      "improvement_eligible": false,
+      "minimum_samples": 10,
+      "absolute_noise": 0
+    }
+  },
+  "files": {
+    "r1-0/operations.log": "{\"operation_id\": 1, \"pid\": 1230359, \"code_sha256\": \"f30d6768c7207091edb0f504fec9a5a63a9761d5589ab1b76ae2a52e0f3ea8bd\", \"operation\": \"javascript\", \"event\": \"start\", \"time_ns\": 1794310622118059902}\n{\"operation_id\": 1, \"pid\": 1230359, \"code_sha256\": \"f30d6768c7207091edb0f504fec9a5a63a9761d5589ab1b76ae2a52e0f3ea8bd\", \"operation\": \"javascript\", \"event\": \"complete\", \"time_ns\": 1794310622147934099, \"elapsed_ms\": 29.734687006566674}\n{\"operation_id\": 2, \"pid\": 1230359, \"token\": \"1230359:2:86713561460238\", \"code_sha256\": \"6bf3895f114429aa27b03e8e79332a2916ec19d73a4a32f213b41aa3d9083700\", \"operation\": \"timed_gui\", \"started_monotonic_ns\": 86713561460238, \"event\": \"start\", \"time_ns\": 1794310622148030715, \"expected_phases\": [], \"require_render\": true, \"timeout_seconds\": 1799.638873034}\n{\"operation_id\": 2, \"pid\": 1230359, \"token\": \"1230359:2:86713561460238\", \"code_sha256\": \"6bf3895f114429aa27b03e8e79332a2916ec19d73a4a32f213b41aa3d9083700\", \"operation\": \"timed_gui\", \"started_monotonic_ns\": 86713561460238, \"event\": \"complete\", \"time_ns\": 1794310623644665009, \"elapsed_ms\": 1496.212232, \"received_monotonic_ns\": 86715057672470, \"request_id\": \"2\", \"terminal_sequence\": 1, \"value_sha256\": \"81b74eee9c7a70c437af87f85aaf82b9fbac6cbac0045c9b4cf5b3600152c4da\", \"phase_ms\": {}}\n{\"event\": \"application_ready\", \"operation_id\": 2, \"token\": \"1230359:2:86713561460238\", \"pid\": 1230359, \"application_started_monotonic_ns\": 86713200319806, \"received_monotonic_ns\": 86715057672470, \"elapsed_ms\": 1857.352664}\n{\"operation_id\": 3, \"pid\": 1230359, \"token\": \"1230359:3:86715058371883\", \"code_sha256\": \"9470c9f2f4f77f69b7f0cad9efd5e18538303e80301515b09cf2c807abad5691\", \"operation\": \"timed_gui\", \"started_monotonic_ns\": 86715058371883, \"event\": \"start\", \"time_ns\": 1794310623644923596, \"expected_phases\": [], \"require_render\": true, \"timeout_seconds\": 1800}\n{\"operation_id\": 3, \"pid\": 1230359, \"token\": \"1230359:3:86715058371883\", \"code_sha256\": \"9470c9f2f4f77f69b7f0cad9efd5e18538303e80301515b09cf2c807abad5691\", \"operation\": \"timed_gui\", \"started_monotonic_ns\": 86715058371883, \"event\": \"complete\", \"time_ns\": 1794310625259915429, \"elapsed_ms\": 1614.580729, \"received_monotonic_ns\": 86716672952612, \"request_id\": \"3\", \"terminal_sequence\": 1, \"value_sha256\": \"729bce536a160ead3cc66ad27b89a199653e3fc730d5c168033dc241958f1b13\", \"phase_ms\": {}}\n{\"operation_id\": 4, \"pid\": 1230359, \"token\": \"1230359:4:86719878624534\", \"code_sha256\": \"49497bae262574c8805c23d08bcc7753df58879f074bfc31c18082f522ac2110\", \"operation\": \"timed_gui\", \"started_monotonic_ns\": 86719878624534, \"event\": \"start\", \"time_ns\": 1794310628465190800, \"expected_phases\": [], \"require_render\": true, \"timeout_seconds\": 1800}\n{\"operation_id\": 4, \"pid\": 1230359, \"token\": \"1230359:4:86719878624534\", \"code_sha256\": \"49497bae262574c8805c23d08bcc7753df58879f074bfc31c18082f522ac2110\", \"operation\": \"timed_gui\", \"started_monotonic_ns\": 86719878624534, \"event\": \"complete\", \"time_ns\": 1794310628708011547, \"elapsed_ms\": 242.536126, \"received_monotonic_ns\": 86720121160660, \"request_id\": \"4\", \"terminal_sequence\": 1, \"value_sha256\": \"722c4a7209c1974f68fc3025956082b0f6624567bb648bc4e1cdc88e532006f9\", \"phase_ms\": {}}\n",
+    "r1-0/runtime/linuxperf-gui-events.jsonl": "{\"backend_time_ns\":1794310622118564339,\"code_sha256\":\"f30d6768c7207091edb0f504fec9a5a63a9761d5589ab1b76ae2a52e0f3ea8bd\",\"event\":\"request\",\"request_id\":\"1\",\"stream\":false,\"token\":\"\"}\n{\"backend_time_ns\":1794310622147492683,\"event\":\"message\",\"payload\":{\"ok\":true,\"value\":true},\"request_id\":\"1\",\"token\":\"\"}\n{\"backend_time_ns\":1794310622148353477,\"code_sha256\":\"6bf3895f114429aa27b03e8e79332a2916ec19d73a4a32f213b41aa3d9083700\",\"event\":\"request\",\"request_id\":\"2\",\"stream\":true,\"token\":\"1230359:2:86713561460238\"}\n{\"backend_time_ns\":1794310623643837978,\"event\":\"message\",\"payload\":{\"js_now_ms\":1576,\"js_started_ms\":134,\"kind\":\"result\",\"ok\":true,\"sequence\":1,\"time_origin_ms\":1794310622066,\"token\":\"1230359:2:86713561460238\",\"value\":{\"profiles\":{\"count\":100,\"ids\":[\"perf-profile-00000\",\"perf-profile-00001\",\"perf-profile-00002\",\"perf-profile-00003\",\"perf-profile-00004\",\"perf-profile-00005\",\"perf-profile-00006\",\"perf-profile-00007\",\"perf-profile-00008\",\"perf-profile-00009\",\"perf-profile-00010\",\"perf-profile-00011\",\"perf-profile-00012\",\"perf-profile-00013\",\"perf-profile-00014\",\"perf-profile-00015\",\"perf-profile-00016\",\"perf-profile-00017\",\"perf-profile-00018\",\"perf-profile-00019\",\"perf-profile-00020\",\"perf-profile-00021\",\"perf-profile-00022\",\"perf-profile-00023\",\"perf-profile-00024\",\"perf-profile-00025\",\"perf-profile-00026\",\"perf-profile-00027\",\"perf-profile-00028\",\"perf-profile-00029\",\"perf-profile-00030\",\"perf-profile-00031\",\"perf-profile-00032\",\"perf-profile-00033\",\"perf-profile-00034\",\"perf-profile-00035\",\"perf-profile-00036\",\"perf-profile-00037\",\"perf-profile-00038\",\"perf-profile-00039\",\"perf-profile-00040\",\"perf-profile-00041\",\"perf-profile-00042\",\"perf-profile-00043\",\"perf-profile-00044\",\"perf-profile-00045\",\"perf-profile-00046\",\"perf-profile-00047\",\"perf-profile-00048\",\"perf-profile-00049\",\"perf-profile-00050\",\"perf-profile-00051\",\"perf-profile-00052\",\"perf-profile-00053\",\"perf-profile-00054\",\"perf-profile-00055\",\"perf-profile-00056\",\"perf-profile-00057\",\"perf-profile-00058\",\"perf-profile-00059\",\"perf-profile-00060\",\"perf-profile-00061\",\"perf-profile-00062\",\"perf-profile-00063\",\"perf-profile-00064\",\"perf-profile-00065\",\"perf-profile-00066\",\"perf-profile-00067\",\"perf-profile-00068\",\"perf-profile-00069\",\"perf-profile-00070\",\"perf-profile-00071\",\"perf-profile-00072\",\"perf-profile-00073\",\"perf-profile-00074\",\"perf-profile-00075\",\"perf-profile-00076\",\"perf-profile-00077\",\"perf-profile-00078\",\"perf-profile-00079\",\"perf-profile-00080\",\"perf-profile-00081\",\"perf-profile-00082\",\"perf-profile-00083\",\"perf-profile-00084\",\"perf-profile-00085\",\"perf-profile-00086\",\"perf-profile-00087\",\"perf-profile-00088\",\"perf-profile-00089\",\"perf-profile-00090\",\"perf-profile-00091\",\"perf-profile-00092\",\"perf-profile-00093\",\"perf-profile-00094\",\"perf-profile-00095\",\"perf-profile-00096\",\"perf-profile-00097\",\"perf-profile-00098\",\"perf-profile-00099\"],\"kind\":\"profiles\",\"names\":[\"性能实例 00000\",\"性能实例 00001\",\"性能实例 00002\",\"性能实例 00003\",\"性能实例 00004\",\"性能实例 00005\",\"性能实例 00006\",\"性能实例 00007\",\"性能实例 00008\",\"性能实例 00009\",\"性能实例 00010\",\"性能实例 00011\",\"性能实例 00012\",\"性能实例 00013\",\"性能实例 00014\",\"性能实例 00015\",\"性能实例 00016\",\"性能实例 00017\",\"性能实例 00018\",\"性能实例 00019\",\"性能实例 00020\",\"性能实例 00021\",\"性能实例 00022\",\"性能实例 00023\",\"性能实例 00024\",\"性能实例 00025\",\"性能实例 00026\",\"性能实例 00027\",\"性能实例 00028\",\"性能实例 00029\",\"性能实例 00030\",\"性能实例 00031\",\"性能实例 00032\",\"性能实例 00033\",\"性能实例 00034\",\"性能实例 00035\",\"性能实例 00036\",\"性能实例 00037\",\"性能实例 00038\",\"性能实例 00039\",\"性能实例 00040\",\"性能实例 00041\",\"性能实例 00042\",\"性能实例 00043\",\"性能实例 00044\",\"性能实例 00045\",\"性能实例 00046\",\"性能实例 00047\",\"性能实例 00048\",\"性能实例 00049\",\"性能实例 00050\",\"性能实例 00051\",\"性能实例 00052\",\"性能实例 00053\",\"性能实例 00054\",\"性能实例 00055\",\"性能实例 00056\",\"性能实例 00057\",\"性能实例 00058\",\"性能实例 00059\",\"性能实例 00060\",\"性能实例 00061\",\"性能实例 00062\",\"性能实例 00063\",\"性能实例 00064\",\"性能实例 00065\",\"性能实例 00066\",\"性能实例 00067\",\"性能实例 00068\",\"性能实例 00069\",\"性能实例 00070\",\"性能实例 00071\",\"性能实例 00072\",\"性能实例 00073\",\"性能实例 00074\",\"性能实例 00075\",\"性能实例 00076\",\"性能实例 00077\",\"性能实例 00078\",\"性能实例 00079\",\"性能实例 00080\",\"性能实例 00081\",\"性能实例 00082\",\"性能实例 00083\",\"性能实例 00084\",\"性能实例 00085\",\"性能实例 00086\",\"性能实例 00087\",\"性能实例 00088\",\"性能实例 00089\",\"性能实例 00090\",\"性能实例 00091\",\"性能实例 00092\",\"性能实例 00093\",\"性能实例 00094\",\"性能实例 00095\",\"性能实例 00096\",\"性能实例 00097\",\"性能实例 00098\",\"性能实例 00099\"]},\"proxies\":{\"builtin_direct\":\"__direct__\",\"count\":1,\"ids\":[\"__direct__\"],\"kind\":\"proxies\",\"names\":[\"直连（不走代理）\"]},\"render\":{\"completed_ms\":1575,\"deadline_ms\":1801549,\"first_frame_ms\":1559,\"frame_attempts\":[{\"callback_ms\":1559,\"raf_ms\":1559},{\"callback_ms\":1575,\"raf_ms\":1575}],\"frame_count\":2,\"predicate_after\":true,\"predicate_before\":true,\"predicate_ms\":1550,\"render_proof_version\":2,\"second_frame_ms\":1575},\"rows\":[{\"id\":\"perf-profile-00000\",\"name\":\"性能实例 00000\"},{\"id\":\"perf-profile-00001\",\"name\":\"性能实例 00001\"},{\"id\":\"perf-profile-00002\",\"name\":\"性能实例 00002\"},{\"id\":\"perf-profile-00003\",\"name\":\"性能实例 00003\"},{\"id\":\"perf-profile-00004\",\"name\":\"性能实例 00004\"},{\"id\":\"perf-profile-00005\",\"name\":\"性能实例 00005\"},{\"id\":\"perf-profile-00006\",\"name\":\"性能实例 00006\"},{\"id\":\"perf-profile-00007\",\"name\":\"性能实例 00007\"},{\"id\":\"perf-profile-00008\",\"name\":\"性能实例 00008\"},{\"id\":\"perf-profile-00009\",\"name\":\"性能实例 00009\"},{\"id\":\"perf-profile-00010\",\"name\":\"性能实例 00010\"},{\"id\":\"perf-profile-00011\",\"name\":\"性能实例 00011\"},{\"id\":\"perf-profile-00012\",\"name\":\"性能实例 00012\"},{\"id\":\"perf-profile-00013\",\"name\":\"性能实例 00013\"},{\"id\":\"perf-profile-00014\",\"name\":\"性能实例 00014\"},{\"id\":\"perf-profile-00015\",\"name\":\"性能实例 00015\"},{\"id\":\"perf-profile-00016\",\"name\":\"性能实例 00016\"},{\"id\":\"perf-profile-00017\",\"name\":\"性能实例 00017\"},{\"id\":\"perf-profile-00018\",\"name\":\"性能实例 00018\"},{\"id\":\"perf-profile-00019\",\"name\":\"性能实例 00019\"},{\"id\":\"perf-profile-00020\",\"name\":\"性能实例 00020\"},{\"id\":\"perf-profile-00021\",\"name\":\"性能实例 00021\"},{\"id\":\"perf-profile-00022\",\"name\":\"性能实例 00022\"},{\"id\":\"perf-profile-00023\",\"name\":\"性能实例 00023\"},{\"id\":\"perf-profile-00024\",\"name\":\"性能实例 00024\"},{\"id\":\"perf-profile-00025\",\"name\":\"性能实例 00025\"},{\"id\":\"perf-profile-00026\",\"name\":\"性能实例 00026\"},{\"id\":\"perf-profile-00027\",\"name\":\"性能实例 00027\"},{\"id\":\"perf-profile-00028\",\"name\":\"性能实例 00028\"},{\"id\":\"perf-profile-00029\",\"name\":\"性能实例 00029\"},{\"id\":\"perf-profile-00030\",\"name\":\"性能实例 00030\"},{\"id\":\"perf-profile-00031\",\"name\":\"性能实例 00031\"},{\"id\":\"perf-profile-00032\",\"name\":\"性能实例 00032\"},{\"id\":\"perf-profile-00033\",\"name\":\"性能实例 00033\"},{\"id\":\"perf-profile-00034\",\"name\":\"性能实例 00034\"},{\"id\":\"perf-profile-00035\",\"name\":\"性能实例 00035\"},{\"id\":\"perf-profile-00036\",\"name\":\"性能实例 00036\"},{\"id\":\"perf-profile-00037\",\"name\":\"性能实例 00037\"},{\"id\":\"perf-profile-00038\",\"name\":\"性能实例 00038\"},{\"id\":\"perf-profile-00039\",\"name\":\"性能实例 00039\"},{\"id\":\"perf-profile-00040\",\"name\":\"性能实例 00040\"},{\"id\":\"perf-profile-00041\",\"name\":\"性能实例 00041\"},{\"id\":\"perf-profile-00042\",\"name\":\"性能实例 00042\"},{\"id\":\"perf-profile-00043\",\"name\":\"性能实例 00043\"},{\"id\":\"perf-profile-00044\",\"name\":\"性能实例 00044\"},{\"id\":\"perf-profile-00045\",\"name\":\"性能实例 00045\"},{\"id\":\"perf-profile-00046\",\"name\":\"性能实例 00046\"},{\"id\":\"perf-profile-00047\",\"name\":\"性能实例 00047\"},{\"id\":\"perf-profile-00048\",\"name\":\"性能实例 00048\"},{\"id\":\"perf-profile-00049\",\"name\":\"性能实例 00049\"},{\"id\":\"perf-profile-00050\",\"name\":\"性能实例 00050\"},{\"id\":\"perf-profile-00051\",\"name\":\"性能实例 00051\"},{\"id\":\"perf-profile-00052\",\"name\":\"性能实例 00052\"},{\"id\":\"perf-profile-00053\",\"name\":\"性能实例 00053\"},{\"id\":\"perf-profile-00054\",\"name\":\"性能实例 00054\"},{\"id\":\"perf-profile-00055\",\"name\":\"性能实例 00055\"},{\"id\":\"perf-profile-00056\",\"name\":\"性能实例 00056\"},{\"id\":\"perf-profile-00057\",\"name\":\"性能实例 00057\"},{\"id\":\"perf-profile-00058\",\"name\":\"性能实例 00058\"},{\"id\":\"perf-profile-00059\",\"name\":\"性能实例 00059\"},{\"id\":\"perf-profile-00060\",\"name\":\"性能实例 00060\"},{\"id\":\"perf-profile-00061\",\"name\":\"性能实例 00061\"},{\"id\":\"perf-profile-00062\",\"name\":\"性能实例 00062\"},{\"id\":\"perf-profile-00063\",\"name\":\"性能实例 00063\"},{\"id\":\"perf-profile-00064\",\"name\":\"性能实例 00064\"},{\"id\":\"perf-profile-00065\",\"name\":\"性能实例 00065\"},{\"id\":\"perf-profile-00066\",\"name\":\"性能实例 00066\"},{\"id\":\"perf-profile-00067\",\"name\":\"性能实例 00067\"},{\"id\":\"perf-profile-00068\",\"name\":\"性能实例 00068\"},{\"id\":\"perf-profile-00069\",\"name\":\"性能实例 00069\"},{\"id\":\"perf-profile-00070\",\"name\":\"性能实例 00070\"},{\"id\":\"perf-profile-00071\",\"name\":\"性能实例 00071\"},{\"id\":\"perf-profile-00072\",\"name\":\"性能实例 00072\"},{\"id\":\"perf-profile-00073\",\"name\":\"性能实例 00073\"},{\"id\":\"perf-profile-00074\",\"name\":\"性能实例 00074\"},{\"id\":\"perf-profile-00075\",\"name\":\"性能实例 00075\"},{\"id\":\"perf-profile-00076\",\"name\":\"性能实例 00076\"},{\"id\":\"perf-profile-00077\",\"name\":\"性能实例 00077\"},{\"id\":\"perf-profile-00078\",\"name\":\"性能实例 00078\"},{\"id\":\"perf-profile-00079\",\"name\":\"性能实例 00079\"},{\"id\":\"perf-profile-00080\",\"name\":\"性能实例 00080\"},{\"id\":\"perf-profile-00081\",\"name\":\"性能实例 00081\"},{\"id\":\"perf-profile-00082\",\"name\":\"性能实例 00082\"},{\"id\":\"perf-profile-00083\",\"name\":\"性能实例 00083\"},{\"id\":\"perf-profile-00084\",\"name\":\"性能实例 00084\"},{\"id\":\"perf-profile-00085\",\"name\":\"性能实例 00085\"},{\"id\":\"perf-profile-00086\",\"name\":\"性能实例 00086\"},{\"id\":\"perf-profile-00087\",\"name\":\"性能实例 00087\"},{\"id\":\"perf-profile-00088\",\"name\":\"性能实例 00088\"},{\"id\":\"perf-profile-00089\",\"name\":\"性能实例 00089\"},{\"id\":\"perf-profile-00090\",\"name\":\"性能实例 00090\"},{\"id\":\"perf-profile-00091\",\"name\":\"性能实例 00091\"},{\"id\":\"perf-profile-00092\",\"name\":\"性能实例 00092\"},{\"id\":\"perf-profile-00093\",\"name\":\"性能实例 00093\"},{\"id\":\"perf-profile-00094\",\"name\":\"性能实例 00094\"},{\"id\":\"perf-profile-00095\",\"name\":\"性能实例 00095\"},{\"id\":\"perf-profile-00096\",\"name\":\"性能实例 00096\"},{\"id\":\"perf-profile-00097\",\"name\":\"性能实例 00097\"},{\"id\":\"perf-profile-00098\",\"name\":\"性能实例 00098\"},{\"id\":\"perf-profile-00099\",\"name\":\"性能实例 00099\"}]}},\"request_id\":\"2\",\"token\":\"1230359:2:86713561460238\"}\n{\"backend_time_ns\":1794310623645235474,\"code_sha256\":\"9470c9f2f4f77f69b7f0cad9efd5e18538303e80301515b09cf2c807abad5691\",\"event\":\"request\",\"request_id\":\"3\",\"stream\":true,\"token\":\"1230359:3:86715058371883\"}\n{\"backend_time_ns\":1794310625259303262,\"event\":\"message\",\"payload\":{\"js_now_ms\":3192,\"js_started_ms\":1578,\"kind\":\"result\",\"ok\":true,\"sequence\":1,\"time_origin_ms\":1794310622066,\"token\":\"1230359:3:86715058371883\",\"value\":{\"coreId\":\"perf-chromium\",\"createdAt\":\"2026-11-10T00:00:00Z\",\"debugPort\":36157,\"debugReady\":true,\"deletedAt\":\"\",\"fingerprintArgs\":[\"--fingerprint-brand=Chrome\",\"--fingerprint-platform=linux\",\"--disable-non-proxied-udp\",\"--fingerprinting-canvas-image-data-noise\",\"--fingerprinting-client-rects-noise\"],\"groupId\":\"\",\"keywords\":[\"perf-keyword-00000\"],\"lastError\":\"\",\"lastLaunchArgs\":[\"--user-data-dir=/tmp/ant-linux-perf-cntr19l1/agents/frontend/formal-v2/rc1/r1-0/runtime/data/profiles/00000\",\"--remote-debugging-port=36157\",\"--disable-session-crashed-bubble\",\"--no-proxy-server\",\"--fingerprint=2737663095945361624\",\"--fingerprint-brand=Chrome\",\"--fingerprint-platform=linux\",\"--disable-non-proxied-udp\",\"--fingerprinting-canvas-image-data-noise\",\"--fingerprinting-client-rects-noise\",\"--disable-sync\",\"--no-first-run\",\"about:blank\"],\"lastStartAt\":\"2026-11-10T19:37:05+08:00\",\"lastStopAt\":\"\",\"launchArgs\":[\"--disable-sync\",\"--no-first-run\"],\"launchCode\":\"P00000\",\"memoryLimitMb\":0,\"pid\":1230528,\"profileId\":\"perf-profile-00000\",\"profileName\":\"性能实例 00000\",\"proxyBindName\":\"直连（不走代理）\",\"proxyBindSourceId\":\"\",\"proxyBindSourceUrl\":\"\",\"proxyBindUpdatedAt\":\"2026-11-10T19:37:01+08:00\",\"proxyConfig\":\"direct://\",\"proxyGroupName\":\"\",\"proxyId\":\"__direct__\",\"proxyMode\":\"fixed\",\"render\":{\"completed_ms\":3187.0000000000005,\"deadline_ms\":1801579,\"first_frame_ms\":3166,\"frame_attempts\":[{\"callback_ms\":3166,\"raf_ms\":3166},{\"callback_ms\":3187.0000000000005,\"raf_ms\":3187}],\"frame_count\":2,\"predicate_after\":true,\"predicate_before\":true,\"predicate_ms\":3145,\"render_proof_version\":2,\"second_frame_ms\":3187.0000000000005},\"restoreLastSession\":\"\",\"running\":true,\"runtimeWarning\":\"\",\"tags\":[\"性能标签 0\"],\"updatedAt\":\"2026-11-10T19:37:01+08:00\",\"userDataDir\":\"00000\"}},\"request_id\":\"3\",\"token\":\"1230359:3:86715058371883\"}\n{\"backend_time_ns\":1794310628465577742,\"code_sha256\":\"49497bae262574c8805c23d08bcc7753df58879f074bfc31c18082f522ac2110\",\"event\":\"request\",\"request_id\":\"4\",\"stream\":true,\"token\":\"1230359:4:86719878624534\"}\n{\"backend_time_ns\":1794310628707409551,\"event\":\"message\",\"payload\":{\"js_now_ms\":6640.000000000001,\"js_started_ms\":6399,\"kind\":\"result\",\"ok\":true,\"sequence\":1,\"time_origin_ms\":1794310622066,\"token\":\"1230359:4:86719878624534\",\"value\":{\"coreId\":\"perf-chromium\",\"createdAt\":\"2026-11-10T00:00:00Z\",\"debugPort\":0,\"debugReady\":false,\"deletedAt\":\"\",\"fingerprintArgs\":[\"--fingerprint-brand=Chrome\",\"--fingerprint-platform=linux\",\"--disable-non-proxied-udp\",\"--fingerprinting-canvas-image-data-noise\",\"--fingerprinting-client-rects-noise\"],\"groupId\":\"\",\"keywords\":[\"perf-keyword-00000\"],\"lastError\":\"\",\"lastLaunchArgs\":[\"--user-data-dir=/tmp/ant-linux-perf-cntr19l1/agents/frontend/formal-v2/rc1/r1-0/runtime/data/profiles/00000\",\"--remote-debugging-port=36157\",\"--disable-session-crashed-bubble\",\"--no-proxy-server\",\"--fingerprint=2737663095945361624\",\"--fingerprint-brand=Chrome\",\"--fingerprint-platform=linux\",\"--disable-non-proxied-udp\",\"--fingerprinting-canvas-image-data-noise\",\"--fingerprinting-client-rects-noise\",\"--disable-sync\",\"--no-first-run\",\"about:blank\"],\"lastStartAt\":\"2026-11-10T19:37:05+08:00\",\"lastStopAt\":\"2026-11-10T19:37:08+08:00\",\"launchArgs\":[\"--disable-sync\",\"--no-first-run\"],\"launchCode\":\"P00000\",\"memoryLimitMb\":0,\"pid\":0,\"profileId\":\"perf-profile-00000\",\"profileName\":\"性能实例 00000\",\"proxyBindName\":\"直连（不走代理）\",\"proxyBindSourceId\":\"\",\"proxyBindSourceUrl\":\"\",\"proxyBindUpdatedAt\":\"2026-11-10T19:37:01+08:00\",\"proxyConfig\":\"direct://\",\"proxyGroupName\":\"\",\"proxyId\":\"__direct__\",\"proxyMode\":\"fixed\",\"render\":{\"completed_ms\":6637,\"deadline_ms\":1806401,\"first_frame_ms\":6636,\"frame_attempts\":[{\"callback_ms\":6636,\"raf_ms\":6636},{\"callback_ms\":6637,\"raf_ms\":6637}],\"frame_count\":2,\"predicate_after\":true,\"predicate_before\":true,\"predicate_ms\":6617,\"render_proof_version\":2,\"second_frame_ms\":6637},\"restoreLastSession\":\"\",\"running\":false,\"runtimeWarning\":\"\",\"tags\":[\"性能标签 0\"],\"updatedAt\":\"2026-11-10T19:37:01+08:00\",\"userDataDir\":\"00000\"}},\"request_id\":\"4\",\"token\":\"1230359:4:86719878624534\"}\n",
+    "r1-0/instance-actions.json": "[\n  {\n    \"action\": \"start\",\n    \"profile_id\": \"perf-profile-00000\",\n    \"timed\": {\n      \"value\": {\n        \"coreId\": \"perf-chromium\",\n        \"createdAt\": \"2026-11-10T00:00:00Z\",\n        \"debugPort\": 36157,\n        \"debugReady\": true,\n        \"deletedAt\": \"\",\n        \"fingerprintArgs\": [\n          \"--fingerprint-brand=Chrome\",\n          \"--fingerprint-platform=linux\",\n          \"--disable-non-proxied-udp\",\n          \"--fingerprinting-canvas-image-data-noise\",\n          \"--fingerprinting-client-rects-noise\"\n        ],\n        \"groupId\": \"\",\n        \"keywords\": [\n          \"perf-keyword-00000\"\n        ],\n        \"lastError\": \"\",\n        \"lastLaunchArgs\": [\n          \"--user-data-dir=/tmp/ant-linux-perf-cntr19l1/agents/frontend/formal-v2/rc1/r1-0/runtime/data/profiles/00000\",\n          \"--remote-debugging-port=36157\",\n          \"--disable-session-crashed-bubble\",\n          \"--no-proxy-server\",\n          \"--fingerprint=2737663095945361624\",\n          \"--fingerprint-brand=Chrome\",\n          \"--fingerprint-platform=linux\",\n          \"--disable-non-proxied-udp\",\n          \"--fingerprinting-canvas-image-data-noise\",\n          \"--fingerprinting-client-rects-noise\",\n          \"--disable-sync\",\n          \"--no-first-run\",\n          \"about:blank\"\n        ],\n        \"lastStartAt\": \"2026-11-10T19:37:05+08:00\",\n        \"lastStopAt\": \"\",\n        \"launchArgs\": [\n          \"--disable-sync\",\n          \"--no-first-run\"\n        ],\n        \"launchCode\": \"P00000\",\n        \"memoryLimitMb\": 0,\n        \"pid\": 1230528,\n        \"profileId\": \"perf-profile-00000\",\n        \"profileName\": \"性能实例 00000\",\n        \"proxyBindName\": \"直连（不走代理）\",\n        \"proxyBindSourceId\": \"\",\n        \"proxyBindSourceUrl\": \"\",\n        \"proxyBindUpdatedAt\": \"2026-11-10T19:37:01+08:00\",\n        \"proxyConfig\": \"direct://\",\n        \"proxyGroupName\": \"\",\n        \"proxyId\": \"__direct__\",\n        \"proxyMode\": \"fixed\",\n        \"render\": {\n          \"completed_ms\": 3187.0000000000005,\n          \"deadline_ms\": 1801579,\n          \"first_frame_ms\": 3166,\n          \"frame_attempts\": [\n            {\n              \"callback_ms\": 3166,\n              \"raf_ms\": 3166\n            },\n            {\n              \"callback_ms\": 3187.0000000000005,\n              \"raf_ms\": 3187\n            }\n          ],\n          \"frame_count\": 2,\n          \"predicate_after\": true,\n          \"predicate_before\": true,\n          \"predicate_ms\": 3145,\n          \"render_proof_version\": 2,\n          \"second_frame_ms\": 3187.0000000000005\n        },\n        \"restoreLastSession\": \"\",\n        \"running\": true,\n        \"runtimeWarning\": \"\",\n        \"tags\": [\n          \"性能标签 0\"\n        ],\n        \"updatedAt\": \"2026-11-10T19:37:01+08:00\",\n        \"userDataDir\": \"00000\"\n      },\n      \"elapsed_ms\": 1614.580729,\n      \"phases\": {},\n      \"operation_id\": 3,\n      \"phase_ms\": {},\n      \"journal_path\": \"/tmp/ant-linux-perf-cntr19l1/agents/frontend/formal-v2/rc1/r1-0/operations.log\",\n      \"token\": \"1230359:3:86715058371883\",\n      \"request_id\": \"3\",\n      \"started_monotonic_ns\": 86715058371883,\n      \"received_monotonic_ns\": 86716672952612\n    },\n    \"page_ready_monotonic_ns\": 86716824467542,\n    \"elapsed_ms\": 1766.095659,\n    \"verified_url\": \"http://127.0.0.1:39639/fixture\",\n    \"title\": \"Ant Linux Performance Fixture\",\n    \"content\": \"local deterministic page\"\n  },\n  {\n    \"action\": \"stop\",\n    \"profile_id\": \"perf-profile-00000\",\n    \"timed\": {\n      \"value\": {\n        \"coreId\": \"perf-chromium\",\n        \"createdAt\": \"2026-11-10T00:00:00Z\",\n        \"debugPort\": 0,\n        \"debugReady\": false,\n        \"deletedAt\": \"\",\n        \"fingerprintArgs\": [\n          \"--fingerprint-brand=Chrome\",\n          \"--fingerprint-platform=linux\",\n          \"--disable-non-proxied-udp\",\n          \"--fingerprinting-canvas-image-data-noise\",\n          \"--fingerprinting-client-rects-noise\"\n        ],\n        \"groupId\": \"\",\n        \"keywords\": [\n          \"perf-keyword-00000\"\n        ],\n        \"lastError\": \"\",\n        \"lastLaunchArgs\": [\n          \"--user-data-dir=/tmp/ant-linux-perf-cntr19l1/agents/frontend/formal-v2/rc1/r1-0/runtime/data/profiles/00000\",\n          \"--remote-debugging-port=36157\",\n          \"--disable-session-crashed-bubble\",\n          \"--no-proxy-server\",\n          \"--fingerprint=2737663095945361624\",\n          \"--fingerprint-brand=Chrome\",\n          \"--fingerprint-platform=linux\",\n          \"--disable-non-proxied-udp\",\n          \"--fingerprinting-canvas-image-data-noise\",\n          \"--fingerprinting-client-rects-noise\",\n          \"--disable-sync\",\n          \"--no-first-run\",\n          \"about:blank\"\n        ],\n        \"lastStartAt\": \"2026-11-10T19:37:05+08:00\",\n        \"lastStopAt\": \"2026-11-10T19:37:08+08:00\",\n        \"launchArgs\": [\n          \"--disable-sync\",\n          \"--no-first-run\"\n        ],\n        \"launchCode\": \"P00000\",\n        \"memoryLimitMb\": 0,\n        \"pid\": 0,\n        \"profileId\": \"perf-profile-00000\",\n        \"profileName\": \"性能实例 00000\",\n        \"proxyBindName\": \"直连（不走代理）\",\n        \"proxyBindSourceId\": \"\",\n        \"proxyBindSourceUrl\": \"\",\n        \"proxyBindUpdatedAt\": \"2026-11-10T19:37:01+08:00\",\n        \"proxyConfig\": \"direct://\",\n        \"proxyGroupName\": \"\",\n        \"proxyId\": \"__direct__\",\n        \"proxyMode\": \"fixed\",\n        \"render\": {\n          \"completed_ms\": 6637,\n          \"deadline_ms\": 1806401,\n          \"first_frame_ms\": 6636,\n          \"frame_attempts\": [\n            {\n              \"callback_ms\": 6636,\n              \"raf_ms\": 6636\n            },\n            {\n              \"callback_ms\": 6637,\n              \"raf_ms\": 6637\n            }\n          ],\n          \"frame_count\": 2,\n          \"predicate_after\": true,\n          \"predicate_before\": true,\n          \"predicate_ms\": 6617,\n          \"render_proof_version\": 2,\n          \"second_frame_ms\": 6637\n        },\n        \"restoreLastSession\": \"\",\n        \"running\": false,\n        \"runtimeWarning\": \"\",\n        \"tags\": [\n          \"性能标签 0\"\n        ],\n        \"updatedAt\": \"2026-11-10T19:37:01+08:00\",\n        \"userDataDir\": \"00000\"\n      },\n      \"elapsed_ms\": 242.536126,\n      \"phases\": {},\n      \"operation_id\": 4,\n      \"phase_ms\": {},\n      \"journal_path\": \"/tmp/ant-linux-perf-cntr19l1/agents/frontend/formal-v2/rc1/r1-0/operations.log\",\n      \"token\": \"1230359:4:86719878624534\",\n      \"request_id\": \"4\",\n      \"started_monotonic_ns\": 86719878624534,\n      \"received_monotonic_ns\": 86720121160660\n    }\n  }\n]\n",
+    "r1-0/browser-starts.json": "[\n  {\n    \"profile_id\": \"perf-profile-00000\",\n    \"pid\": \"1230528\",\n    \"start\": 8671513,\n    \"debug_port\": 36157,\n    \"verified_page_url\": \"http://127.0.0.1:39639/fixture\"\n  }\n]\n"
+  }
+}

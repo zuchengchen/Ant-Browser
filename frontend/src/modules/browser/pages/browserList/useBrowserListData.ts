@@ -3,6 +3,7 @@ import { toast } from '../../../../shared/components'
 import type { BrowserGroupWithCount, BrowserProfile, BrowserProxy, BrowserProxyVirtualGroup } from '../../types'
 import { fetchBrowserProfiles, fetchBrowserProxies, fetchBrowserProxyVirtualGroups, fetchGroups } from '../../api'
 import { EventsOn } from '../../../../wailsjs/runtime/runtime'
+import { reuseProfileSnapshot } from './profileSnapshot'
 
 const PROFILE_LIST_FALLBACK_REFRESH_MS = 15_000
 const APP_READY_EVENT = 'app:ready'
@@ -41,8 +42,10 @@ export function useBrowserListData({ loadCores }: UseBrowserListDataOptions) {
   }
 
   const replaceProfilesState = (items: BrowserProfile[]) => {
-    profilesRef.current = items
-    setProfiles(items)
+    const next = reuseProfileSnapshot(profilesRef.current, items)
+    if (next === profilesRef.current) return
+    profilesRef.current = next
+    setProfiles(next)
   }
 
   const updateProfilesState = (updater: (items: BrowserProfile[]) => BrowserProfile[]) => {

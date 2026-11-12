@@ -67,7 +67,8 @@ func (m *Manager) Create(input ProfileInput) (*Profile, error) {
 	}
 	m.Profiles[profileId] = profile
 	log.Info("浏览器配置创建", logger.F("profile_id", profileId), logger.F("profile_name", input.ProfileName))
-	if err := m.SaveProfiles(); err != nil {
+	if err := m.SaveProfile(profile); err != nil {
+		delete(m.Profiles, profileId)
 		return nil, err
 	}
 	m.ensureProfileLaunchCode(profile)

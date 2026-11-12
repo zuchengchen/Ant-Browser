@@ -17,11 +17,15 @@ func (a *App) reconcileProfileProxyBindings() {
 	log := logger.New("Browser")
 	a.browserMgr.Mutex.Lock()
 	defer a.browserMgr.Mutex.Unlock()
+	if len(a.browserMgr.Profiles) == 0 {
+		return
+	}
 
+	resolveBinding := a.browserMgr.NewProfileProxyBindingResolver()
 	changedCount := 0
 	reboundCount := 0
 	for _, profile := range a.browserMgr.Profiles {
-		changed, boundInPool, mode := a.browserMgr.ResolveProfileProxyBinding(profile)
+		changed, boundInPool, mode := resolveBinding(profile)
 		if changed {
 			profile.UpdatedAt = time.Now().Format(time.RFC3339)
 			changedCount++

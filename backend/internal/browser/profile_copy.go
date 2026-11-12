@@ -128,7 +128,8 @@ func (m *Manager) copyProfile(profileId string, newName string, fingerprintResol
 	m.Profiles[newId] = profile
 	log.Info("实例复制成功", logger.F("src_id", profileId), logger.F("new_id", newId), logger.F("new_name", profileName))
 
-	if err := m.SaveProfiles(); err != nil {
+	if err := m.SaveProfile(profile); err != nil {
+		delete(m.Profiles, newId)
 		return nil, err
 	}
 

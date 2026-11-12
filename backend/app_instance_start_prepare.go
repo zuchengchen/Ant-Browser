@@ -243,7 +243,7 @@ func (a *App) prepareBrowserLaunchContext(input browserStartInput, profile *Brow
 
 	proxyChanged, proxyNotice, proxyErr := a.browserMgr.ApplyDefaults(profile)
 	if proxyChanged {
-		_ = a.browserMgr.SaveProfiles()
+		_ = a.browserMgr.SaveProfile(profile)
 	}
 	// 代理绑定被自动修正（按快照找回节点 / 改用配置快照）时必须让用户看见，
 	// 由 execute 阶段并入 RuntimeWarning 返回给前端。

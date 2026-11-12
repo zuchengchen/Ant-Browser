@@ -1,0 +1,154 @@
+{
+  "schema": 1,
+  "seed": 1729,
+  "catalog_sizes": [
+    100,
+    1000,
+    10000
+  ],
+  "runtime_counts": [
+    0,
+    1,
+    5,
+    10
+  ],
+  "short_samples": 30,
+  "independent_rounds": 10,
+  "warmup_seconds": 15,
+  "resource_sample_seconds": 30,
+  "resource_interval_seconds": 1,
+  "catalog": {
+    "binding": "one synthetic HTTP proxy per profile; no live proxy tests on display-only entries",
+    "freshness": "never measured, identical on both sides",
+    "operations": [
+      "initial_render",
+      "profile_filter",
+      "profile_restore",
+      "proxy_filter",
+      "proxy_restore",
+      "keyword_save_visible",
+      "keyword_save_closed",
+      "profiles_api",
+      "groups_api",
+      "proxies_api"
+    ],
+    "assertions": [
+      "exact returned/rendered IDs and names",
+      "saved keyword returned by backend",
+      "persisted keyword on disk",
+      "saved state after restart"
+    ]
+  },
+  "runtime": {
+    "catalog_size": 100,
+    "binding": "direct; local deterministic page; empty new profiles each round",
+    "operations": [
+      "application_ready",
+      "instance_ready",
+      "rendered_running_state",
+      "stop",
+      "idle_resources",
+      "resource_reclamation"
+    ],
+    "categories": [
+      "app",
+      "webview",
+      "browser",
+      "proxy",
+      "other"
+    ],
+    "assertions": [
+      "real Chromium debugging endpoint",
+      "local page title and content",
+      "running/stopped UI",
+      "same profile state in API",
+      "all owned browser PIDs exited"
+    ],
+    "launch_args": [
+      "--disable-sync",
+      "--no-first-run"
+    ],
+    "operation_trigger": "actual instance row start/stop button"
+  },
+  "proxy": {
+    "engines": [
+      "xray",
+      "sing-box",
+      "mihomo"
+    ],
+    "samples": 30,
+    "assertions": [
+      "local authenticated flow",
+      "TLS temporary CA and bad-hostname negative control",
+      "bridge reuse",
+      "process reclamation"
+    ]
+  },
+  "file_io": {
+    "samples": 30,
+    "assertions": [
+      "fixed sample hashes",
+      "real local HTTP and archive operations",
+      "cancel/error correctness"
+    ]
+  },
+  "statistics": {
+    "method": "independent percentile bootstrap of median difference",
+    "resamples": 4000,
+    "confidence": 0.95,
+    "maximum_regression": 0.05,
+    "absolute_noise": "only for near-zero metrics, calibrated using producer clock/memory resolution before the formal run",
+    "core_metrics": [
+      "user operation median latency",
+      "same-load CPU time",
+      "same-load PSS"
+    ],
+    "auxiliary_metrics": [
+      "p95 latency",
+      "RSS",
+      "allocation count",
+      "process count",
+      "goroutine count",
+      "file descriptor count",
+      "fixed modal animation time"
+    ],
+    "improvement_eligible": [
+      "profile_filter",
+      "proxy_filter",
+      "keyword_save_visible",
+      "application_ready",
+      "instance_ready",
+      "proxy_cold_ready"
+    ],
+    "inconclusive": "increase samples or diagnose environment; never pass indeterminate evidence"
+  },
+  "observation_timeout_seconds": 1800,
+  "gui_timing": {
+    "origin": "host dispatch before queue",
+    "completion": "verified business predicate, two animation frames, host result receipt",
+    "input": "calibrated DOM entry in real Wails/WebKitGTK",
+    "keyword_phases": [
+      "keyword_visible",
+      "keyword_closed"
+    ],
+    "timeout_seconds": 1800
+  },
+  "v2_roles": {
+    "baseline_catalog_sizes": [
+      100,
+      1000
+    ],
+    "candidate_catalog_sizes": [
+      100,
+      1000,
+      10000
+    ],
+    "pressure_exception": "verified historical baseline catalog 10000 only",
+    "candidate_only_resource_catalog_sizes": [
+      10000
+    ],
+    "resource_rounds": 10,
+    "resource_warmup_seconds": 15,
+    "resource_sample_seconds": 30
+  }
+}

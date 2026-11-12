@@ -1,0 +1,226 @@
+// Copied only into an isolated performance build. Never linked into normal releases.
+package main
+
+import (
+	"context"
+	"crypto/sha256"
+	"encoding/json"
+	"fmt"
+	"net"
+	"net/http"
+	"os"
+	"path/filepath"
+	"runtime"
+	"strconv"
+	"sync"
+	"sync/atomic"
+	"time"
+
+	wr "github.com/wailsapp/wails/v2/pkg/runtime"
+)
+
+func linuxPerfOnDomReady(ctx context.Context) {
+	root, err := filepath.Abs(os.Getenv("LINUX_PERF_RUNTIME"))
+	if err != nil || root != appRoot {
+		panic("performance runtime root mismatch")
+	}
+	if _, err = os.Stat(filepath.Join(root, ".linux-perf-runtime")); err != nil {
+		panic(err)
+	}
+	socket := os.Getenv("LINUX_PERF_SOCKET")
+	if socket == "" || !filepath.IsAbs(socket) {
+		panic("missing performance socket")
+	}
+	listener, err := net.Listen("unix", socket)
+	if err != nil {
+		panic(err)
+	}
+	if err := os.Chmod(socket, 0600); err != nil {
+		panic(err)
+	}
+	journal, err := os.OpenFile(filepath.Join(root, "linuxperf-gui-events.jsonl"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
+	if err != nil {
+		panic(err)
+	}
+	var journalMu sync.Mutex
+	record := func(value map[string]interface{}) error {
+		journalMu.Lock()
+		defer journalMu.Unlock()
+		value["backend_time_ns"] = time.Now().UnixNano()
+		return json.NewEncoder(journal).Encode(value)
+	}
+	type observation struct {
+		payload string
+		err     error
+	}
+	type operation struct {
+		token    string
+		messages chan observation
+		done     <-chan struct{}
+	}
+	var mu sync.Mutex
+	var counter atomic.Uint64
+	pending := map[string]*operation{}
+	wr.EventsOn(ctx, "linuxperf:result", func(args ...interface{}) {
+		if len(args) != 2 {
+			return
+		}
+		id, ok := args[0].(string)
+		if !ok {
+			return
+		}
+		payload, ok := args[1].(string)
+		if !ok {
+			return
+		}
+		mu.Lock()
+		entry := pending[id]
+		mu.Unlock()
+		if entry == nil {
+			return
+		}
+		var raw interface{}
+		err := json.Unmarshal([]byte(payload), &raw)
+		if err == nil {
+			err = record(map[string]interface{}{"event": "message", "request_id": id, "token": entry.token, "payload": raw})
+		}
+		select {
+		case entry.messages <- observation{payload, err}:
+		case <-entry.done:
+		}
+	})
+	mux := http.NewServeMux()
+	mux.HandleFunc("/state", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{"root": appRoot, "pid": os.Getpid(), "goroutines": runtime.NumGoroutine(), "engine": "wails-webkitgtk", "ready": true, "gui_protocol": 2})
+	})
+	mux.HandleFunc("/eval", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" {
+			http.Error(w, "POST required", 405)
+			return
+		}
+		var request struct {
+			Code      string `json:"code"`
+			Stream    bool   `json:"stream"`
+			Token     string `json:"token"`
+			TimeoutMS int    `json:"timeout_ms"`
+		}
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 8<<20)).Decode(&request); err != nil {
+			http.Error(w, err.Error(), 400)
+			return
+		}
+		if request.Stream && (request.Token == "" || request.TimeoutMS <= 0 || request.TimeoutMS > 1800000) {
+			http.Error(w, "invalid timed request identity or deadline", 400)
+			return
+		}
+		id := strconv.FormatUint(counter.Add(1), 10)
+		entry := &operation{request.Token, make(chan observation, 32), r.Context().Done()}
+		mu.Lock()
+		pending[id] = entry
+		mu.Unlock()
+		defer func() { mu.Lock(); delete(pending, id); mu.Unlock() }()
+		if err := record(map[string]interface{}{"event": "request", "request_id": id, "token": request.Token, "code_sha256": fmt.Sprintf("%x", sha256.Sum256([]byte(request.Code))), "stream": request.Stream}); err != nil {
+			http.Error(w, "cannot persist GUI observation", 500)
+			return
+		}
+		code, _ := json.Marshal(request.Code)
+		if !request.Stream {
+			js := fmt.Sprintf(`(async()=>{try{const value=await(new Function("return (async()=>{"+%s+"})()"))(); window.runtime.EventsEmit("linuxperf:result","%s",JSON.stringify({ok:true,value}));}catch(e){window.runtime.EventsEmit("linuxperf:result","%s",JSON.stringify({ok:false,error:String(e),stack:e.stack}));}})()`, string(code), id, id)
+			wr.WindowExecJS(ctx, js)
+			select {
+			case item := <-entry.messages:
+				if item.err != nil {
+					http.Error(w, "invalid or unpersisted GUI result", 500)
+					return
+				}
+				w.Header().Set("Content-Type", "application/json")
+				fmt.Fprint(w, item.payload)
+			case <-r.Context().Done():
+				return
+			case <-time.After(30 * time.Minute):
+				http.Error(w, "GUI operation timeout", 504)
+			}
+			return
+		}
+		w.Header().Set("Content-Type", "application/x-ndjson")
+		w.WriteHeader(http.StatusOK)
+		flusher, ok := w.(http.Flusher)
+		if !ok {
+			return
+		}
+		flusher.Flush()
+		token, _ := json.Marshal(request.Token)
+		js := fmt.Sprintf(`(async()=>{let sequence=0;const token=%s;const js_started_ms=performance.now();const time_origin_ms=performance.timeOrigin;const send=(kind,fields)=>window.runtime.EventsEmit("linuxperf:result","%s",JSON.stringify({token,sequence:++sequence,kind,js_started_ms,time_origin_ms,js_now_ms:performance.now(),...fields}));const linuxPerfPhase=(phase,value)=>send("phase",{ok:true,phase,value});try{const value=await(new Function("linuxPerfPhase","return (async()=>{"+%s+"})()"))(linuxPerfPhase);send("result",{ok:true,value});}catch(e){send("error",{ok:false,error:String(e),stack:e.stack});}})()`, string(token), id, string(code))
+		timer := time.NewTimer(time.Duration(request.TimeoutMS) * time.Millisecond)
+		defer timer.Stop()
+		wr.WindowExecJS(ctx, js)
+		seen, terminal := map[int]bool{}, 0
+		encoder := json.NewEncoder(w)
+		fail := func(message string) {
+			encoder.Encode(map[string]interface{}{"token": request.Token, "request_id": id, "sequence": len(seen) + 1, "kind": "error", "ok": false, "error": message})
+			flusher.Flush()
+		}
+		for {
+			select {
+			case item := <-entry.messages:
+				if item.err != nil {
+					fail("invalid or unpersisted GUI result")
+					return
+				}
+				var message map[string]interface{}
+				if err := json.Unmarshal([]byte(item.payload), &message); err != nil {
+					fail("malformed GUI result")
+					return
+				}
+				number, ok := message["sequence"].(float64)
+				seq := int(number)
+				if !ok || seq <= 0 || float64(seq) != number || seen[seq] || message["token"] != request.Token {
+					fail("duplicate or mismatched GUI result identity")
+					return
+				}
+				kind, _ := message["kind"].(string)
+				if kind != "phase" && kind != "result" && kind != "error" {
+					fail("unknown GUI result kind")
+					return
+				}
+				seen[seq] = true
+				message["request_id"] = id
+				if err := encoder.Encode(message); err != nil {
+					return
+				}
+				flusher.Flush()
+				if kind == "error" {
+					return
+				}
+				if kind == "result" {
+					if terminal != 0 {
+						fail("duplicate terminal GUI result")
+						return
+					}
+					terminal = seq
+				}
+				if terminal != 0 {
+					complete := len(seen) == terminal
+					for i := 1; complete && i <= terminal; i++ {
+						complete = seen[i]
+					}
+					if complete {
+						return
+					}
+				}
+			case <-r.Context().Done():
+				record(map[string]interface{}{"event": "cancelled", "request_id": id, "token": request.Token, "error": r.Context().Err().Error()})
+				return
+			case <-timer.C:
+				record(map[string]interface{}{"event": "timeout", "request_id": id, "token": request.Token})
+				fail("GUI operation timeout")
+				return
+			}
+		}
+	})
+	go func() {
+		if err := http.Serve(listener, mux); err != nil {
+			fmt.Fprintln(os.Stderr, "performance observer:", err)
+		}
+	}()
+}

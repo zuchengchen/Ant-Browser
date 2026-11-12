@@ -54,10 +54,10 @@ export const useProxySpeedStore = create<ProxySpeedStoreState>((set) => ({
   }),
   setTesting: (proxyId, testing) => set((state) => {
     if (testing) {
-      if (state.testingIds[proxyId]) return {}
+      if (state.testingIds[proxyId]) return state
       return { testingIds: { ...state.testingIds, [proxyId]: true } }
     }
-    if (!state.testingIds[proxyId]) return {}
+    if (!state.testingIds[proxyId]) return state
     const next = { ...state.testingIds }
     delete next[proxyId]
     return { testingIds: next }
@@ -77,12 +77,12 @@ export const useProxySpeedStore = create<ProxySpeedStoreState>((set) => ({
     return changed ? { testingIds: next } : {}
   }),
   applyBackendResults: (proxies, isFresh) => set((state) => {
-    let changed = false
-    const next = { ...state.results }
+    let next = state.results
     proxies.forEach((proxy) => {
       if (next[proxy.proxyId]) return
       if (!proxy.lastTestedAt || typeof proxy.lastLatencyMs !== 'number') return
       if (!isFresh(proxy.lastTestedAt)) return
+      if (next === state.results) next = { ...state.results }
       next[proxy.proxyId] = {
         proxyId: proxy.proxyId,
         ok: proxy.lastTestOk ?? false,
@@ -92,9 +92,8 @@ export const useProxySpeedStore = create<ProxySpeedStoreState>((set) => ({
         testedAt: proxy.lastTestedAt,
         fingerprint: proxy.speedTestFingerprint || undefined,
       }
-      changed = true
     })
-    return changed ? { results: next } : {}
+    return next === state.results ? state : { results: next }
   }),
   prune: (validIds) => set((state) => {
     if (validIds.size === 0) return {}

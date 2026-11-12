@@ -97,6 +97,26 @@ func (m *Manager) loadProfiles() {
 	log.Debug("浏览器配置从文件加载完成", logger.F("count", len(m.Profiles)))
 }
 
+// SaveProfile persists one changed profile. The caller must hold Mutex, as for
+// SaveProfiles. File-backed configurations still require a complete snapshot.
+func (m *Manager) SaveProfile(profile *Profile) error {
+	if m.ProfileDAO != nil {
+		profile.CoreId = normalizeProfileCoreID(profile.CoreId)
+		if err := m.ProfileDAO.Upsert(profile); err != nil {
+			logger.New("Browser").Error("实例配置持久化失败", logger.F("profile_id", profile.ProfileId), logger.F("error", err))
+			return err
+		}
+		return nil
+	}
+
+	previous := m.Config.Browser.Profiles
+	if err := m.SaveProfiles(); err != nil {
+		m.Config.Browser.Profiles = previous
+		return err
+	}
+	return nil
+}
+
 // SaveProfiles 保存所有实例配置（DAO 模式：逐条 upsert）
 func (m *Manager) SaveProfiles() error {
 	log := logger.New("Browser")

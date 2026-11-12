@@ -135,7 +135,37 @@ func (m *Manager) ResolveProfileProxyBinding(profile *Profile) (bool, bool, stri
 		changed := BindProfileToProxy(profile, proxy, true)
 		return changed, true, "proxy_id"
 	}
+	return resolveProfileProxyBindingBySnapshot(profile, proxies)
+}
 
+// NewProfileProxyBindingResolver reads a fresh catalog once for a reconciliation
+// pass. Keep the returned resolver local to that pass; a later pass must reload
+// the catalog to see proxy edits. The caller holds Mutex while changing profiles.
+func (m *Manager) NewProfileProxyBindingResolver() func(*Profile) (bool, bool, string) {
+	proxies := m.listProxyCatalog()
+	byID := make(map[string]Proxy, len(proxies))
+	for _, proxy := range proxies {
+		key := normalizeProxyBindValue(proxy.ProxyId)
+		if key == "" {
+			continue
+		}
+		// Match findProxyByID's first result for duplicate normalized IDs.
+		if _, exists := byID[key]; !exists {
+			byID[key] = proxy
+		}
+	}
+	return func(profile *Profile) (bool, bool, string) {
+		if profile == nil {
+			return false, false, ""
+		}
+		if proxy, ok := byID[normalizeProxyBindValue(profile.ProxyId)]; ok {
+			return BindProfileToProxy(profile, proxy, true), true, "proxy_id"
+		}
+		return resolveProfileProxyBindingBySnapshot(profile, proxies)
+	}
+}
+
+func resolveProfileProxyBindingBySnapshot(profile *Profile, proxies []Proxy) (bool, bool, string) {
 	allowConfigFallback := strings.TrimSpace(profile.ProxyId) != "" ||
 		strings.TrimSpace(profile.ProxyBindSourceID) != "" ||
 		strings.TrimSpace(profile.ProxyBindSourceURL) != "" ||

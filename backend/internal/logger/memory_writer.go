@@ -21,6 +21,7 @@ type MemoryWriter struct {
 	mu      sync.RWMutex
 	entries []MemoryLogEntry
 	maxSize int
+	next    int // next slot to overwrite once entries reaches maxSize
 }
 
 var globalMemoryWriter *MemoryWriter
@@ -54,10 +55,15 @@ func (w *MemoryWriter) Write(entry *LogEntry) error {
 		Message:   entry.Message,
 		Fields:    entry.Fields,
 	}
-	if len(w.entries) >= w.maxSize {
-		w.entries = w.entries[1:]
+	if len(w.entries) < w.maxSize {
+		w.entries = append(w.entries, item)
+		return nil
 	}
-	w.entries = append(w.entries, item)
+	w.entries[w.next] = item
+	w.next++
+	if w.next == len(w.entries) {
+		w.next = 0
+	}
 	return nil
 }
 
@@ -81,7 +87,8 @@ func (w *MemoryWriter) GetEntries() []MemoryLogEntry {
 	w.mu.RLock()
 	defer w.mu.RUnlock()
 	result := make([]MemoryLogEntry, len(w.entries))
-	copy(result, w.entries)
+	copied := copy(result, w.entries[w.next:])
+	copy(result[copied:], w.entries[:w.next])
 	return result
 }
 
@@ -89,5 +96,7 @@ func (w *MemoryWriter) GetEntries() []MemoryLogEntry {
 func (w *MemoryWriter) Clear() {
 	w.mu.Lock()
 	defer w.mu.Unlock()
+	clear(w.entries)
 	w.entries = w.entries[:0]
+	w.next = 0
 }

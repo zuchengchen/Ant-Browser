@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { MoreHorizontal, Pencil, Wifi } from 'lucide-react'
+import { MoreHorizontal, Pencil } from 'lucide-react'
 
 import { Button, Card, Input, Table } from '../../../../shared/components'
 import type { SortOrder, TableColumn } from '../../../../shared/components/Table'
@@ -7,6 +7,7 @@ import type { ProxyIPHealthResult } from '../../types'
 
 import { BUILTIN_PROXY_IDS, isSelectableProxyDisplay, sourceHostLabel, type ProxyDisplayInfo } from './helpers'
 import { BrowserEditSelect } from '../../components/BrowserEditSelect'
+import { ProxyPoolLatencyCell, ProxyPoolLatencyEngineCell, ProxyPoolTestButton } from './ProxyPoolSpeedCells'
 
 interface ProxyPoolTableCardProps {
   allFilteredSelected: boolean
@@ -44,9 +45,6 @@ interface ProxyPoolTableCardProps {
   someFilteredSelected: boolean
   sortColumn: string
   sortOrder: SortOrder
-  latencyMap: Record<string, number>
-  latencyEngineMap: Record<string, string>
-  latencyErrorMap: Record<string, string>
 }
 
 export function ProxyPoolTableCard({
@@ -85,9 +83,6 @@ export function ProxyPoolTableCard({
   someFilteredSelected,
   sortColumn,
   sortOrder,
-  latencyMap,
-  latencyEngineMap,
-  latencyErrorMap,
 }: ProxyPoolTableCardProps) {
   const hasActiveFilters = filterProtocol !== 'all' || !!filterKeyword || filterGroup !== 'all' || filterAvailableOnly
   const [openMoreProxyId, setOpenMoreProxyId] = useState<string | null>(null)
@@ -111,36 +106,6 @@ export function ProxyPoolTableCard({
     const availableAbove = buttonRect.top - boundaryTop
     const availableBelow = boundaryBottom - buttonRect.bottom
     return availableBelow < menuHeight && availableAbove > availableBelow ? 'up' : 'down'
-  }
-
-  const renderLatency = (record: ProxyDisplayInfo) => {
-    if (record.isVirtual) return '\u6309\u6210\u5458\u8282\u70b9'
-    if (record.proxyConfig === 'direct://') {
-      return <span className="text-[var(--color-text-muted)] text-xs">不适用</span>
-    }
-    const value = latencyMap[record.proxyId]
-    // 状态列不允许空白/含糊占位：没有结果时明确显示“未测速”。
-    if (value === undefined) return <span className="text-[var(--color-text-muted)] text-xs">未测速</span>
-    if (value === -1) return <span className="text-[var(--color-text-muted)] text-xs animate-pulse">测试中...</span>
-    const error = latencyErrorMap[record.proxyId] || ''
-    if (value === -2) return <span className="text-red-500 text-xs" title={error || '测速超时'}>超时</span>
-    if (value === -3) return <span className="text-gray-400 text-xs" title={error || '协议不支持'}>不支持</span>
-    if (value === -4) return <span className="text-red-500 text-xs" title={error || '测速失败'}>失败</span>
-    const color = value < 200 ? 'text-green-500' : value < 500 ? 'text-yellow-500' : 'text-red-500'
-    return <span className={`text-xs font-medium ${color}`}>{value} ms</span>
-  }
-
-  const renderLatencyEngine = (record: ProxyDisplayInfo) => {
-    if (record.isVirtual) return '\u865a\u62df\u5206\u7ec4'
-    if (record.proxyConfig === 'direct://') {
-      return <span className="text-[var(--color-text-muted)] text-xs">不适用</span>
-    }
-    const value = latencyMap[record.proxyId]
-    if (value === undefined) return <span className="text-[var(--color-text-muted)] text-xs">-</span>
-    if (value === -1) return <span className="text-[var(--color-text-muted)] text-xs animate-pulse">-</span>
-    return latencyEngineMap[record.proxyId]
-      ? <span className="text-xs text-[var(--color-text-secondary)] whitespace-nowrap">{latencyEngineMap[record.proxyId]}</span>
-      : <span className="text-[var(--color-text-muted)] text-xs">-</span>
   }
 
   const renderIPHealth = (record: ProxyDisplayInfo) => {
@@ -257,13 +222,13 @@ export function ProxyPoolTableCard({
       title: '延迟',
       width: '90px',
       sortable: true,
-      render: (_, record) => renderLatency(record),
+      render: (_, record) => <ProxyPoolLatencyCell record={record} />,
     },
     {
       key: 'latencyEngine',
       title: '测速类型',
       width: '90px',
-      render: (_, record) => renderLatencyEngine(record),
+      render: (_, record) => <ProxyPoolLatencyEngineCell record={record} />,
     },
     {
       key: 'ipHealth',
@@ -291,17 +256,10 @@ export function ProxyPoolTableCard({
         const closeMore = () => setOpenMoreProxyId(null)
         return (
           <div className="flex items-center gap-1">
-            <Button
-              size="sm"
-              variant="ghost"
-              className="px-2"
-              title="测速"
+            <ProxyPoolTestButton
+              record={record}
               onClick={(event) => { event.stopPropagation(); closeMore(); onTestOne(record) }}
-              loading={latencyMap[record.proxyId] === -1}
-              disabled={record.proxyConfig === 'direct://'}
-            >
-              {latencyMap[record.proxyId] !== -1 && <Wifi className="w-3.5 h-3.5" />}
-            </Button>
+            />
             <Button
               size="sm"
               variant="ghost"
@@ -382,8 +340,6 @@ export function ProxyPoolTableCard({
   ], [
     checkingIPHealthIds,
     ipHealthMap,
-    latencyMap,
-    latencyEngineMap,
     onCheckOneIPHealth,
     onDelete,
     onEdit,

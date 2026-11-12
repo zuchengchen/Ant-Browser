@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ConfirmModal, toast } from '../../../shared/components'
 import type { SortOrder } from '../../../shared/components/Table'
@@ -22,7 +22,6 @@ import {
 import {
   ProxyPoolEditModal,
   ProxyPoolIPHealthDetailModal,
-  ProxyPoolImportModal,
   ProxyPoolPreviewModal,
   type ProxyEditFormValue,
 } from './proxyPool/ProxyPoolModals'
@@ -32,11 +31,9 @@ import { ProxyPoolTableCard } from './proxyPool/ProxyPoolTableCard'
 import { ProxyVirtualGroupMembersModal } from './proxyPool/ProxyVirtualGroupMembersModal'
 import { ProxyPoolCheckSettingsModal } from './proxyPool/ProxyPoolCheckSettingsModal'
 import { ProxyPoolUsageGuideModal } from './proxyPool/ProxyPoolUsageGuideModal'
-import { ProxySourceRefreshModal } from './proxyPool/ProxySourceRefreshModal'
-import { ProxyCoreDownloadModal } from './proxyPool/ProxyCoreDownloadModal'
+import { ConnectedProxyPoolImportModal, ConnectedProxySourceRefreshModal, ConnectedProxyCoreDownloadModal } from './proxyPool/ProxyPoolSpeedOptions'
 import { useProxySourceRefresh } from './proxyPool/useProxySourceRefresh'
 import { useProxyImportFlow } from './proxyPool/useProxyImportFlow'
-import { selectUsableProxies, useProxySpeedStore } from '../proxySpeedStore'
 import { useProxyChecks } from './proxyPool/useProxyChecks'
 import { useProxySelection } from './proxyPool/useProxySelection'
 import { useProxyCheckSettingsModal } from './proxyPool/useProxyCheckSettingsModal'
@@ -168,8 +165,6 @@ export function ProxyPoolPage() {
 
   const {
     latencyMap,
-    latencyEngineMap,
-    latencyErrorMap,
     testingAll,
     ipHealthMap,
     checkingIPHealthIds,
@@ -184,7 +179,10 @@ export function ProxyPoolPage() {
     handleCheckOneIPHealth,
     handleCheckAllIPHealth,
     openIPHealthDetail,
-  } = useProxyChecks({ proxies })
+  } = useProxyChecks({
+    proxies,
+    aggregateSpeed: filterAvailableOnly || (sortColumn === 'latency' && sortOrder !== undefined),
+  })
 
   const loadProxies = useCallback(async () => {
     setLoading(true)
@@ -244,35 +242,6 @@ export function ProxyPoolPage() {
     label: `虚拟：${group.groupName}`,
   }))
 
-  // 订阅拉取代理选项：只给测速成功（延迟为正）的节点，按延迟升序；
-  // 失败/未测速的节点拉订阅大概率也不可用，不再出现在下拉里。
-  // 延迟合入测速 store 的最新值（store 未覆盖时回落行上持久化的上次结果），
-  // 导入弹窗与更新管理弹窗共用这份选项展示延迟。
-  const speedResults = useProxySpeedStore(state => state.results)
-  const fetchProxyOptions = useMemo(
-    () => selectUsableProxies(proxies, speedResults).map(proxy => ({
-      ...proxy,
-      lastLatencyMs: speedResults[proxy.proxyId]?.latencyMs ?? proxy.lastLatencyMs,
-    })),
-    [proxies, speedResults],
-  )
-
-  // 可用下载代理选项：测速成功（latency > 0）的节点，按延迟升序；
-  // 数据来自全局测速 store 派生的 latencyMap（与表格展示同源）。
-  const downloadProxyOptions = useMemo(() => {
-    return proxies
-      .filter(proxy => {
-        if (!proxy.proxyId || proxy.proxyConfig === 'direct://') return false
-        const latency = latencyMap[proxy.proxyId]
-        return typeof latency === 'number' && latency > 0
-      })
-      .sort((a, b) => (latencyMap[a.proxyId] || 0) - (latencyMap[b.proxyId] || 0))
-      .slice(0, 20)
-      .map(proxy => ({
-        value: proxy.proxyConfig,
-        label: `${proxy.proxyName} · ${latencyMap[proxy.proxyId]}ms`,
-      }))
-  }, [proxies, latencyMap])
 
   const {
     selectedIds,
@@ -438,9 +407,6 @@ export function ProxyPoolPage() {
         groups={groups}
         virtualGroupOptions={virtualGroupOptions}
         ipHealthMap={ipHealthMap}
-        latencyMap={latencyMap}
-        latencyEngineMap={latencyEngineMap}
-        latencyErrorMap={latencyErrorMap}
         loading={loading}
         onCheckOneIPHealth={(record) => void handleCheckOneIPHealth(record)}
         onClearFilters={() => {
@@ -489,13 +455,12 @@ export function ProxyPoolPage() {
         onClose={() => setUsageGuideOpen(false)}
       />
 
-      <ProxySourceRefreshModal
+      <ConnectedProxySourceRefreshModal
         open={sourceManagerOpen}
         sources={sourceMetas}
         proxies={proxies}
         refreshingAll={refreshingAllSources}
         refreshingSourceIds={refreshingSourceIds}
-        fetchProxyOptions={fetchProxyOptions}
         onClose={() => setSourceManagerOpen(false)}
         onRefreshAll={() => void handleRefreshAllSources(false)}
         onRefreshOne={(sourceId) => void refreshSingleSource(sourceId, false)}
@@ -512,7 +477,8 @@ export function ProxyPoolPage() {
         }}
       />
 
-      <ProxyPoolImportModal
+      <ConnectedProxyPoolImportModal
+        proxies={proxies}
         open={importModalOpen}
         groups={groups}
         importMode={importMode}
@@ -530,7 +496,6 @@ export function ProxyPoolPage() {
         chainImportForm={chainImportForm}
         directImportForm={directImportForm}
         fetchingImportUrl={fetchingImportUrl}
-        fetchProxyOptions={fetchProxyOptions}
         canParseImport={canParseImport}
         onClose={() => setImportModalOpen(false)}
         onParse={handleParseImport}
@@ -609,13 +574,13 @@ export function ProxyPoolPage() {
         onCheckTargetsTextChange={setCheckTargetsText}
       />
 
-      <ProxyCoreDownloadModal
+      <ConnectedProxyCoreDownloadModal
+        proxies={proxies}
         open={coreDownloadOpen}
         core={coreDownloadType}
         goos={coreDownloadGOOS}
         goarch={coreDownloadGOARCH}
         downloadProxy={coreDownloadProxy}
-        proxyOptions={downloadProxyOptions}
         progress={coreDownloadProgress}
         status={downloadCoreStatus}
         statusLoading={downloadCoreStatusLoading}

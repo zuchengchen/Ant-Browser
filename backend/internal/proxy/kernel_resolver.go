@@ -100,10 +100,10 @@ func ResolveProxyKernelForConnector(proxyConfig string, proxies []config.Browser
 		return ResolveProxyKernel(src, proxies, proxyId, explicitKernel)
 	}
 
-	supported := SupportedKernelsForProtocol(DetectProxyProtocol(src), src, proxies, proxyId)
+	protocol := DetectProxyProtocol(src)
+	supported := SupportedKernelsForProtocol(protocol, src, proxies, proxyId)
 	selectedKernel := selectKernelForConnector(supported, connectorType)
 	if selectedKernel == "" {
-		protocol := DetectProxyProtocol(src)
 		if len(supported) == 0 {
 			return ProxyKernelResolution{PreferredKernel: ProxyKernelAuto, Protocol: protocol}, fmt.Errorf("不支持的代理协议: %s", protocol)
 		}
@@ -113,7 +113,19 @@ func ResolveProxyKernelForConnector(proxyConfig string, proxies []config.Browser
 			SupportedKernels: supported,
 		}, fmt.Errorf("协议 %s 不属于当前 %s 连接栈，请切换连接栈", protocol, connectorType)
 	}
-	return ResolveProxyKernel(src, proxies, proxyId, selectedKernel)
+	// Selection already validated this protocol and kernel. Reusing that
+	// result avoids parsing the same YAML node again for every probe/start.
+	reason := "使用代理指定内核"
+	if protocol == "direct" {
+		reason = "直连无需代理内核"
+	}
+	return ProxyKernelResolution{
+		Protocol:         protocol,
+		PreferredKernel:  selectedKernel,
+		Kernel:           selectedKernel,
+		SupportedKernels: supported,
+		Reason:           reason,
+	}, nil
 }
 
 func DetectProxyProtocol(proxyConfig string) string {

@@ -1,0 +1,4357 @@
+{
+  "source": {
+    "diagnostic_only": true,
+    "formal_samples": false,
+    "render_proof_version": 2,
+    "results": "/tmp/ant-linux-perf-cntr19l1/agents/frontend/formal-v2/rc1/results.json",
+    "results_sha256": "4f16b3c246040393a827246a532a2c83df540afbf752401f4fdd15a7a16811e6",
+    "prepared_manifest": "/tmp/ant-linux-perf-cntr19l1/agents/frontend/formal-v2/receipt-calibration/inputs.json",
+    "prepared_manifest_sha256": "4dce99059bfe1e76aa381033afe5c3bf633e6255dd2fc00479d5cc6f95efd671",
+    "producer_script_sha256": "a14cb4fb18cb2bd89a3678d95b29abeef57326b56dc4c9125443ea3492716867",
+    "catalog_script_sha256": "0276898a88d5b5cb1ca3db7c51b5b8ab170069d0b429a16f5a4074f342a0ebf9",
+    "binary": "/tmp/ant-linux-perf-cntr19l1/diagnostics/proxy-stream/build/build/build/bin/ant-chrome",
+    "binary_sha256": "ef7bc43f540002c4a47d8d823acc63cbb1a6ee6e5039424913ed1120d3a5328e",
+    "seed": "/tmp/ant-linux-perf-cntr19l1/diagnostics/proxy-stream/build/seed",
+    "seed_sha256": "c642cebb3075ab7c10d92f66cac9e943c3d1d4f0abf4ab86092ab2d3ce1ec66c",
+    "raw_artifacts": {
+      "c100-0/application.log": "4d9b4bd1b54cf010a4f25ee02d90b1128f67764701ae7c9dd5a0b107ceafa680",
+      "c100-0/event-refresh.json": "c6e41da781b914a77855b58ed5ae8b8a96a7467f2a8f1f288406ebf87d42e580",
+      "c100-0/lifecycle.json": "2af4fe0e1104c9cf6fdf6a2d43dd5005e1b98eb14adc17152b836859efe59c43",
+      "c100-0/operations.log": "2fbe90ac727734de78b61272ac313ab333573c9a1c9403ef99bda01ab019f1b5",
+      "c100-0/runtime/linuxperf-gui-events.jsonl": "deee3fed9d21f53f0e0421b9a414ea2e73085de7dc8c4cc4edebaa37ecc78e8b",
+      "c100-0/seed.log": "9d48665ff7c8af595b71c697f2236e144a31fbb36a0c048b6d19da83359766ac",
+      "display-lifecycle.json": "749c4885ea76243831dd32fd33062922cb117c04b734b2eea2bed0dc3924e039",
+      "r1-0/application.log": "434800acb1d47e851a7b50105b570c79c182ca5c397ab60a8e067275b4c36690",
+      "r1-0/browser-starts.json": "99da888471cda7602729d87ce1177d6f2a8cb294ce90307aae382b7501995376",
+      "r1-0/instance-actions.json": "dd4cd3e7c6f183b76a9fdaedcb4a9a50be37bd653f63f3bd8c8cede94eab6691",
+      "r1-0/lifecycle.json": "9fbe11967a5c63e5b30727bcf2a1c1b7749498151c915d8041e53ec89ad92e78",
+      "r1-0/operations.log": "8f24ed1ef28a818aecab72cbb7fb62acfdf97b46cfdab8ed62bf443bbf5d2d64",
+      "r1-0/resources.json": "99178e44fd27e7d32bdc3e8d5cf7f63e2d17e79c7aeb2003c267bc4f23a2e531",
+      "r1-0/runtime/linuxperf-gui-events.jsonl": "9859c0d1b7a45fa52710dcd4608c9fecba86e3e76178b7dc0cfe834e3c8f281c",
+      "r1-0/seed.log": "fef4bafe88e64e1ac18e47c91f1fc90dc7d24524423118c5d7f67f04383ad839",
+      "xvfb.log": "3396ea4287ee60f3da22a69a2e91669ef3757459c02e1dcd2c5a82da7d179b9e"
+    },
+    "owned_identities": [
+      [
+        "1230063",
+        8670919
+      ],
+      [
+        "1230074",
+        8670928
+      ],
+      [
+        "1230131",
+        8670940
+      ],
+      [
+        "1230140",
+        8670942
+      ],
+      [
+        "1230141",
+        8670942
+      ],
+      [
+        "1230142",
+        8670942
+      ],
+      [
+        "1230146",
+        8670943
+      ],
+      [
+        "1230359",
+        8671320
+      ],
+      [
+        "1230416",
+        8671332
+      ],
+      [
+        "1230425",
+        8671333
+      ],
+      [
+        "1230426",
+        8671334
+      ],
+      [
+        "1230427",
+        8671334
+      ],
+      [
+        "1230431",
+        8671335
+      ],
+      [
+        "1230528",
+        8671513
+      ],
+      [
+        "1230530",
+        8671515
+      ],
+      [
+        "1230532",
+        8671515
+      ],
+      [
+        "1230536",
+        8671515
+      ],
+      [
+        "1230537",
+        8671516
+      ],
+      [
+        "1230539",
+        8671518
+      ],
+      [
+        "1230563",
+        8671523
+      ],
+      [
+        "1230565",
+        8671523
+      ],
+      [
+        "1230609",
+        8671526
+      ],
+      [
+        "1230631",
+        8671531
+      ],
+      [
+        "1230641",
+        8671533
+      ],
+      [
+        "1230662",
+        8671535
+      ],
+      [
+        "1230663",
+        8671535
+      ]
+    ],
+    "remaining_owned": []
+  },
+  "samples": [
+    {
+      "journal": "c100-0/operations.log",
+      "token": "1230074:4:86711122015688",
+      "operation_id": 4,
+      "phase": null,
+      "application_ready": false
+    },
+    {
+      "journal": "c100-0/operations.log",
+      "token": "1230074:9:86711365586226",
+      "operation_id": 9,
+      "phase": null,
+      "application_ready": false
+    },
+    {
+      "journal": "c100-0/operations.log",
+      "token": "1230074:9:86711365586226",
+      "operation_id": 9,
+      "phase": "keyword_visible",
+      "application_ready": false
+    },
+    {
+      "journal": "c100-0/operations.log",
+      "token": "1230074:9:86711365586226",
+      "operation_id": 9,
+      "phase": "keyword_closed",
+      "application_ready": false
+    },
+    {
+      "journal": "c100-0/operations.log",
+      "token": "1230074:2:86709615550026",
+      "operation_id": 2,
+      "phase": null,
+      "application_ready": true
+    }
+  ],
+  "host": [
+    {
+      "operation_id": 1,
+      "pid": 1230074,
+      "code_sha256": "f30d6768c7207091edb0f504fec9a5a63a9761d5589ab1b76ae2a52e0f3ea8bd",
+      "operation": "javascript",
+      "event": "start",
+      "time_ns": 1794310618195350830
+    },
+    {
+      "operation_id": 1,
+      "pid": 1230074,
+      "code_sha256": "f30d6768c7207091edb0f504fec9a5a63a9761d5589ab1b76ae2a52e0f3ea8bd",
+      "operation": "javascript",
+      "event": "complete",
+      "time_ns": 1794310618202037972,
+      "elapsed_ms": 6.595176993869245
+    },
+    {
+      "operation_id": 2,
+      "pid": 1230074,
+      "token": "1230074:2:86709615550026",
+      "code_sha256": "83bfc8f08b7b85cf83840a3663b75573c0c81dcad1a7aa2f3838e5f64db2bd8c",
+      "operation": "timed_gui",
+      "started_monotonic_ns": 86709615550026,
+      "event": "start",
+      "time_ns": 1794310618202116158,
+      "expected_phases": [],
+      "require_render": true,
+      "timeout_seconds": 1799.664930762
+    },
+    {
+      "operation_id": 2,
+      "pid": 1230074,
+      "token": "1230074:2:86709615550026",
+      "code_sha256": "83bfc8f08b7b85cf83840a3663b75573c0c81dcad1a7aa2f3838e5f64db2bd8c",
+      "operation": "timed_gui",
+      "started_monotonic_ns": 86709615550026,
+      "event": "complete",
+      "time_ns": 1794310619705763298,
+      "elapsed_ms": 1503.184733,
+      "received_monotonic_ns": 86711118734759,
+      "request_id": "2",
+      "terminal_sequence": 1,
+      "value_sha256": "3922629a1c28ae542b84776d420ae9a7319388bf7e8415cf239ea30c017a4e7e",
+      "phase_ms": {}
+    },
+    {
+      "event": "application_ready",
+      "operation_id": 2,
+      "token": "1230074:2:86709615550026",
+      "pid": 1230074,
+      "application_started_monotonic_ns": 86709280468354,
+      "received_monotonic_ns": 86711118734759,
+      "elapsed_ms": 1838.266405
+    },
+    {
+      "operation_id": 3,
+      "pid": 1230074,
+      "token": "1230074:3:86711119843900",
+      "code_sha256": "738a809d6b474e2ed0c29bdb1ac1b641957644f675f92aaf4e8b8569537ae9a8",
+      "operation": "timed_gui",
+      "started_monotonic_ns": 86711119843900,
+      "event": "start",
+      "time_ns": 1794310619706401209,
+      "expected_phases": [],
+      "require_render": false,
+      "timeout_seconds": 1800
+    },
+    {
+      "operation_id": 3,
+      "pid": 1230074,
+      "token": "1230074:3:86711119843900",
+      "code_sha256": "738a809d6b474e2ed0c29bdb1ac1b641957644f675f92aaf4e8b8569537ae9a8",
+      "operation": "timed_gui",
+      "started_monotonic_ns": 86711119843900,
+      "event": "complete",
+      "time_ns": 1794310619707746148,
+      "elapsed_ms": 1.235438,
+      "received_monotonic_ns": 86711121079338,
+      "request_id": "3",
+      "terminal_sequence": 1,
+      "value_sha256": "a69ecf99f14b3540c5cb72a622185e7095fd0ac486978ea8704959b5ae72968e",
+      "phase_ms": {}
+    },
+    {
+      "operation_id": 4,
+      "pid": 1230074,
+      "token": "1230074:4:86711122015688",
+      "code_sha256": "34dded39e5b67dde81ce60cbcafc8158a189195209d694cdcfa87b8dce9755e6",
+      "operation": "timed_gui",
+      "started_monotonic_ns": 86711122015688,
+      "event": "start",
+      "time_ns": 1794310619708571435,
+      "expected_phases": [],
+      "require_render": false,
+      "timeout_seconds": 1800
+    },
+    {
+      "operation_id": 4,
+      "pid": 1230074,
+      "token": "1230074:4:86711122015688",
+      "code_sha256": "34dded39e5b67dde81ce60cbcafc8158a189195209d694cdcfa87b8dce9755e6",
+      "operation": "timed_gui",
+      "started_monotonic_ns": 86711122015688,
+      "event": "complete",
+      "time_ns": 1794310619711100195,
+      "elapsed_ms": 2.406166,
+      "received_monotonic_ns": 86711124421854,
+      "request_id": "4",
+      "terminal_sequence": 1,
+      "value_sha256": "986098f35980714813f2cad825f4a43089228db367d2f2297bc625a4460b6c45",
+      "phase_ms": {}
+    },
+    {
+      "operation_id": 5,
+      "pid": 1230074,
+      "token": "1230074:5:86711125516872",
+      "code_sha256": "47f77c58abb56d6657f52ade3bdd8518d329e6462e5fc83b434fa62e18663c4c",
+      "operation": "timed_gui",
+      "started_monotonic_ns": 86711125516872,
+      "event": "start",
+      "time_ns": 1794310619712069745,
+      "expected_phases": [],
+      "require_render": false,
+      "timeout_seconds": 1800
+    },
+    {
+      "operation_id": 5,
+      "pid": 1230074,
+      "token": "1230074:5:86711125516872",
+      "code_sha256": "47f77c58abb56d6657f52ade3bdd8518d329e6462e5fc83b434fa62e18663c4c",
+      "operation": "timed_gui",
+      "started_monotonic_ns": 86711125516872,
+      "event": "complete",
+      "time_ns": 1794310619713160033,
+      "elapsed_ms": 1.005143,
+      "received_monotonic_ns": 86711126522015,
+      "request_id": "5",
+      "terminal_sequence": 1,
+      "value_sha256": "c2258d52d34df8ba2e27c01fa742bd7e9e26ee9bb785ee4fa3f91bfe64e55bf5",
+      "phase_ms": {}
+    },
+    {
+      "operation_id": 6,
+      "pid": 1230074,
+      "token": "1230074:6:86711127600467",
+      "code_sha256": "5ad32f65d56ba61dcf1125df06b755a73a7ba9100a32e208a0827f59b04f9f95",
+      "operation": "timed_gui",
+      "started_monotonic_ns": 86711127600467,
+      "event": "start",
+      "time_ns": 1794310619714153240,
+      "expected_phases": [],
+      "require_render": false,
+      "timeout_seconds": 1800
+    },
+    {
+      "operation_id": 6,
+      "pid": 1230074,
+      "token": "1230074:6:86711127600467",
+      "code_sha256": "5ad32f65d56ba61dcf1125df06b755a73a7ba9100a32e208a0827f59b04f9f95",
+      "operation": "timed_gui",
+      "started_monotonic_ns": 86711127600467,
+      "event": "complete",
+      "time_ns": 1794310619717059198,
+      "elapsed_ms": 2.781232,
+      "received_monotonic_ns": 86711130381699,
+      "request_id": "6",
+      "terminal_sequence": 1,
+      "value_sha256": "639ff0e6f980adf5b848674e1cbb95979b9f0542ce51a50ca89624a29617f32e",
+      "phase_ms": {}
+    },
+    {
+      "operation_id": 7,
+      "pid": 1230074,
+      "token": "1230074:7:86711131573048",
+      "code_sha256": "f865e80f37e30b92fd5575c771584d6c0d44dedfe1c8980f4856ed9ef48ebe95",
+      "operation": "timed_gui",
+      "started_monotonic_ns": 86711131573048,
+      "event": "start",
+      "time_ns": 1794310619718126318,
+      "expected_phases": [],
+      "require_render": true,
+      "timeout_seconds": 1800
+    },
+    {
+      "operation_id": 7,
+      "pid": 1230074,
+      "token": "1230074:7:86711131573048",
+      "code_sha256": "f865e80f37e30b92fd5575c771584d6c0d44dedfe1c8980f4856ed9ef48ebe95",
+      "operation": "timed_gui",
+      "started_monotonic_ns": 86711131573048,
+      "event": "complete",
+      "time_ns": 1794310619745910043,
+      "elapsed_ms": 27.525476,
+      "received_monotonic_ns": 86711159098524,
+      "request_id": "7",
+      "terminal_sequence": 1,
+      "value_sha256": "710860e2c52f3566105c7834c30f83ec3f963a57cf0d37f1382732878c04b537",
+      "phase_ms": {}
+    },
+    {
+      "operation_id": 8,
+      "pid": 1230074,
+      "token": "1230074:8:86711160608495",
+      "code_sha256": "999dd20fb0d598cce61c7fe27784be1f213147ca71d3dc6d877d9b45522f4ef7",
+      "operation": "timed_gui",
+      "started_monotonic_ns": 86711160608495,
+      "event": "start",
+      "time_ns": 1794310619747168228,
+      "expected_phases": [],
+      "require_render": true,
+      "timeout_seconds": 1800
+    },
+    {
+      "operation_id": 8,
+      "pid": 1230074,
+      "token": "1230074:8:86711160608495",
+      "code_sha256": "999dd20fb0d598cce61c7fe27784be1f213147ca71d3dc6d877d9b45522f4ef7",
+      "operation": "timed_gui",
+      "started_monotonic_ns": 86711160608495,
+      "event": "complete",
+      "time_ns": 1794310619950842541,
+      "elapsed_ms": 203.157806,
+      "received_monotonic_ns": 86711363766301,
+      "request_id": "8",
+      "terminal_sequence": 1,
+      "value_sha256": "98ce0a901821e54a9aedf376fe714aac3c487c587d96b343841f11d4d265c720",
+      "phase_ms": {}
+    },
+    {
+      "operation_id": 9,
+      "pid": 1230074,
+      "token": "1230074:9:86711365586226",
+      "code_sha256": "f7a2c33d2a363becd90c5e7f25e7dbc3b818af2e6c36de1ecc9240cf8a4aafa9",
+      "operation": "timed_gui",
+      "started_monotonic_ns": 86711365586226,
+      "event": "start",
+      "time_ns": 1794310619952158316,
+      "expected_phases": [
+        "keyword_visible",
+        "keyword_closed"
+      ],
+      "require_render": true,
+      "timeout_seconds": 1800
+    },
+    {
+      "operation_id": 9,
+      "pid": 1230074,
+      "token": "1230074:9:86711365586226",
+      "code_sha256": "f7a2c33d2a363becd90c5e7f25e7dbc3b818af2e6c36de1ecc9240cf8a4aafa9",
+      "operation": "timed_gui",
+      "started_monotonic_ns": 86711365586226,
+      "event": "phase",
+      "time_ns": 1794310620073756974,
+      "phase": "keyword_visible",
+      "sequence": 1,
+      "elapsed_ms": 121.478659,
+      "received_monotonic_ns": 86711487064885,
+      "value": {
+        "keyword": "perf-updated-00042-0",
+        "profileId": "perf-profile-00042",
+        "render": {
+          "completed_ms": 1945,
+          "deadline_ms": 1801848,
+          "first_frame_ms": 1936,
+          "frame_attempts": [
+            {
+              "callback_ms": 1936,
+              "raf_ms": 1936
+            },
+            {
+              "callback_ms": 1945,
+              "raf_ms": 1945
+            }
+          ],
+          "frame_count": 2,
+          "predicate_after": true,
+          "predicate_before": true,
+          "predicate_ms": 1931,
+          "render_proof_version": 2,
+          "second_frame_ms": 1945
+        }
+      }
+    },
+    {
+      "operation_id": 9,
+      "pid": 1230074,
+      "token": "1230074:9:86711365586226",
+      "code_sha256": "f7a2c33d2a363becd90c5e7f25e7dbc3b818af2e6c36de1ecc9240cf8a4aafa9",
+      "operation": "timed_gui",
+      "started_monotonic_ns": 86711365586226,
+      "event": "phase",
+      "time_ns": 1794310620073879743,
+      "phase": "keyword_closed",
+      "sequence": 2,
+      "elapsed_ms": 121.703856,
+      "received_monotonic_ns": 86711487290082,
+      "value": {
+        "keyword": "perf-updated-00042-0",
+        "profileId": "perf-profile-00042",
+        "render": {
+          "completed_ms": 1945,
+          "deadline_ms": 1801849,
+          "first_frame_ms": 1936,
+          "frame_attempts": [
+            {
+              "callback_ms": 1936,
+              "raf_ms": 1936
+            },
+            {
+              "callback_ms": 1945,
+              "raf_ms": 1945
+            }
+          ],
+          "frame_count": 2,
+          "predicate_after": true,
+          "predicate_before": true,
+          "predicate_ms": 1931,
+          "render_proof_version": 2,
+          "second_frame_ms": 1945
+        }
+      }
+    },
+    {
+      "operation_id": 9,
+      "pid": 1230074,
+      "token": "1230074:9:86711365586226",
+      "code_sha256": "f7a2c33d2a363becd90c5e7f25e7dbc3b818af2e6c36de1ecc9240cf8a4aafa9",
+      "operation": "timed_gui",
+      "started_monotonic_ns": 86711365586226,
+      "event": "complete",
+      "time_ns": 1794310620077916463,
+      "elapsed_ms": 125.571488,
+      "received_monotonic_ns": 86711491157714,
+      "request_id": "9",
+      "terminal_sequence": 3,
+      "value_sha256": "0bc7254a6627136875d3ef197e61995eb02ecda0548c6594a2f87a58fb39d6fd",
+      "phase_ms": {
+        "keyword_visible": 121.478659,
+        "keyword_closed": 121.703856
+      }
+    },
+    {
+      "operation_id": 10,
+      "pid": 1230074,
+      "token": "1230074:10:86711493907797",
+      "code_sha256": "2485126aaf74cbde0dc2140cd7f02599ad4f1510cff5fad3d69725c099116291",
+      "operation": "timed_gui",
+      "started_monotonic_ns": 86711493907797,
+      "event": "start",
+      "time_ns": 1794310620080467969,
+      "expected_phases": [],
+      "require_render": true,
+      "timeout_seconds": 1800
+    },
+    {
+      "operation_id": 10,
+      "pid": 1230074,
+      "token": "1230074:10:86711493907797",
+      "code_sha256": "2485126aaf74cbde0dc2140cd7f02599ad4f1510cff5fad3d69725c099116291",
+      "operation": "timed_gui",
+      "started_monotonic_ns": 86711493907797,
+      "event": "complete",
+      "time_ns": 1794310620137735080,
+      "elapsed_ms": 56.968241,
+      "received_monotonic_ns": 86711550876038,
+      "request_id": "10",
+      "terminal_sequence": 1,
+      "value_sha256": "ebd0d9eb081f4852acbdf2e1efcffe50d5b595aa8e11bf7fd8bb88145477c9da",
+      "phase_ms": {}
+    },
+    {
+      "operation_id": 11,
+      "pid": 1230074,
+      "token": "1230074:11:86711552671989",
+      "code_sha256": "9a981064a4672b7d1ecc3bedf9298f7280bd7004ac3210fab178eeb0a6b93824",
+      "operation": "timed_gui",
+      "started_monotonic_ns": 86711552671989,
+      "event": "start",
+      "time_ns": 1794310620139237005,
+      "expected_phases": [],
+      "require_render": true,
+      "timeout_seconds": 1800
+    },
+    {
+      "operation_id": 11,
+      "pid": 1230074,
+      "token": "1230074:11:86711552671989",
+      "code_sha256": "9a981064a4672b7d1ecc3bedf9298f7280bd7004ac3210fab178eeb0a6b93824",
+      "operation": "timed_gui",
+      "started_monotonic_ns": 86711552671989,
+      "event": "complete",
+      "time_ns": 1794310620219690360,
+      "elapsed_ms": 80.028262,
+      "received_monotonic_ns": 86711632700251,
+      "request_id": "11",
+      "terminal_sequence": 1,
+      "value_sha256": "40e578d7cd5fc1ccb1c88f31b6a224d8278bf6d1c7a6d4935dfe0ae947fba7bb",
+      "phase_ms": {}
+    },
+    {
+      "operation_id": 12,
+      "pid": 1230074,
+      "token": "1230074:12:86711635299066",
+      "code_sha256": "584488733c91cd5d87f1a59b0d819b01124d8602b8db28dbfe191a0d24feff1f",
+      "operation": "timed_gui",
+      "started_monotonic_ns": 86711635299066,
+      "event": "start",
+      "time_ns": 1794310620221898221,
+      "expected_phases": [],
+      "require_render": true,
+      "timeout_seconds": 1800
+    },
+    {
+      "operation_id": 12,
+      "pid": 1230074,
+      "token": "1230074:12:86711635299066",
+      "code_sha256": "584488733c91cd5d87f1a59b0d819b01124d8602b8db28dbfe191a0d24feff1f",
+      "operation": "timed_gui",
+      "started_monotonic_ns": 86711635299066,
+      "event": "complete",
+      "time_ns": 1794310620349179905,
+      "elapsed_ms": 126.741248,
+      "received_monotonic_ns": 86711762040314,
+      "request_id": "12",
+      "terminal_sequence": 1,
+      "value_sha256": "49c31e35f16c1c8fc37ddd2aa01833e85359ab8ad9a71be16ed76c29cf319235",
+      "phase_ms": {}
+    },
+    {
+      "operation_id": 13,
+      "pid": 1230074,
+      "token": "1230074:13:86711765206318",
+      "code_sha256": "10d0053c3cc74724730f15bc2a088286dcb9e2372620a7146ab68465c670bbe3",
+      "operation": "timed_gui",
+      "started_monotonic_ns": 86711765206318,
+      "event": "start",
+      "time_ns": 1794310620351818262,
+      "expected_phases": [],
+      "require_render": true,
+      "timeout_seconds": 1800
+    },
+    {
+      "operation_id": 13,
+      "pid": 1230074,
+      "token": "1230074:13:86711765206318",
+      "code_sha256": "10d0053c3cc74724730f15bc2a088286dcb9e2372620a7146ab68465c670bbe3",
+      "operation": "timed_gui",
+      "started_monotonic_ns": 86711765206318,
+      "event": "complete",
+      "time_ns": 1794310620448058530,
+      "elapsed_ms": 95.913828,
+      "received_monotonic_ns": 86711861120146,
+      "request_id": "13",
+      "terminal_sequence": 1,
+      "value_sha256": "0cff426acd4bc93ccaaea458cf2d3fb00f48468ea6e92d8fc11f571d894df57a",
+      "phase_ms": {}
+    },
+    {
+      "operation_id": 14,
+      "pid": 1230074,
+      "token": "1230074:14:86711868030556",
+      "code_sha256": "dfb862b5a5c9293bad5b212a0bdfb0f95714fe8d74ccfe40843e19fd0647eb46",
+      "operation": "timed_gui",
+      "started_monotonic_ns": 86711868030556,
+      "event": "start",
+      "time_ns": 1794310620454670468,
+      "expected_phases": [],
+      "require_render": true,
+      "timeout_seconds": 5
+    },
+    {
+      "operation_id": 14,
+      "pid": 1230074,
+      "token": "1230074:14:86711868030556",
+      "code_sha256": "dfb862b5a5c9293bad5b212a0bdfb0f95714fe8d74ccfe40843e19fd0647eb46",
+      "operation": "timed_gui",
+      "started_monotonic_ns": 86711868030556,
+      "event": "complete",
+      "time_ns": 1794310620863795027,
+      "elapsed_ms": 408.893378,
+      "received_monotonic_ns": 86712276923934,
+      "request_id": "15",
+      "terminal_sequence": 1,
+      "value_sha256": "37cf4442611fb734b0347b096a0fb6d2dd04ceb987f16c7c7e1b02f52eaf9069",
+      "phase_ms": {}
+    },
+    {
+      "operation_id": 15,
+      "pid": 1230074,
+      "token": "1230074:15:86712284115452",
+      "code_sha256": "b7afd68724d607b5e9f7e67aeccecc4fa103afad4c22d5b4b88d68c6908f4010",
+      "operation": "timed_gui",
+      "started_monotonic_ns": 86712284115452,
+      "event": "start",
+      "time_ns": 1794310620870681501,
+      "expected_phases": [],
+      "require_render": true,
+      "timeout_seconds": 2
+    },
+    {
+      "operation_id": 15,
+      "pid": 1230074,
+      "token": "1230074:15:86712284115452",
+      "code_sha256": "b7afd68724d607b5e9f7e67aeccecc4fa103afad4c22d5b4b88d68c6908f4010",
+      "operation": "timed_gui",
+      "started_monotonic_ns": 86712284115452,
+      "event": "failed",
+      "time_ns": 1794310620953624280,
+      "error": "EvidenceError: GUI operation failed: {\"error\": \"Error: Timed out waiting for actual rendered result: profile filter IDs, names and controlled input\", \"js_now_ms\": 2825, \"js_started_ms\": 2743, \"kind\": \"error\", \"ok\": false, \"request_id\": \"16\", \"sequence\": 1, \"stack\": \"waitRendered@\", \"time_origin_ms\": 1794310618127, \"token\": \"1230074:15:86712284115452\"}",
+      "elapsed_ms": 82.908939,
+      "received_phases": []
+    },
+    {
+      "operation_id": 16,
+      "pid": 1230074,
+      "token": "1230074:16:86712368807382",
+      "code_sha256": "525a2a7d40e9ed91b474a929fb244dadb389904e6e37fdaf7d3b0fbad77e2f99",
+      "operation": "timed_gui",
+      "started_monotonic_ns": 86712368807382,
+      "event": "start",
+      "time_ns": 1794310620955380284,
+      "expected_phases": [
+        "keyword_visible"
+      ],
+      "require_render": true,
+      "timeout_seconds": 2
+    },
+    {
+      "operation_id": 16,
+      "pid": 1230074,
+      "token": "1230074:16:86712368807382",
+      "code_sha256": "525a2a7d40e9ed91b474a929fb244dadb389904e6e37fdaf7d3b0fbad77e2f99",
+      "operation": "timed_gui",
+      "started_monotonic_ns": 86712368807382,
+      "event": "failed",
+      "time_ns": 1794310620973533468,
+      "error": "EvidenceError: Missing required GUI phases",
+      "elapsed_ms": 18.138042,
+      "received_phases": []
+    },
+    {
+      "operation_id": 17,
+      "pid": 1230074,
+      "token": "1230074:17:86712388673133",
+      "code_sha256": "28faa1889496b978b7d8ed6880cec575cac98e9c4a66f6c83a987ce4eec5b0fe",
+      "operation": "timed_gui",
+      "started_monotonic_ns": 86712388673133,
+      "event": "start",
+      "time_ns": 1794310620975243051,
+      "expected_phases": [],
+      "require_render": true,
+      "timeout_seconds": 2
+    },
+    {
+      "operation_id": 17,
+      "pid": 1230074,
+      "token": "1230074:17:86712388673133",
+      "code_sha256": "28faa1889496b978b7d8ed6880cec575cac98e9c4a66f6c83a987ce4eec5b0fe",
+      "operation": "timed_gui",
+      "started_monotonic_ns": 86712388673133,
+      "event": "failed",
+      "time_ns": 1794310621005844222,
+      "error": "EvidenceError: GUI result lacks two rendered frames",
+      "elapsed_ms": 30.583345,
+      "received_phases": []
+    },
+    {
+      "operation_id": 18,
+      "pid": 1230074,
+      "token": "1230074:18:86712420965606",
+      "code_sha256": "ef04b80f123c33fda1b67550ca883061dcb7fd364e3801016406e531e1990478",
+      "operation": "timed_gui",
+      "started_monotonic_ns": 86712420965606,
+      "event": "start",
+      "time_ns": 1794310621007534688,
+      "expected_phases": [],
+      "require_render": true,
+      "timeout_seconds": 2
+    },
+    {
+      "operation_id": 18,
+      "pid": 1230074,
+      "token": "1230074:18:86712420965606",
+      "code_sha256": "ef04b80f123c33fda1b67550ca883061dcb7fd364e3801016406e531e1990478",
+      "operation": "timed_gui",
+      "started_monotonic_ns": 86712420965606,
+      "event": "failed",
+      "time_ns": 1794310621088439924,
+      "error": "EvidenceError: GUI operation failed: {\"error\": \"Error: Rendered frame deadline exceeded: withheld second frame; {\\\"predicate_ms\\\":2880,\\\"deadline_ms\\\":2960,\\\"attempt_count\\\":1,\\\"first\\\":{\\\"raf_ms\\\":2893,\\\"callback_ms\\\":2893.0000000000005},\\\"last\\\":{\\\"raf_ms\\\":2893,\\\"callback_ms\\\":2893.0000000000005}}\", \"js_now_ms\": 2959, \"js_started_ms\": 2880, \"kind\": \"error\", \"ok\": false, \"request_id\": \"19\", \"sequence\": 1, \"stack\": \"invalidFrame@\\nwaitRendered@\", \"time_origin_ms\": 1794310618127, \"token\": \"1230074:18:86712420965606\"}",
+      "elapsed_ms": 80.832639,
+      "received_phases": []
+    },
+    {
+      "operation_id": 19,
+      "pid": 1230074,
+      "token": "1230074:19:86712503805762",
+      "code_sha256": "80a534b16b3f17972df7c797f4131652ce019ffd7156c604d7ce3b6ecf343789",
+      "operation": "timed_gui",
+      "started_monotonic_ns": 86712503805762,
+      "event": "start",
+      "time_ns": 1794310621090377463,
+      "expected_phases": [],
+      "require_render": false,
+      "timeout_seconds": 0.15
+    },
+    {
+      "operation_id": 19,
+      "pid": 1230074,
+      "token": "1230074:19:86712503805762",
+      "code_sha256": "80a534b16b3f17972df7c797f4131652ce019ffd7156c604d7ce3b6ecf343789",
+      "operation": "timed_gui",
+      "started_monotonic_ns": 86712503805762,
+      "event": "failed",
+      "time_ns": 1794310621240877348,
+      "error": "EvidenceError: GUI operation exceeded host observation deadline",
+      "elapsed_ms": 150.404692,
+      "received_phases": []
+    },
+    {
+      "operation_id": 20,
+      "pid": 1230074,
+      "token": "1230074:20:86712658014033",
+      "code_sha256": "16911515fa1e394246f63b25559a2c093dc44b96909c5e039636545315ef55a0",
+      "operation": "timed_gui",
+      "started_monotonic_ns": 86712658014033,
+      "event": "start",
+      "time_ns": 1794310621244644213,
+      "expected_phases": [],
+      "require_render": true,
+      "timeout_seconds": 1800
+    },
+    {
+      "operation_id": 20,
+      "pid": 1230074,
+      "token": "1230074:20:86712658014033",
+      "code_sha256": "16911515fa1e394246f63b25559a2c093dc44b96909c5e039636545315ef55a0",
+      "operation": "timed_gui",
+      "started_monotonic_ns": 86712658014033,
+      "event": "complete",
+      "time_ns": 1794310621279640853,
+      "elapsed_ms": 34.649291,
+      "received_monotonic_ns": 86712692663324,
+      "request_id": "21",
+      "terminal_sequence": 1,
+      "value_sha256": "9537a3a544dfd3b58724741571d7495a9f2f86abc29a4f37a681efd2ce258f92",
+      "phase_ms": {}
+    },
+    {
+      "operation_id": 21,
+      "pid": 1230074,
+      "token": "1230074:21:86712697192958",
+      "code_sha256": "23edf17adb5c5402025680930db028d4a438516c584cff12e3ccfdd21d18d053",
+      "operation": "timed_gui",
+      "started_monotonic_ns": 86712697192958,
+      "event": "start",
+      "time_ns": 1794310621283807164,
+      "expected_phases": [],
+      "require_render": true,
+      "timeout_seconds": 1800
+    },
+    {
+      "operation_id": 21,
+      "pid": 1230074,
+      "token": "1230074:21:86712697192958",
+      "code_sha256": "23edf17adb5c5402025680930db028d4a438516c584cff12e3ccfdd21d18d053",
+      "operation": "timed_gui",
+      "started_monotonic_ns": 86712697192958,
+      "event": "complete",
+      "time_ns": 1794310621520143686,
+      "elapsed_ms": 235.85482,
+      "received_monotonic_ns": 86712933047778,
+      "request_id": "22",
+      "terminal_sequence": 1,
+      "value_sha256": "270841689e981be71bdccaff92f177c200ea58347fd2b2baaba5f2babfc03bf8",
+      "phase_ms": {}
+    },
+    {
+      "operation_id": 22,
+      "pid": 1230074,
+      "token": "1230074:22:86712937688306",
+      "code_sha256": "2b7a3aa1dc184bad5d1d8bc98f245a30194d5b88e961a87d2af6915d79f0d6a4",
+      "operation": "timed_gui",
+      "started_monotonic_ns": 86712937688306,
+      "event": "start",
+      "time_ns": 1794310621524338942,
+      "expected_phases": [],
+      "require_render": true,
+      "timeout_seconds": 1800
+    },
+    {
+      "operation_id": 22,
+      "pid": 1230074,
+      "token": "1230074:22:86712937688306",
+      "code_sha256": "2b7a3aa1dc184bad5d1d8bc98f245a30194d5b88e961a87d2af6915d79f0d6a4",
+      "operation": "timed_gui",
+      "started_monotonic_ns": 86712937688306,
+      "event": "complete",
+      "time_ns": 1794310621606094787,
+      "elapsed_ms": 81.360872,
+      "received_monotonic_ns": 86713019049178,
+      "request_id": "23",
+      "terminal_sequence": 1,
+      "value_sha256": "215f2196a45bf027dc235ed00cd2fb123e2f2e5ae722b0fb31f00aa0d46ee9e9",
+      "phase_ms": {}
+    },
+    {
+      "operation_id": 23,
+      "pid": 1230074,
+      "token": "1230074:23:86713035012529",
+      "code_sha256": "192c0be1efc7078b286c2a2afb721b40363d261bf3f6936562637bf8cc2f70eb",
+      "operation": "timed_gui",
+      "started_monotonic_ns": 86713035012529,
+      "event": "start",
+      "time_ns": 1794310621621697174,
+      "expected_phases": [],
+      "require_render": true,
+      "timeout_seconds": 1800
+    },
+    {
+      "operation_id": 23,
+      "pid": 1230074,
+      "token": "1230074:23:86713035012529",
+      "code_sha256": "192c0be1efc7078b286c2a2afb721b40363d261bf3f6936562637bf8cc2f70eb",
+      "operation": "timed_gui",
+      "started_monotonic_ns": 86713035012529,
+      "event": "complete",
+      "time_ns": 1794310621650097651,
+      "elapsed_ms": 28.014673,
+      "received_monotonic_ns": 86713063027202,
+      "request_id": "24",
+      "terminal_sequence": 1,
+      "value_sha256": "7facc560bdc27b99565e5249ad3aec8fc923a70209d100aa19aa92ae3cb1c691",
+      "phase_ms": {}
+    }
+  ],
+  "backend": [
+    {
+      "backend_time_ns": 1794310618195782710,
+      "code_sha256": "f30d6768c7207091edb0f504fec9a5a63a9761d5589ab1b76ae2a52e0f3ea8bd",
+      "event": "request",
+      "request_id": "1",
+      "stream": false,
+      "token": ""
+    },
+    {
+      "backend_time_ns": 1794310618201727008,
+      "event": "message",
+      "payload": {
+        "ok": true,
+        "value": true
+      },
+      "request_id": "1",
+      "token": ""
+    },
+    {
+      "backend_time_ns": 1794310618202422547,
+      "code_sha256": "83bfc8f08b7b85cf83840a3663b75573c0c81dcad1a7aa2f3838e5f64db2bd8c",
+      "event": "request",
+      "request_id": "2",
+      "stream": true,
+      "token": "1230074:2:86709615550026"
+    },
+    {
+      "backend_time_ns": 1794310619704815876,
+      "event": "message",
+      "payload": {
+        "js_now_ms": 1576,
+        "js_started_ms": 122,
+        "kind": "result",
+        "ok": true,
+        "sequence": 1,
+        "time_origin_ms": 1794310618127,
+        "token": "1230074:2:86709615550026",
+        "value": {
+          "profiles": {
+            "count": 100,
+            "ids": [
+              "perf-profile-00000",
+              "perf-profile-00001",
+              "perf-profile-00002",
+              "perf-profile-00003",
+              "perf-profile-00004",
+              "perf-profile-00005",
+              "perf-profile-00006",
+              "perf-profile-00007",
+              "perf-profile-00008",
+              "perf-profile-00009",
+              "perf-profile-00010",
+              "perf-profile-00011",
+              "perf-profile-00012",
+              "perf-profile-00013",
+              "perf-profile-00014",
+              "perf-profile-00015",
+              "perf-profile-00016",
+              "perf-profile-00017",
+              "perf-profile-00018",
+              "perf-profile-00019",
+              "perf-profile-00020",
+              "perf-profile-00021",
+              "perf-profile-00022",
+              "perf-profile-00023",
+              "perf-profile-00024",
+              "perf-profile-00025",
+              "perf-profile-00026",
+              "perf-profile-00027",
+              "perf-profile-00028",
+              "perf-profile-00029",
+              "perf-profile-00030",
+              "perf-profile-00031",
+              "perf-profile-00032",
+              "perf-profile-00033",
+              "perf-profile-00034",
+              "perf-profile-00035",
+              "perf-profile-00036",
+              "perf-profile-00037",
+              "perf-profile-00038",
+              "perf-profile-00039",
+              "perf-profile-00040",
+              "perf-profile-00041",
+              "perf-profile-00042",
+              "perf-profile-00043",
+              "perf-profile-00044",
+              "perf-profile-00045",
+              "perf-profile-00046",
+              "perf-profile-00047",
+              "perf-profile-00048",
+              "perf-profile-00049",
+              "perf-profile-00050",
+              "perf-profile-00051",
+              "perf-profile-00052",
+              "perf-profile-00053",
+              "perf-profile-00054",
+              "perf-profile-00055",
+              "perf-profile-00056",
+              "perf-profile-00057",
+              "perf-profile-00058",
+              "perf-profile-00059",
+              "perf-profile-00060",
+              "perf-profile-00061",
+              "perf-profile-00062",
+              "perf-profile-00063",
+              "perf-profile-00064",
+              "perf-profile-00065",
+              "perf-profile-00066",
+              "perf-profile-00067",
+              "perf-profile-00068",
+              "perf-profile-00069",
+              "perf-profile-00070",
+              "perf-profile-00071",
+              "perf-profile-00072",
+              "perf-profile-00073",
+              "perf-profile-00074",
+              "perf-profile-00075",
+              "perf-profile-00076",
+              "perf-profile-00077",
+              "perf-profile-00078",
+              "perf-profile-00079",
+              "perf-profile-00080",
+              "perf-profile-00081",
+              "perf-profile-00082",
+              "perf-profile-00083",
+              "perf-profile-00084",
+              "perf-profile-00085",
+              "perf-profile-00086",
+              "perf-profile-00087",
+              "perf-profile-00088",
+              "perf-profile-00089",
+              "perf-profile-00090",
+              "perf-profile-00091",
+              "perf-profile-00092",
+              "perf-profile-00093",
+              "perf-profile-00094",
+              "perf-profile-00095",
+              "perf-profile-00096",
+              "perf-profile-00097",
+              "perf-profile-00098",
+              "perf-profile-00099"
+            ],
+            "kind": "profiles",
+            "names": [
+              "性能实例 00000",
+              "性能实例 00001",
+              "性能实例 00002",
+              "性能实例 00003",
+              "性能实例 00004",
+              "性能实例 00005",
+              "性能实例 00006",
+              "性能实例 00007",
+              "性能实例 00008",
+              "性能实例 00009",
+              "性能实例 00010",
+              "性能实例 00011",
+              "性能实例 00012",
+              "性能实例 00013",
+              "性能实例 00014",
+              "性能实例 00015",
+              "性能实例 00016",
+              "性能实例 00017",
+              "性能实例 00018",
+              "性能实例 00019",
+              "性能实例 00020",
+              "性能实例 00021",
+              "性能实例 00022",
+              "性能实例 00023",
+              "性能实例 00024",
+              "性能实例 00025",
+              "性能实例 00026",
+              "性能实例 00027",
+              "性能实例 00028",
+              "性能实例 00029",
+              "性能实例 00030",
+              "性能实例 00031",
+              "性能实例 00032",
+              "性能实例 00033",
+              "性能实例 00034",
+              "性能实例 00035",
+              "性能实例 00036",
+              "性能实例 00037",
+              "性能实例 00038",
+              "性能实例 00039",
+              "性能实例 00040",
+              "性能实例 00041",
+              "性能实例 00042",
+              "性能实例 00043",
+              "性能实例 00044",
+              "性能实例 00045",
+              "性能实例 00046",
+              "性能实例 00047",
+              "性能实例 00048",
+              "性能实例 00049",
+              "性能实例 00050",
+              "性能实例 00051",
+              "性能实例 00052",
+              "性能实例 00053",
+              "性能实例 00054",
+              "性能实例 00055",
+              "性能实例 00056",
+              "性能实例 00057",
+              "性能实例 00058",
+              "性能实例 00059",
+              "性能实例 00060",
+              "性能实例 00061",
+              "性能实例 00062",
+              "性能实例 00063",
+              "性能实例 00064",
+              "性能实例 00065",
+              "性能实例 00066",
+              "性能实例 00067",
+              "性能实例 00068",
+              "性能实例 00069",
+              "性能实例 00070",
+              "性能实例 00071",
+              "性能实例 00072",
+              "性能实例 00073",
+              "性能实例 00074",
+              "性能实例 00075",
+              "性能实例 00076",
+              "性能实例 00077",
+              "性能实例 00078",
+              "性能实例 00079",
+              "性能实例 00080",
+              "性能实例 00081",
+              "性能实例 00082",
+              "性能实例 00083",
+              "性能实例 00084",
+              "性能实例 00085",
+              "性能实例 00086",
+              "性能实例 00087",
+              "性能实例 00088",
+              "性能实例 00089",
+              "性能实例 00090",
+              "性能实例 00091",
+              "性能实例 00092",
+              "性能实例 00093",
+              "性能实例 00094",
+              "性能实例 00095",
+              "性能实例 00096",
+              "性能实例 00097",
+              "性能实例 00098",
+              "性能实例 00099"
+            ]
+          },
+          "proxies": {
+            "builtin_direct": "__direct__",
+            "count": 101,
+            "ids": [
+              "__direct__",
+              "perf-proxy-00000",
+              "perf-proxy-00001",
+              "perf-proxy-00002",
+              "perf-proxy-00003",
+              "perf-proxy-00004",
+              "perf-proxy-00005",
+              "perf-proxy-00006",
+              "perf-proxy-00007",
+              "perf-proxy-00008",
+              "perf-proxy-00009",
+              "perf-proxy-00010",
+              "perf-proxy-00011",
+              "perf-proxy-00012",
+              "perf-proxy-00013",
+              "perf-proxy-00014",
+              "perf-proxy-00015",
+              "perf-proxy-00016",
+              "perf-proxy-00017",
+              "perf-proxy-00018",
+              "perf-proxy-00019",
+              "perf-proxy-00020",
+              "perf-proxy-00021",
+              "perf-proxy-00022",
+              "perf-proxy-00023",
+              "perf-proxy-00024",
+              "perf-proxy-00025",
+              "perf-proxy-00026",
+              "perf-proxy-00027",
+              "perf-proxy-00028",
+              "perf-proxy-00029",
+              "perf-proxy-00030",
+              "perf-proxy-00031",
+              "perf-proxy-00032",
+              "perf-proxy-00033",
+              "perf-proxy-00034",
+              "perf-proxy-00035",
+              "perf-proxy-00036",
+              "perf-proxy-00037",
+              "perf-proxy-00038",
+              "perf-proxy-00039",
+              "perf-proxy-00040",
+              "perf-proxy-00041",
+              "perf-proxy-00042",
+              "perf-proxy-00043",
+              "perf-proxy-00044",
+              "perf-proxy-00045",
+              "perf-proxy-00046",
+              "perf-proxy-00047",
+              "perf-proxy-00048",
+              "perf-proxy-00049",
+              "perf-proxy-00050",
+              "perf-proxy-00051",
+              "perf-proxy-00052",
+              "perf-proxy-00053",
+              "perf-proxy-00054",
+              "perf-proxy-00055",
+              "perf-proxy-00056",
+              "perf-proxy-00057",
+              "perf-proxy-00058",
+              "perf-proxy-00059",
+              "perf-proxy-00060",
+              "perf-proxy-00061",
+              "perf-proxy-00062",
+              "perf-proxy-00063",
+              "perf-proxy-00064",
+              "perf-proxy-00065",
+              "perf-proxy-00066",
+              "perf-proxy-00067",
+              "perf-proxy-00068",
+              "perf-proxy-00069",
+              "perf-proxy-00070",
+              "perf-proxy-00071",
+              "perf-proxy-00072",
+              "perf-proxy-00073",
+              "perf-proxy-00074",
+              "perf-proxy-00075",
+              "perf-proxy-00076",
+              "perf-proxy-00077",
+              "perf-proxy-00078",
+              "perf-proxy-00079",
+              "perf-proxy-00080",
+              "perf-proxy-00081",
+              "perf-proxy-00082",
+              "perf-proxy-00083",
+              "perf-proxy-00084",
+              "perf-proxy-00085",
+              "perf-proxy-00086",
+              "perf-proxy-00087",
+              "perf-proxy-00088",
+              "perf-proxy-00089",
+              "perf-proxy-00090",
+              "perf-proxy-00091",
+              "perf-proxy-00092",
+              "perf-proxy-00093",
+              "perf-proxy-00094",
+              "perf-proxy-00095",
+              "perf-proxy-00096",
+              "perf-proxy-00097",
+              "perf-proxy-00098",
+              "perf-proxy-00099"
+            ],
+            "kind": "proxies",
+            "names": [
+              "直连（不走代理）",
+              "性能代理 00000",
+              "性能代理 00001",
+              "性能代理 00002",
+              "性能代理 00003",
+              "性能代理 00004",
+              "性能代理 00005",
+              "性能代理 00006",
+              "性能代理 00007",
+              "性能代理 00008",
+              "性能代理 00009",
+              "性能代理 00010",
+              "性能代理 00011",
+              "性能代理 00012",
+              "性能代理 00013",
+              "性能代理 00014",
+              "性能代理 00015",
+              "性能代理 00016",
+              "性能代理 00017",
+              "性能代理 00018",
+              "性能代理 00019",
+              "性能代理 00020",
+              "性能代理 00021",
+              "性能代理 00022",
+              "性能代理 00023",
+              "性能代理 00024",
+              "性能代理 00025",
+              "性能代理 00026",
+              "性能代理 00027",
+              "性能代理 00028",
+              "性能代理 00029",
+              "性能代理 00030",
+              "性能代理 00031",
+              "性能代理 00032",
+              "性能代理 00033",
+              "性能代理 00034",
+              "性能代理 00035",
+              "性能代理 00036",
+              "性能代理 00037",
+              "性能代理 00038",
+              "性能代理 00039",
+              "性能代理 00040",
+              "性能代理 00041",
+              "性能代理 00042",
+              "性能代理 00043",
+              "性能代理 00044",
+              "性能代理 00045",
+              "性能代理 00046",
+              "性能代理 00047",
+              "性能代理 00048",
+              "性能代理 00049",
+              "性能代理 00050",
+              "性能代理 00051",
+              "性能代理 00052",
+              "性能代理 00053",
+              "性能代理 00054",
+              "性能代理 00055",
+              "性能代理 00056",
+              "性能代理 00057",
+              "性能代理 00058",
+              "性能代理 00059",
+              "性能代理 00060",
+              "性能代理 00061",
+              "性能代理 00062",
+              "性能代理 00063",
+              "性能代理 00064",
+              "性能代理 00065",
+              "性能代理 00066",
+              "性能代理 00067",
+              "性能代理 00068",
+              "性能代理 00069",
+              "性能代理 00070",
+              "性能代理 00071",
+              "性能代理 00072",
+              "性能代理 00073",
+              "性能代理 00074",
+              "性能代理 00075",
+              "性能代理 00076",
+              "性能代理 00077",
+              "性能代理 00078",
+              "性能代理 00079",
+              "性能代理 00080",
+              "性能代理 00081",
+              "性能代理 00082",
+              "性能代理 00083",
+              "性能代理 00084",
+              "性能代理 00085",
+              "性能代理 00086",
+              "性能代理 00087",
+              "性能代理 00088",
+              "性能代理 00089",
+              "性能代理 00090",
+              "性能代理 00091",
+              "性能代理 00092",
+              "性能代理 00093",
+              "性能代理 00094",
+              "性能代理 00095",
+              "性能代理 00096",
+              "性能代理 00097",
+              "性能代理 00098",
+              "性能代理 00099"
+            ]
+          },
+          "render": {
+            "completed_ms": 1576,
+            "deadline_ms": 1801552,
+            "first_frame_ms": 1559,
+            "frame_attempts": [
+              {
+                "callback_ms": 1559,
+                "raf_ms": 1559
+              },
+              {
+                "callback_ms": 1575,
+                "raf_ms": 1575
+              }
+            ],
+            "frame_count": 2,
+            "predicate_after": true,
+            "predicate_before": true,
+            "predicate_ms": 1553,
+            "render_proof_version": 2,
+            "second_frame_ms": 1575
+          },
+          "rows": [
+            {
+              "id": "perf-profile-00000",
+              "name": "性能实例 00000"
+            },
+            {
+              "id": "perf-profile-00001",
+              "name": "性能实例 00001"
+            },
+            {
+              "id": "perf-profile-00002",
+              "name": "性能实例 00002"
+            },
+            {
+              "id": "perf-profile-00003",
+              "name": "性能实例 00003"
+            },
+            {
+              "id": "perf-profile-00004",
+              "name": "性能实例 00004"
+            },
+            {
+              "id": "perf-profile-00005",
+              "name": "性能实例 00005"
+            },
+            {
+              "id": "perf-profile-00006",
+              "name": "性能实例 00006"
+            },
+            {
+              "id": "perf-profile-00007",
+              "name": "性能实例 00007"
+            },
+            {
+              "id": "perf-profile-00008",
+              "name": "性能实例 00008"
+            },
+            {
+              "id": "perf-profile-00009",
+              "name": "性能实例 00009"
+            },
+            {
+              "id": "perf-profile-00010",
+              "name": "性能实例 00010"
+            },
+            {
+              "id": "perf-profile-00011",
+              "name": "性能实例 00011"
+            },
+            {
+              "id": "perf-profile-00012",
+              "name": "性能实例 00012"
+            },
+            {
+              "id": "perf-profile-00013",
+              "name": "性能实例 00013"
+            },
+            {
+              "id": "perf-profile-00014",
+              "name": "性能实例 00014"
+            },
+            {
+              "id": "perf-profile-00015",
+              "name": "性能实例 00015"
+            },
+            {
+              "id": "perf-profile-00016",
+              "name": "性能实例 00016"
+            },
+            {
+              "id": "perf-profile-00017",
+              "name": "性能实例 00017"
+            },
+            {
+              "id": "perf-profile-00018",
+              "name": "性能实例 00018"
+            },
+            {
+              "id": "perf-profile-00019",
+              "name": "性能实例 00019"
+            },
+            {
+              "id": "perf-profile-00020",
+              "name": "性能实例 00020"
+            },
+            {
+              "id": "perf-profile-00021",
+              "name": "性能实例 00021"
+            },
+            {
+              "id": "perf-profile-00022",
+              "name": "性能实例 00022"
+            },
+            {
+              "id": "perf-profile-00023",
+              "name": "性能实例 00023"
+            },
+            {
+              "id": "perf-profile-00024",
+              "name": "性能实例 00024"
+            },
+            {
+              "id": "perf-profile-00025",
+              "name": "性能实例 00025"
+            },
+            {
+              "id": "perf-profile-00026",
+              "name": "性能实例 00026"
+            },
+            {
+              "id": "perf-profile-00027",
+              "name": "性能实例 00027"
+            },
+            {
+              "id": "perf-profile-00028",
+              "name": "性能实例 00028"
+            },
+            {
+              "id": "perf-profile-00029",
+              "name": "性能实例 00029"
+            },
+            {
+              "id": "perf-profile-00030",
+              "name": "性能实例 00030"
+            },
+            {
+              "id": "perf-profile-00031",
+              "name": "性能实例 00031"
+            },
+            {
+              "id": "perf-profile-00032",
+              "name": "性能实例 00032"
+            },
+            {
+              "id": "perf-profile-00033",
+              "name": "性能实例 00033"
+            },
+            {
+              "id": "perf-profile-00034",
+              "name": "性能实例 00034"
+            },
+            {
+              "id": "perf-profile-00035",
+              "name": "性能实例 00035"
+            },
+            {
+              "id": "perf-profile-00036",
+              "name": "性能实例 00036"
+            },
+            {
+              "id": "perf-profile-00037",
+              "name": "性能实例 00037"
+            },
+            {
+              "id": "perf-profile-00038",
+              "name": "性能实例 00038"
+            },
+            {
+              "id": "perf-profile-00039",
+              "name": "性能实例 00039"
+            },
+            {
+              "id": "perf-profile-00040",
+              "name": "性能实例 00040"
+            },
+            {
+              "id": "perf-profile-00041",
+              "name": "性能实例 00041"
+            },
+            {
+              "id": "perf-profile-00042",
+              "name": "性能实例 00042"
+            },
+            {
+              "id": "perf-profile-00043",
+              "name": "性能实例 00043"
+            },
+            {
+              "id": "perf-profile-00044",
+              "name": "性能实例 00044"
+            },
+            {
+              "id": "perf-profile-00045",
+              "name": "性能实例 00045"
+            },
+            {
+              "id": "perf-profile-00046",
+              "name": "性能实例 00046"
+            },
+            {
+              "id": "perf-profile-00047",
+              "name": "性能实例 00047"
+            },
+            {
+              "id": "perf-profile-00048",
+              "name": "性能实例 00048"
+            },
+            {
+              "id": "perf-profile-00049",
+              "name": "性能实例 00049"
+            },
+            {
+              "id": "perf-profile-00050",
+              "name": "性能实例 00050"
+            },
+            {
+              "id": "perf-profile-00051",
+              "name": "性能实例 00051"
+            },
+            {
+              "id": "perf-profile-00052",
+              "name": "性能实例 00052"
+            },
+            {
+              "id": "perf-profile-00053",
+              "name": "性能实例 00053"
+            },
+            {
+              "id": "perf-profile-00054",
+              "name": "性能实例 00054"
+            },
+            {
+              "id": "perf-profile-00055",
+              "name": "性能实例 00055"
+            },
+            {
+              "id": "perf-profile-00056",
+              "name": "性能实例 00056"
+            },
+            {
+              "id": "perf-profile-00057",
+              "name": "性能实例 00057"
+            },
+            {
+              "id": "perf-profile-00058",
+              "name": "性能实例 00058"
+            },
+            {
+              "id": "perf-profile-00059",
+              "name": "性能实例 00059"
+            },
+            {
+              "id": "perf-profile-00060",
+              "name": "性能实例 00060"
+            },
+            {
+              "id": "perf-profile-00061",
+              "name": "性能实例 00061"
+            },
+            {
+              "id": "perf-profile-00062",
+              "name": "性能实例 00062"
+            },
+            {
+              "id": "perf-profile-00063",
+              "name": "性能实例 00063"
+            },
+            {
+              "id": "perf-profile-00064",
+              "name": "性能实例 00064"
+            },
+            {
+              "id": "perf-profile-00065",
+              "name": "性能实例 00065"
+            },
+            {
+              "id": "perf-profile-00066",
+              "name": "性能实例 00066"
+            },
+            {
+              "id": "perf-profile-00067",
+              "name": "性能实例 00067"
+            },
+            {
+              "id": "perf-profile-00068",
+              "name": "性能实例 00068"
+            },
+            {
+              "id": "perf-profile-00069",
+              "name": "性能实例 00069"
+            },
+            {
+              "id": "perf-profile-00070",
+              "name": "性能实例 00070"
+            },
+            {
+              "id": "perf-profile-00071",
+              "name": "性能实例 00071"
+            },
+            {
+              "id": "perf-profile-00072",
+              "name": "性能实例 00072"
+            },
+            {
+              "id": "perf-profile-00073",
+              "name": "性能实例 00073"
+            },
+            {
+              "id": "perf-profile-00074",
+              "name": "性能实例 00074"
+            },
+            {
+              "id": "perf-profile-00075",
+              "name": "性能实例 00075"
+            },
+            {
+              "id": "perf-profile-00076",
+              "name": "性能实例 00076"
+            },
+            {
+              "id": "perf-profile-00077",
+              "name": "性能实例 00077"
+            },
+            {
+              "id": "perf-profile-00078",
+              "name": "性能实例 00078"
+            },
+            {
+              "id": "perf-profile-00079",
+              "name": "性能实例 00079"
+            },
+            {
+              "id": "perf-profile-00080",
+              "name": "性能实例 00080"
+            },
+            {
+              "id": "perf-profile-00081",
+              "name": "性能实例 00081"
+            },
+            {
+              "id": "perf-profile-00082",
+              "name": "性能实例 00082"
+            },
+            {
+              "id": "perf-profile-00083",
+              "name": "性能实例 00083"
+            },
+            {
+              "id": "perf-profile-00084",
+              "name": "性能实例 00084"
+            },
+            {
+              "id": "perf-profile-00085",
+              "name": "性能实例 00085"
+            },
+            {
+              "id": "perf-profile-00086",
+              "name": "性能实例 00086"
+            },
+            {
+              "id": "perf-profile-00087",
+              "name": "性能实例 00087"
+            },
+            {
+              "id": "perf-profile-00088",
+              "name": "性能实例 00088"
+            },
+            {
+              "id": "perf-profile-00089",
+              "name": "性能实例 00089"
+            },
+            {
+              "id": "perf-profile-00090",
+              "name": "性能实例 00090"
+            },
+            {
+              "id": "perf-profile-00091",
+              "name": "性能实例 00091"
+            },
+            {
+              "id": "perf-profile-00092",
+              "name": "性能实例 00092"
+            },
+            {
+              "id": "perf-profile-00093",
+              "name": "性能实例 00093"
+            },
+            {
+              "id": "perf-profile-00094",
+              "name": "性能实例 00094"
+            },
+            {
+              "id": "perf-profile-00095",
+              "name": "性能实例 00095"
+            },
+            {
+              "id": "perf-profile-00096",
+              "name": "性能实例 00096"
+            },
+            {
+              "id": "perf-profile-00097",
+              "name": "性能实例 00097"
+            },
+            {
+              "id": "perf-profile-00098",
+              "name": "性能实例 00098"
+            },
+            {
+              "id": "perf-profile-00099",
+              "name": "性能实例 00099"
+            }
+          ]
+        }
+      },
+      "request_id": "2",
+      "token": "1230074:2:86709615550026"
+    },
+    {
+      "backend_time_ns": 1794310619706668744,
+      "code_sha256": "738a809d6b474e2ed0c29bdb1ac1b641957644f675f92aaf4e8b8569537ae9a8",
+      "event": "request",
+      "request_id": "3",
+      "stream": true,
+      "token": "1230074:3:86711119843900"
+    },
+    {
+      "backend_time_ns": 1794310619707535231,
+      "event": "message",
+      "payload": {
+        "js_now_ms": 1579,
+        "js_started_ms": 1579,
+        "kind": "result",
+        "ok": true,
+        "sequence": 1,
+        "time_origin_ms": 1794310618127,
+        "token": "1230074:3:86711119843900",
+        "value": {
+          "kind": "config",
+          "settings": {
+            "defaultConnectorType": "xray",
+            "defaultFingerprintArgs": [
+              "--fingerprint-brand=Chrome",
+              "--fingerprint-platform=linux",
+              "--disable-non-proxied-udp",
+              "--fingerprinting-canvas-image-data-noise",
+              "--fingerprinting-client-rects-noise"
+            ],
+            "defaultLaunchArgs": [
+              "--disable-sync",
+              "--no-first-run"
+            ],
+            "defaultStartUrls": [],
+            "lightStartEnabled": true,
+            "maxConcurrentInstances": 0,
+            "restoreLastSession": false,
+            "startReadyTimeoutMs": 3000,
+            "startStableWindowMs": 1200,
+            "userDataRoot": "data/profiles"
+          }
+        }
+      },
+      "request_id": "3",
+      "token": "1230074:3:86711119843900"
+    },
+    {
+      "backend_time_ns": 1794310619708842974,
+      "code_sha256": "34dded39e5b67dde81ce60cbcafc8158a189195209d694cdcfa87b8dce9755e6",
+      "event": "request",
+      "request_id": "4",
+      "stream": true,
+      "token": "1230074:4:86711122015688"
+    },
+    {
+      "backend_time_ns": 1794310619710815135,
+      "event": "message",
+      "payload": {
+        "js_now_ms": 1582,
+        "js_started_ms": 1581,
+        "kind": "result",
+        "ok": true,
+        "sequence": 1,
+        "time_origin_ms": 1794310618127,
+        "token": "1230074:4:86711122015688",
+        "value": {
+          "count": 100,
+          "ids": [
+            "perf-profile-00000",
+            "perf-profile-00001",
+            "perf-profile-00002",
+            "perf-profile-00003",
+            "perf-profile-00004",
+            "perf-profile-00005",
+            "perf-profile-00006",
+            "perf-profile-00007",
+            "perf-profile-00008",
+            "perf-profile-00009",
+            "perf-profile-00010",
+            "perf-profile-00011",
+            "perf-profile-00012",
+            "perf-profile-00013",
+            "perf-profile-00014",
+            "perf-profile-00015",
+            "perf-profile-00016",
+            "perf-profile-00017",
+            "perf-profile-00018",
+            "perf-profile-00019",
+            "perf-profile-00020",
+            "perf-profile-00021",
+            "perf-profile-00022",
+            "perf-profile-00023",
+            "perf-profile-00024",
+            "perf-profile-00025",
+            "perf-profile-00026",
+            "perf-profile-00027",
+            "perf-profile-00028",
+            "perf-profile-00029",
+            "perf-profile-00030",
+            "perf-profile-00031",
+            "perf-profile-00032",
+            "perf-profile-00033",
+            "perf-profile-00034",
+            "perf-profile-00035",
+            "perf-profile-00036",
+            "perf-profile-00037",
+            "perf-profile-00038",
+            "perf-profile-00039",
+            "perf-profile-00040",
+            "perf-profile-00041",
+            "perf-profile-00042",
+            "perf-profile-00043",
+            "perf-profile-00044",
+            "perf-profile-00045",
+            "perf-profile-00046",
+            "perf-profile-00047",
+            "perf-profile-00048",
+            "perf-profile-00049",
+            "perf-profile-00050",
+            "perf-profile-00051",
+            "perf-profile-00052",
+            "perf-profile-00053",
+            "perf-profile-00054",
+            "perf-profile-00055",
+            "perf-profile-00056",
+            "perf-profile-00057",
+            "perf-profile-00058",
+            "perf-profile-00059",
+            "perf-profile-00060",
+            "perf-profile-00061",
+            "perf-profile-00062",
+            "perf-profile-00063",
+            "perf-profile-00064",
+            "perf-profile-00065",
+            "perf-profile-00066",
+            "perf-profile-00067",
+            "perf-profile-00068",
+            "perf-profile-00069",
+            "perf-profile-00070",
+            "perf-profile-00071",
+            "perf-profile-00072",
+            "perf-profile-00073",
+            "perf-profile-00074",
+            "perf-profile-00075",
+            "perf-profile-00076",
+            "perf-profile-00077",
+            "perf-profile-00078",
+            "perf-profile-00079",
+            "perf-profile-00080",
+            "perf-profile-00081",
+            "perf-profile-00082",
+            "perf-profile-00083",
+            "perf-profile-00084",
+            "perf-profile-00085",
+            "perf-profile-00086",
+            "perf-profile-00087",
+            "perf-profile-00088",
+            "perf-profile-00089",
+            "perf-profile-00090",
+            "perf-profile-00091",
+            "perf-profile-00092",
+            "perf-profile-00093",
+            "perf-profile-00094",
+            "perf-profile-00095",
+            "perf-profile-00096",
+            "perf-profile-00097",
+            "perf-profile-00098",
+            "perf-profile-00099"
+          ],
+          "kind": "profiles",
+          "names": [
+            "性能实例 00000",
+            "性能实例 00001",
+            "性能实例 00002",
+            "性能实例 00003",
+            "性能实例 00004",
+            "性能实例 00005",
+            "性能实例 00006",
+            "性能实例 00007",
+            "性能实例 00008",
+            "性能实例 00009",
+            "性能实例 00010",
+            "性能实例 00011",
+            "性能实例 00012",
+            "性能实例 00013",
+            "性能实例 00014",
+            "性能实例 00015",
+            "性能实例 00016",
+            "性能实例 00017",
+            "性能实例 00018",
+            "性能实例 00019",
+            "性能实例 00020",
+            "性能实例 00021",
+            "性能实例 00022",
+            "性能实例 00023",
+            "性能实例 00024",
+            "性能实例 00025",
+            "性能实例 00026",
+            "性能实例 00027",
+            "性能实例 00028",
+            "性能实例 00029",
+            "性能实例 00030",
+            "性能实例 00031",
+            "性能实例 00032",
+            "性能实例 00033",
+            "性能实例 00034",
+            "性能实例 00035",
+            "性能实例 00036",
+            "性能实例 00037",
+            "性能实例 00038",
+            "性能实例 00039",
+            "性能实例 00040",
+            "性能实例 00041",
+            "性能实例 00042",
+            "性能实例 00043",
+            "性能实例 00044",
+            "性能实例 00045",
+            "性能实例 00046",
+            "性能实例 00047",
+            "性能实例 00048",
+            "性能实例 00049",
+            "性能实例 00050",
+            "性能实例 00051",
+            "性能实例 00052",
+            "性能实例 00053",
+            "性能实例 00054",
+            "性能实例 00055",
+            "性能实例 00056",
+            "性能实例 00057",
+            "性能实例 00058",
+            "性能实例 00059",
+            "性能实例 00060",
+            "性能实例 00061",
+            "性能实例 00062",
+            "性能实例 00063",
+            "性能实例 00064",
+            "性能实例 00065",
+            "性能实例 00066",
+            "性能实例 00067",
+            "性能实例 00068",
+            "性能实例 00069",
+            "性能实例 00070",
+            "性能实例 00071",
+            "性能实例 00072",
+            "性能实例 00073",
+            "性能实例 00074",
+            "性能实例 00075",
+            "性能实例 00076",
+            "性能实例 00077",
+            "性能实例 00078",
+            "性能实例 00079",
+            "性能实例 00080",
+            "性能实例 00081",
+            "性能实例 00082",
+            "性能实例 00083",
+            "性能实例 00084",
+            "性能实例 00085",
+            "性能实例 00086",
+            "性能实例 00087",
+            "性能实例 00088",
+            "性能实例 00089",
+            "性能实例 00090",
+            "性能实例 00091",
+            "性能实例 00092",
+            "性能实例 00093",
+            "性能实例 00094",
+            "性能实例 00095",
+            "性能实例 00096",
+            "性能实例 00097",
+            "性能实例 00098",
+            "性能实例 00099"
+          ]
+        }
+      },
+      "request_id": "4",
+      "token": "1230074:4:86711122015688"
+    },
+    {
+      "backend_time_ns": 1794310619712271612,
+      "code_sha256": "47f77c58abb56d6657f52ade3bdd8518d329e6462e5fc83b434fa62e18663c4c",
+      "event": "request",
+      "request_id": "5",
+      "stream": true,
+      "token": "1230074:5:86711125516872"
+    },
+    {
+      "backend_time_ns": 1794310619713011734,
+      "event": "message",
+      "payload": {
+        "js_now_ms": 1585,
+        "js_started_ms": 1584,
+        "kind": "result",
+        "ok": true,
+        "sequence": 1,
+        "time_origin_ms": 1794310618127,
+        "token": "1230074:5:86711125516872",
+        "value": {
+          "count": 0,
+          "ids": [],
+          "kind": "groups",
+          "names": []
+        }
+      },
+      "request_id": "5",
+      "token": "1230074:5:86711125516872"
+    },
+    {
+      "backend_time_ns": 1794310619714350817,
+      "code_sha256": "5ad32f65d56ba61dcf1125df06b755a73a7ba9100a32e208a0827f59b04f9f95",
+      "event": "request",
+      "request_id": "6",
+      "stream": true,
+      "token": "1230074:6:86711127600467"
+    },
+    {
+      "backend_time_ns": 1794310619716769722,
+      "event": "message",
+      "payload": {
+        "js_now_ms": 1588,
+        "js_started_ms": 1586,
+        "kind": "result",
+        "ok": true,
+        "sequence": 1,
+        "time_origin_ms": 1794310618127,
+        "token": "1230074:6:86711127600467",
+        "value": {
+          "builtin_direct": "__direct__",
+          "count": 101,
+          "ids": [
+            "__direct__",
+            "perf-proxy-00000",
+            "perf-proxy-00001",
+            "perf-proxy-00002",
+            "perf-proxy-00003",
+            "perf-proxy-00004",
+            "perf-proxy-00005",
+            "perf-proxy-00006",
+            "perf-proxy-00007",
+            "perf-proxy-00008",
+            "perf-proxy-00009",
+            "perf-proxy-00010",
+            "perf-proxy-00011",
+            "perf-proxy-00012",
+            "perf-proxy-00013",
+            "perf-proxy-00014",
+            "perf-proxy-00015",
+            "perf-proxy-00016",
+            "perf-proxy-00017",
+            "perf-proxy-00018",
+            "perf-proxy-00019",
+            "perf-proxy-00020",
+            "perf-proxy-00021",
+            "perf-proxy-00022",
+            "perf-proxy-00023",
+            "perf-proxy-00024",
+            "perf-proxy-00025",
+            "perf-proxy-00026",
+            "perf-proxy-00027",
+            "perf-proxy-00028",
+            "perf-proxy-00029",
+            "perf-proxy-00030",
+            "perf-proxy-00031",
+            "perf-proxy-00032",
+            "perf-proxy-00033",
+            "perf-proxy-00034",
+            "perf-proxy-00035",
+            "perf-proxy-00036",
+            "perf-proxy-00037",
+            "perf-proxy-00038",
+            "perf-proxy-00039",
+            "perf-proxy-00040",
+            "perf-proxy-00041",
+            "perf-proxy-00042",
+            "perf-proxy-00043",
+            "perf-proxy-00044",
+            "perf-proxy-00045",
+            "perf-proxy-00046",
+            "perf-proxy-00047",
+            "perf-proxy-00048",
+            "perf-proxy-00049",
+            "perf-proxy-00050",
+            "perf-proxy-00051",
+            "perf-proxy-00052",
+            "perf-proxy-00053",
+            "perf-proxy-00054",
+            "perf-proxy-00055",
+            "perf-proxy-00056",
+            "perf-proxy-00057",
+            "perf-proxy-00058",
+            "perf-proxy-00059",
+            "perf-proxy-00060",
+            "perf-proxy-00061",
+            "perf-proxy-00062",
+            "perf-proxy-00063",
+            "perf-proxy-00064",
+            "perf-proxy-00065",
+            "perf-proxy-00066",
+            "perf-proxy-00067",
+            "perf-proxy-00068",
+            "perf-proxy-00069",
+            "perf-proxy-00070",
+            "perf-proxy-00071",
+            "perf-proxy-00072",
+            "perf-proxy-00073",
+            "perf-proxy-00074",
+            "perf-proxy-00075",
+            "perf-proxy-00076",
+            "perf-proxy-00077",
+            "perf-proxy-00078",
+            "perf-proxy-00079",
+            "perf-proxy-00080",
+            "perf-proxy-00081",
+            "perf-proxy-00082",
+            "perf-proxy-00083",
+            "perf-proxy-00084",
+            "perf-proxy-00085",
+            "perf-proxy-00086",
+            "perf-proxy-00087",
+            "perf-proxy-00088",
+            "perf-proxy-00089",
+            "perf-proxy-00090",
+            "perf-proxy-00091",
+            "perf-proxy-00092",
+            "perf-proxy-00093",
+            "perf-proxy-00094",
+            "perf-proxy-00095",
+            "perf-proxy-00096",
+            "perf-proxy-00097",
+            "perf-proxy-00098",
+            "perf-proxy-00099"
+          ],
+          "kind": "proxies",
+          "names": [
+            "直连（不走代理）",
+            "性能代理 00000",
+            "性能代理 00001",
+            "性能代理 00002",
+            "性能代理 00003",
+            "性能代理 00004",
+            "性能代理 00005",
+            "性能代理 00006",
+            "性能代理 00007",
+            "性能代理 00008",
+            "性能代理 00009",
+            "性能代理 00010",
+            "性能代理 00011",
+            "性能代理 00012",
+            "性能代理 00013",
+            "性能代理 00014",
+            "性能代理 00015",
+            "性能代理 00016",
+            "性能代理 00017",
+            "性能代理 00018",
+            "性能代理 00019",
+            "性能代理 00020",
+            "性能代理 00021",
+            "性能代理 00022",
+            "性能代理 00023",
+            "性能代理 00024",
+            "性能代理 00025",
+            "性能代理 00026",
+            "性能代理 00027",
+            "性能代理 00028",
+            "性能代理 00029",
+            "性能代理 00030",
+            "性能代理 00031",
+            "性能代理 00032",
+            "性能代理 00033",
+            "性能代理 00034",
+            "性能代理 00035",
+            "性能代理 00036",
+            "性能代理 00037",
+            "性能代理 00038",
+            "性能代理 00039",
+            "性能代理 00040",
+            "性能代理 00041",
+            "性能代理 00042",
+            "性能代理 00043",
+            "性能代理 00044",
+            "性能代理 00045",
+            "性能代理 00046",
+            "性能代理 00047",
+            "性能代理 00048",
+            "性能代理 00049",
+            "性能代理 00050",
+            "性能代理 00051",
+            "性能代理 00052",
+            "性能代理 00053",
+            "性能代理 00054",
+            "性能代理 00055",
+            "性能代理 00056",
+            "性能代理 00057",
+            "性能代理 00058",
+            "性能代理 00059",
+            "性能代理 00060",
+            "性能代理 00061",
+            "性能代理 00062",
+            "性能代理 00063",
+            "性能代理 00064",
+            "性能代理 00065",
+            "性能代理 00066",
+            "性能代理 00067",
+            "性能代理 00068",
+            "性能代理 00069",
+            "性能代理 00070",
+            "性能代理 00071",
+            "性能代理 00072",
+            "性能代理 00073",
+            "性能代理 00074",
+            "性能代理 00075",
+            "性能代理 00076",
+            "性能代理 00077",
+            "性能代理 00078",
+            "性能代理 00079",
+            "性能代理 00080",
+            "性能代理 00081",
+            "性能代理 00082",
+            "性能代理 00083",
+            "性能代理 00084",
+            "性能代理 00085",
+            "性能代理 00086",
+            "性能代理 00087",
+            "性能代理 00088",
+            "性能代理 00089",
+            "性能代理 00090",
+            "性能代理 00091",
+            "性能代理 00092",
+            "性能代理 00093",
+            "性能代理 00094",
+            "性能代理 00095",
+            "性能代理 00096",
+            "性能代理 00097",
+            "性能代理 00098",
+            "性能代理 00099"
+          ]
+        }
+      },
+      "request_id": "6",
+      "token": "1230074:6:86711127600467"
+    },
+    {
+      "backend_time_ns": 1794310619718320237,
+      "code_sha256": "f865e80f37e30b92fd5575c771584d6c0d44dedfe1c8980f4856ed9ef48ebe95",
+      "event": "request",
+      "request_id": "7",
+      "stream": true,
+      "token": "1230074:7:86711131573048"
+    },
+    {
+      "backend_time_ns": 1794310619745489262,
+      "event": "message",
+      "payload": {
+        "js_now_ms": 1614,
+        "js_started_ms": 1590,
+        "kind": "result",
+        "ok": true,
+        "sequence": 1,
+        "time_origin_ms": 1794310618127,
+        "token": "1230074:7:86711131573048",
+        "value": {
+          "elapsedMs": 23,
+          "render": {
+            "completed_ms": 1614,
+            "deadline_ms": 1801603,
+            "first_frame_ms": 1606,
+            "frame_attempts": [
+              {
+                "callback_ms": 1606,
+                "raf_ms": 1606
+              },
+              {
+                "callback_ms": 1614,
+                "raf_ms": 1614
+              }
+            ],
+            "frame_count": 2,
+            "predicate_after": true,
+            "predicate_before": true,
+            "predicate_ms": 1603,
+            "render_proof_version": 2,
+            "second_frame_ms": 1614
+          },
+          "rows": [
+            {
+              "id": "perf-profile-00042",
+              "name": "性能实例 00042"
+            }
+          ],
+          "value": "性能实例 00042"
+        }
+      },
+      "request_id": "7",
+      "token": "1230074:7:86711131573048"
+    },
+    {
+      "backend_time_ns": 1794310619747459744,
+      "code_sha256": "999dd20fb0d598cce61c7fe27784be1f213147ca71d3dc6d877d9b45522f4ef7",
+      "event": "request",
+      "request_id": "8",
+      "stream": true,
+      "token": "1230074:8:86711160608495"
+    },
+    {
+      "backend_time_ns": 1794310619950000400,
+      "event": "message",
+      "payload": {
+        "js_now_ms": 1821,
+        "js_started_ms": 1620,
+        "kind": "result",
+        "ok": true,
+        "sequence": 1,
+        "time_origin_ms": 1794310618127,
+        "token": "1230074:8:86711160608495",
+        "value": {
+          "keyword": "perf-updated-00042-0",
+          "profileId": "perf-profile-00042",
+          "render": {
+            "completed_ms": 1821,
+            "deadline_ms": 1801767,
+            "first_frame_ms": 1793,
+            "frame_attempts": [
+              {
+                "callback_ms": 1793,
+                "raf_ms": 1793
+              },
+              {
+                "callback_ms": 1821,
+                "raf_ms": 1821
+              }
+            ],
+            "frame_count": 2,
+            "predicate_after": true,
+            "predicate_before": true,
+            "predicate_ms": 1767.0000000000002,
+            "render_proof_version": 2,
+            "second_frame_ms": 1821
+          }
+        }
+      },
+      "request_id": "8",
+      "token": "1230074:8:86711160608495"
+    },
+    {
+      "backend_time_ns": 1794310619952519220,
+      "code_sha256": "f7a2c33d2a363becd90c5e7f25e7dbc3b818af2e6c36de1ecc9240cf8a4aafa9",
+      "event": "request",
+      "request_id": "9",
+      "stream": true,
+      "token": "1230074:9:86711365586226"
+    },
+    {
+      "backend_time_ns": 1794310620073454455,
+      "event": "message",
+      "payload": {
+        "js_now_ms": 1945,
+        "js_started_ms": 1847,
+        "kind": "phase",
+        "ok": true,
+        "phase": "keyword_visible",
+        "sequence": 1,
+        "time_origin_ms": 1794310618127,
+        "token": "1230074:9:86711365586226",
+        "value": {
+          "keyword": "perf-updated-00042-0",
+          "profileId": "perf-profile-00042",
+          "render": {
+            "completed_ms": 1945,
+            "deadline_ms": 1801848,
+            "first_frame_ms": 1936,
+            "frame_attempts": [
+              {
+                "callback_ms": 1936,
+                "raf_ms": 1936
+              },
+              {
+                "callback_ms": 1945,
+                "raf_ms": 1945
+              }
+            ],
+            "frame_count": 2,
+            "predicate_after": true,
+            "predicate_before": true,
+            "predicate_ms": 1931,
+            "render_proof_version": 2,
+            "second_frame_ms": 1945
+          }
+        }
+      },
+      "request_id": "9",
+      "token": "1230074:9:86711365586226"
+    },
+    {
+      "backend_time_ns": 1794310620073489908,
+      "event": "message",
+      "payload": {
+        "js_now_ms": 1945,
+        "js_started_ms": 1847,
+        "kind": "phase",
+        "ok": true,
+        "phase": "keyword_closed",
+        "sequence": 2,
+        "time_origin_ms": 1794310618127,
+        "token": "1230074:9:86711365586226",
+        "value": {
+          "keyword": "perf-updated-00042-0",
+          "profileId": "perf-profile-00042",
+          "render": {
+            "completed_ms": 1945,
+            "deadline_ms": 1801849,
+            "first_frame_ms": 1936,
+            "frame_attempts": [
+              {
+                "callback_ms": 1936,
+                "raf_ms": 1936
+              },
+              {
+                "callback_ms": 1945,
+                "raf_ms": 1945
+              }
+            ],
+            "frame_count": 2,
+            "predicate_after": true,
+            "predicate_before": true,
+            "predicate_ms": 1931,
+            "render_proof_version": 2,
+            "second_frame_ms": 1945
+          }
+        }
+      },
+      "request_id": "9",
+      "token": "1230074:9:86711365586226"
+    },
+    {
+      "backend_time_ns": 1794310620077599137,
+      "event": "message",
+      "payload": {
+        "js_now_ms": 1949,
+        "js_started_ms": 1847,
+        "kind": "result",
+        "ok": true,
+        "sequence": 3,
+        "time_origin_ms": 1794310618127,
+        "token": "1230074:9:86711365586226",
+        "value": {
+          "keyword": "perf-updated-00042-0",
+          "modalClosedMs": 97,
+          "profileId": "perf-profile-00042",
+          "render": {
+            "completed_ms": 1945,
+            "deadline_ms": 1801849,
+            "first_frame_ms": 1936,
+            "frame_attempts": [
+              {
+                "callback_ms": 1936,
+                "raf_ms": 1936
+              },
+              {
+                "callback_ms": 1945,
+                "raf_ms": 1945
+              }
+            ],
+            "frame_count": 2,
+            "predicate_after": true,
+            "predicate_before": true,
+            "predicate_ms": 1931,
+            "render_proof_version": 2,
+            "second_frame_ms": 1945
+          },
+          "visibleMs": 97
+        }
+      },
+      "request_id": "9",
+      "token": "1230074:9:86711365586226"
+    },
+    {
+      "backend_time_ns": 1794310620080735247,
+      "code_sha256": "2485126aaf74cbde0dc2140cd7f02599ad4f1510cff5fad3d69725c099116291",
+      "event": "request",
+      "request_id": "10",
+      "stream": true,
+      "token": "1230074:10:86711493907797"
+    },
+    {
+      "backend_time_ns": 1794310620137276419,
+      "event": "message",
+      "payload": {
+        "js_now_ms": 2009,
+        "js_started_ms": 1953,
+        "kind": "result",
+        "ok": true,
+        "sequence": 1,
+        "time_origin_ms": 1794310618127,
+        "token": "1230074:10:86711493907797",
+        "value": {
+          "render": {
+            "completed_ms": 2009,
+            "deadline_ms": 1801954,
+            "first_frame_ms": 1996,
+            "frame_attempts": [
+              {
+                "callback_ms": 1996,
+                "raf_ms": 1996
+              },
+              {
+                "callback_ms": 2009,
+                "raf_ms": 2009
+              }
+            ],
+            "frame_count": 2,
+            "predicate_after": true,
+            "predicate_before": true,
+            "predicate_ms": 1993,
+            "render_proof_version": 2,
+            "second_frame_ms": 2009
+          }
+        }
+      },
+      "request_id": "10",
+      "token": "1230074:10:86711493907797"
+    },
+    {
+      "backend_time_ns": 1794310620139555834,
+      "code_sha256": "9a981064a4672b7d1ecc3bedf9298f7280bd7004ac3210fab178eeb0a6b93824",
+      "event": "request",
+      "request_id": "11",
+      "stream": true,
+      "token": "1230074:11:86711552671989"
+    },
+    {
+      "backend_time_ns": 1794310620219064699,
+      "event": "message",
+      "payload": {
+        "js_now_ms": 2091,
+        "js_started_ms": 2023.0000000000002,
+        "kind": "result",
+        "ok": true,
+        "sequence": 1,
+        "time_origin_ms": 1794310618127,
+        "token": "1230074:11:86711552671989",
+        "value": {
+          "elapsedMs": 66.99999999999977,
+          "names": [
+            "性能代理 00042"
+          ],
+          "render": {
+            "completed_ms": 2090,
+            "deadline_ms": 1802024,
+            "first_frame_ms": 2081,
+            "frame_attempts": [
+              {
+                "callback_ms": 2081,
+                "raf_ms": 2081
+              },
+              {
+                "callback_ms": 2090,
+                "raf_ms": 2090
+              }
+            ],
+            "frame_count": 2,
+            "predicate_after": true,
+            "predicate_before": true,
+            "predicate_ms": 2080,
+            "render_proof_version": 2,
+            "second_frame_ms": 2090
+          },
+          "rows": [
+            {
+              "id": "perf-proxy-00042",
+              "name": "性能代理 00042"
+            }
+          ],
+          "value": "性能代理 00042"
+        }
+      },
+      "request_id": "11",
+      "token": "1230074:11:86711552671989"
+    },
+    {
+      "backend_time_ns": 1794310620222380517,
+      "code_sha256": "584488733c91cd5d87f1a59b0d819b01124d8602b8db28dbfe191a0d24feff1f",
+      "event": "request",
+      "request_id": "12",
+      "stream": true,
+      "token": "1230074:12:86711635299066"
+    },
+    {
+      "backend_time_ns": 1794310620348220471,
+      "event": "message",
+      "payload": {
+        "js_now_ms": 2215,
+        "js_started_ms": 2099,
+        "kind": "result",
+        "ok": true,
+        "sequence": 1,
+        "time_origin_ms": 1794310618127,
+        "token": "1230074:12:86711635299066",
+        "value": {
+          "elapsedMs": 116,
+          "names": [
+            "性能代理 00000",
+            "性能代理 00001",
+            "性能代理 00002",
+            "性能代理 00003",
+            "性能代理 00004",
+            "性能代理 00005",
+            "性能代理 00006",
+            "性能代理 00007",
+            "性能代理 00008",
+            "性能代理 00009",
+            "性能代理 00010",
+            "性能代理 00011",
+            "性能代理 00012",
+            "性能代理 00013",
+            "性能代理 00014",
+            "性能代理 00015",
+            "性能代理 00016",
+            "性能代理 00017",
+            "性能代理 00018",
+            "性能代理 00019",
+            "性能代理 00020",
+            "性能代理 00021",
+            "性能代理 00022",
+            "性能代理 00023",
+            "性能代理 00024",
+            "性能代理 00025",
+            "性能代理 00026",
+            "性能代理 00027",
+            "性能代理 00028",
+            "性能代理 00029",
+            "性能代理 00030",
+            "性能代理 00031",
+            "性能代理 00032",
+            "性能代理 00033",
+            "性能代理 00034",
+            "性能代理 00035",
+            "性能代理 00036",
+            "性能代理 00037",
+            "性能代理 00038",
+            "性能代理 00039",
+            "性能代理 00040",
+            "性能代理 00041",
+            "性能代理 00042",
+            "性能代理 00043",
+            "性能代理 00044",
+            "性能代理 00045",
+            "性能代理 00046",
+            "性能代理 00047",
+            "性能代理 00048",
+            "性能代理 00049",
+            "性能代理 00050",
+            "性能代理 00051",
+            "性能代理 00052",
+            "性能代理 00053",
+            "性能代理 00054",
+            "性能代理 00055",
+            "性能代理 00056",
+            "性能代理 00057",
+            "性能代理 00058",
+            "性能代理 00059",
+            "性能代理 00060",
+            "性能代理 00061",
+            "性能代理 00062",
+            "性能代理 00063",
+            "性能代理 00064",
+            "性能代理 00065",
+            "性能代理 00066",
+            "性能代理 00067",
+            "性能代理 00068",
+            "性能代理 00069",
+            "性能代理 00070",
+            "性能代理 00071",
+            "性能代理 00072",
+            "性能代理 00073",
+            "性能代理 00074",
+            "性能代理 00075",
+            "性能代理 00076",
+            "性能代理 00077",
+            "性能代理 00078",
+            "性能代理 00079",
+            "性能代理 00080",
+            "性能代理 00081",
+            "性能代理 00082",
+            "性能代理 00083",
+            "性能代理 00084",
+            "性能代理 00085",
+            "性能代理 00086",
+            "性能代理 00087",
+            "性能代理 00088",
+            "性能代理 00089",
+            "性能代理 00090",
+            "性能代理 00091",
+            "性能代理 00092",
+            "性能代理 00093",
+            "性能代理 00094",
+            "性能代理 00095",
+            "性能代理 00096",
+            "性能代理 00097",
+            "性能代理 00098",
+            "性能代理 00099"
+          ],
+          "render": {
+            "completed_ms": 2215,
+            "deadline_ms": 1802117,
+            "first_frame_ms": 2201,
+            "frame_attempts": [
+              {
+                "callback_ms": 2201,
+                "raf_ms": 2200
+              },
+              {
+                "callback_ms": 2214,
+                "raf_ms": 2214
+              }
+            ],
+            "frame_count": 2,
+            "predicate_after": true,
+            "predicate_before": true,
+            "predicate_ms": 2118,
+            "render_proof_version": 2,
+            "second_frame_ms": 2214
+          },
+          "rows": [
+            {
+              "id": "perf-proxy-00000",
+              "name": "性能代理 00000"
+            },
+            {
+              "id": "perf-proxy-00001",
+              "name": "性能代理 00001"
+            },
+            {
+              "id": "perf-proxy-00002",
+              "name": "性能代理 00002"
+            },
+            {
+              "id": "perf-proxy-00003",
+              "name": "性能代理 00003"
+            },
+            {
+              "id": "perf-proxy-00004",
+              "name": "性能代理 00004"
+            },
+            {
+              "id": "perf-proxy-00005",
+              "name": "性能代理 00005"
+            },
+            {
+              "id": "perf-proxy-00006",
+              "name": "性能代理 00006"
+            },
+            {
+              "id": "perf-proxy-00007",
+              "name": "性能代理 00007"
+            },
+            {
+              "id": "perf-proxy-00008",
+              "name": "性能代理 00008"
+            },
+            {
+              "id": "perf-proxy-00009",
+              "name": "性能代理 00009"
+            },
+            {
+              "id": "perf-proxy-00010",
+              "name": "性能代理 00010"
+            },
+            {
+              "id": "perf-proxy-00011",
+              "name": "性能代理 00011"
+            },
+            {
+              "id": "perf-proxy-00012",
+              "name": "性能代理 00012"
+            },
+            {
+              "id": "perf-proxy-00013",
+              "name": "性能代理 00013"
+            },
+            {
+              "id": "perf-proxy-00014",
+              "name": "性能代理 00014"
+            },
+            {
+              "id": "perf-proxy-00015",
+              "name": "性能代理 00015"
+            },
+            {
+              "id": "perf-proxy-00016",
+              "name": "性能代理 00016"
+            },
+            {
+              "id": "perf-proxy-00017",
+              "name": "性能代理 00017"
+            },
+            {
+              "id": "perf-proxy-00018",
+              "name": "性能代理 00018"
+            },
+            {
+              "id": "perf-proxy-00019",
+              "name": "性能代理 00019"
+            },
+            {
+              "id": "perf-proxy-00020",
+              "name": "性能代理 00020"
+            },
+            {
+              "id": "perf-proxy-00021",
+              "name": "性能代理 00021"
+            },
+            {
+              "id": "perf-proxy-00022",
+              "name": "性能代理 00022"
+            },
+            {
+              "id": "perf-proxy-00023",
+              "name": "性能代理 00023"
+            },
+            {
+              "id": "perf-proxy-00024",
+              "name": "性能代理 00024"
+            },
+            {
+              "id": "perf-proxy-00025",
+              "name": "性能代理 00025"
+            },
+            {
+              "id": "perf-proxy-00026",
+              "name": "性能代理 00026"
+            },
+            {
+              "id": "perf-proxy-00027",
+              "name": "性能代理 00027"
+            },
+            {
+              "id": "perf-proxy-00028",
+              "name": "性能代理 00028"
+            },
+            {
+              "id": "perf-proxy-00029",
+              "name": "性能代理 00029"
+            },
+            {
+              "id": "perf-proxy-00030",
+              "name": "性能代理 00030"
+            },
+            {
+              "id": "perf-proxy-00031",
+              "name": "性能代理 00031"
+            },
+            {
+              "id": "perf-proxy-00032",
+              "name": "性能代理 00032"
+            },
+            {
+              "id": "perf-proxy-00033",
+              "name": "性能代理 00033"
+            },
+            {
+              "id": "perf-proxy-00034",
+              "name": "性能代理 00034"
+            },
+            {
+              "id": "perf-proxy-00035",
+              "name": "性能代理 00035"
+            },
+            {
+              "id": "perf-proxy-00036",
+              "name": "性能代理 00036"
+            },
+            {
+              "id": "perf-proxy-00037",
+              "name": "性能代理 00037"
+            },
+            {
+              "id": "perf-proxy-00038",
+              "name": "性能代理 00038"
+            },
+            {
+              "id": "perf-proxy-00039",
+              "name": "性能代理 00039"
+            },
+            {
+              "id": "perf-proxy-00040",
+              "name": "性能代理 00040"
+            },
+            {
+              "id": "perf-proxy-00041",
+              "name": "性能代理 00041"
+            },
+            {
+              "id": "perf-proxy-00042",
+              "name": "性能代理 00042"
+            },
+            {
+              "id": "perf-proxy-00043",
+              "name": "性能代理 00043"
+            },
+            {
+              "id": "perf-proxy-00044",
+              "name": "性能代理 00044"
+            },
+            {
+              "id": "perf-proxy-00045",
+              "name": "性能代理 00045"
+            },
+            {
+              "id": "perf-proxy-00046",
+              "name": "性能代理 00046"
+            },
+            {
+              "id": "perf-proxy-00047",
+              "name": "性能代理 00047"
+            },
+            {
+              "id": "perf-proxy-00048",
+              "name": "性能代理 00048"
+            },
+            {
+              "id": "perf-proxy-00049",
+              "name": "性能代理 00049"
+            },
+            {
+              "id": "perf-proxy-00050",
+              "name": "性能代理 00050"
+            },
+            {
+              "id": "perf-proxy-00051",
+              "name": "性能代理 00051"
+            },
+            {
+              "id": "perf-proxy-00052",
+              "name": "性能代理 00052"
+            },
+            {
+              "id": "perf-proxy-00053",
+              "name": "性能代理 00053"
+            },
+            {
+              "id": "perf-proxy-00054",
+              "name": "性能代理 00054"
+            },
+            {
+              "id": "perf-proxy-00055",
+              "name": "性能代理 00055"
+            },
+            {
+              "id": "perf-proxy-00056",
+              "name": "性能代理 00056"
+            },
+            {
+              "id": "perf-proxy-00057",
+              "name": "性能代理 00057"
+            },
+            {
+              "id": "perf-proxy-00058",
+              "name": "性能代理 00058"
+            },
+            {
+              "id": "perf-proxy-00059",
+              "name": "性能代理 00059"
+            },
+            {
+              "id": "perf-proxy-00060",
+              "name": "性能代理 00060"
+            },
+            {
+              "id": "perf-proxy-00061",
+              "name": "性能代理 00061"
+            },
+            {
+              "id": "perf-proxy-00062",
+              "name": "性能代理 00062"
+            },
+            {
+              "id": "perf-proxy-00063",
+              "name": "性能代理 00063"
+            },
+            {
+              "id": "perf-proxy-00064",
+              "name": "性能代理 00064"
+            },
+            {
+              "id": "perf-proxy-00065",
+              "name": "性能代理 00065"
+            },
+            {
+              "id": "perf-proxy-00066",
+              "name": "性能代理 00066"
+            },
+            {
+              "id": "perf-proxy-00067",
+              "name": "性能代理 00067"
+            },
+            {
+              "id": "perf-proxy-00068",
+              "name": "性能代理 00068"
+            },
+            {
+              "id": "perf-proxy-00069",
+              "name": "性能代理 00069"
+            },
+            {
+              "id": "perf-proxy-00070",
+              "name": "性能代理 00070"
+            },
+            {
+              "id": "perf-proxy-00071",
+              "name": "性能代理 00071"
+            },
+            {
+              "id": "perf-proxy-00072",
+              "name": "性能代理 00072"
+            },
+            {
+              "id": "perf-proxy-00073",
+              "name": "性能代理 00073"
+            },
+            {
+              "id": "perf-proxy-00074",
+              "name": "性能代理 00074"
+            },
+            {
+              "id": "perf-proxy-00075",
+              "name": "性能代理 00075"
+            },
+            {
+              "id": "perf-proxy-00076",
+              "name": "性能代理 00076"
+            },
+            {
+              "id": "perf-proxy-00077",
+              "name": "性能代理 00077"
+            },
+            {
+              "id": "perf-proxy-00078",
+              "name": "性能代理 00078"
+            },
+            {
+              "id": "perf-proxy-00079",
+              "name": "性能代理 00079"
+            },
+            {
+              "id": "perf-proxy-00080",
+              "name": "性能代理 00080"
+            },
+            {
+              "id": "perf-proxy-00081",
+              "name": "性能代理 00081"
+            },
+            {
+              "id": "perf-proxy-00082",
+              "name": "性能代理 00082"
+            },
+            {
+              "id": "perf-proxy-00083",
+              "name": "性能代理 00083"
+            },
+            {
+              "id": "perf-proxy-00084",
+              "name": "性能代理 00084"
+            },
+            {
+              "id": "perf-proxy-00085",
+              "name": "性能代理 00085"
+            },
+            {
+              "id": "perf-proxy-00086",
+              "name": "性能代理 00086"
+            },
+            {
+              "id": "perf-proxy-00087",
+              "name": "性能代理 00087"
+            },
+            {
+              "id": "perf-proxy-00088",
+              "name": "性能代理 00088"
+            },
+            {
+              "id": "perf-proxy-00089",
+              "name": "性能代理 00089"
+            },
+            {
+              "id": "perf-proxy-00090",
+              "name": "性能代理 00090"
+            },
+            {
+              "id": "perf-proxy-00091",
+              "name": "性能代理 00091"
+            },
+            {
+              "id": "perf-proxy-00092",
+              "name": "性能代理 00092"
+            },
+            {
+              "id": "perf-proxy-00093",
+              "name": "性能代理 00093"
+            },
+            {
+              "id": "perf-proxy-00094",
+              "name": "性能代理 00094"
+            },
+            {
+              "id": "perf-proxy-00095",
+              "name": "性能代理 00095"
+            },
+            {
+              "id": "perf-proxy-00096",
+              "name": "性能代理 00096"
+            },
+            {
+              "id": "perf-proxy-00097",
+              "name": "性能代理 00097"
+            },
+            {
+              "id": "perf-proxy-00098",
+              "name": "性能代理 00098"
+            },
+            {
+              "id": "perf-proxy-00099",
+              "name": "性能代理 00099"
+            }
+          ],
+          "value": "性能代理"
+        }
+      },
+      "request_id": "12",
+      "token": "1230074:12:86711635299066"
+    },
+    {
+      "backend_time_ns": 1794310620352298488,
+      "code_sha256": "10d0053c3cc74724730f15bc2a088286dcb9e2372620a7146ab68465c670bbe3",
+      "event": "request",
+      "request_id": "13",
+      "stream": true,
+      "token": "1230074:13:86711765206318"
+    },
+    {
+      "backend_time_ns": 1794310620447491347,
+      "event": "message",
+      "payload": {
+        "js_now_ms": 2315,
+        "js_started_ms": 2225,
+        "kind": "result",
+        "ok": true,
+        "sequence": 1,
+        "time_origin_ms": 1794310618127,
+        "token": "1230074:13:86711765206318",
+        "value": {
+          "elapsedMs": 33,
+          "render": {
+            "completed_ms": 2315,
+            "deadline_ms": 1802282,
+            "first_frame_ms": 2298,
+            "frame_attempts": [
+              {
+                "callback_ms": 2298,
+                "raf_ms": 2298
+              },
+              {
+                "callback_ms": 2314,
+                "raf_ms": 2314
+              }
+            ],
+            "frame_count": 2,
+            "predicate_after": true,
+            "predicate_before": true,
+            "predicate_ms": 2283,
+            "render_proof_version": 2,
+            "second_frame_ms": 2314
+          },
+          "rows": [
+            {
+              "id": "perf-profile-00042",
+              "name": "性能实例 00042"
+            }
+          ],
+          "value": "性能实例 00042"
+        }
+      },
+      "request_id": "13",
+      "token": "1230074:13:86711765206318"
+    },
+    {
+      "backend_time_ns": 1794310620452451505,
+      "code_sha256": "9f932813c3e72730272e8f02e3f4f091d7d212c209a85f0400fc76ef070cd476",
+      "event": "request",
+      "request_id": "14",
+      "stream": true,
+      "token": "calibration-blocker-86711864082095"
+    },
+    {
+      "backend_time_ns": 1794310620454371909,
+      "event": "message",
+      "payload": {
+        "js_now_ms": 2325,
+        "js_started_ms": 2325,
+        "kind": "phase",
+        "ok": true,
+        "phase": "block_begin",
+        "sequence": 1,
+        "time_origin_ms": 1794310618127,
+        "token": "calibration-blocker-86711864082095",
+        "value": {
+          "begin": 2325
+        }
+      },
+      "request_id": "14",
+      "token": "calibration-blocker-86711864082095"
+    },
+    {
+      "backend_time_ns": 1794310620455113360,
+      "code_sha256": "dfb862b5a5c9293bad5b212a0bdfb0f95714fe8d74ccfe40843e19fd0647eb46",
+      "event": "request",
+      "request_id": "15",
+      "stream": true,
+      "token": "1230074:14:86711868030556"
+    },
+    {
+      "backend_time_ns": 1794310620853340257,
+      "event": "message",
+      "payload": {
+        "js_now_ms": 2725,
+        "js_started_ms": 2325,
+        "kind": "result",
+        "ok": true,
+        "sequence": 2,
+        "time_origin_ms": 1794310618127,
+        "token": "calibration-blocker-86711864082095",
+        "value": {
+          "begin": 2325,
+          "end": 2725,
+          "timeOrigin": 1794310618127
+        }
+      },
+      "request_id": "14",
+      "token": "calibration-blocker-86711864082095"
+    },
+    {
+      "backend_time_ns": 1794310620863159920,
+      "event": "message",
+      "payload": {
+        "js_now_ms": 2734,
+        "js_started_ms": 2725,
+        "kind": "result",
+        "ok": true,
+        "sequence": 1,
+        "time_origin_ms": 1794310618127,
+        "token": "1230074:14:86711868030556",
+        "value": {
+          "began": 2725,
+          "render": {
+            "completed_ms": 2734,
+            "deadline_ms": 1802725,
+            "first_frame_ms": 2726,
+            "frame_attempts": [
+              {
+                "callback_ms": 2726,
+                "raf_ms": 2725
+              },
+              {
+                "callback_ms": 2734,
+                "raf_ms": 2734
+              }
+            ],
+            "frame_count": 2,
+            "predicate_after": true,
+            "predicate_before": true,
+            "predicate_ms": 2725,
+            "render_proof_version": 2,
+            "second_frame_ms": 2734
+          },
+          "timeOrigin": 1794310618127
+        }
+      },
+      "request_id": "15",
+      "token": "1230074:14:86711868030556"
+    },
+    {
+      "backend_time_ns": 1794310620871053490,
+      "code_sha256": "b7afd68724d607b5e9f7e67aeccecc4fa103afad4c22d5b4b88d68c6908f4010",
+      "event": "request",
+      "request_id": "16",
+      "stream": true,
+      "token": "1230074:15:86712284115452"
+    },
+    {
+      "backend_time_ns": 1794310620953313102,
+      "event": "message",
+      "payload": {
+        "error": "Error: Timed out waiting for actual rendered result: profile filter IDs, names and controlled input",
+        "js_now_ms": 2825,
+        "js_started_ms": 2743,
+        "kind": "error",
+        "ok": false,
+        "sequence": 1,
+        "stack": "waitRendered@",
+        "time_origin_ms": 1794310618127,
+        "token": "1230074:15:86712284115452"
+      },
+      "request_id": "16",
+      "token": "1230074:15:86712284115452"
+    },
+    {
+      "backend_time_ns": 1794310620955676089,
+      "code_sha256": "525a2a7d40e9ed91b474a929fb244dadb389904e6e37fdaf7d3b0fbad77e2f99",
+      "event": "request",
+      "request_id": "17",
+      "stream": true,
+      "token": "1230074:16:86712368807382"
+    },
+    {
+      "backend_time_ns": 1794310620973258234,
+      "event": "message",
+      "payload": {
+        "js_now_ms": 2845,
+        "js_started_ms": 2828,
+        "kind": "result",
+        "ok": true,
+        "sequence": 1,
+        "time_origin_ms": 1794310618127,
+        "token": "1230074:16:86712368807382",
+        "value": {
+          "render": {
+            "completed_ms": 2845,
+            "deadline_ms": 1802828,
+            "first_frame_ms": 2829,
+            "frame_attempts": [
+              {
+                "callback_ms": 2829,
+                "raf_ms": 2829
+              },
+              {
+                "callback_ms": 2845,
+                "raf_ms": 2845
+              }
+            ],
+            "frame_count": 2,
+            "predicate_after": true,
+            "predicate_before": true,
+            "predicate_ms": 2828,
+            "render_proof_version": 2,
+            "second_frame_ms": 2845
+          }
+        }
+      },
+      "request_id": "17",
+      "token": "1230074:16:86712368807382"
+    },
+    {
+      "backend_time_ns": 1794310620975511648,
+      "code_sha256": "28faa1889496b978b7d8ed6880cec575cac98e9c4a66f6c83a987ce4eec5b0fe",
+      "event": "request",
+      "request_id": "18",
+      "stream": true,
+      "token": "1230074:17:86712388673133"
+    },
+    {
+      "backend_time_ns": 1794310621005503380,
+      "event": "message",
+      "payload": {
+        "js_now_ms": 2877,
+        "js_started_ms": 2848,
+        "kind": "result",
+        "ok": true,
+        "sequence": 1,
+        "time_origin_ms": 1794310618127,
+        "token": "1230074:17:86712388673133",
+        "value": {
+          "render": {
+            "completed_ms": 2877,
+            "deadline_ms": 1802848,
+            "first_frame_ms": 2861,
+            "frame_attempts": [
+              {
+                "callback_ms": 2861,
+                "raf_ms": 2861
+              },
+              {
+                "callback_ms": 2877,
+                "raf_ms": 2877
+              }
+            ],
+            "frame_count": 1,
+            "predicate_after": true,
+            "predicate_before": true,
+            "predicate_ms": 2848,
+            "render_proof_version": 2,
+            "second_frame_ms": 2877
+          }
+        }
+      },
+      "request_id": "18",
+      "token": "1230074:17:86712388673133"
+    },
+    {
+      "backend_time_ns": 1794310621007784606,
+      "code_sha256": "ef04b80f123c33fda1b67550ca883061dcb7fd364e3801016406e531e1990478",
+      "event": "request",
+      "request_id": "19",
+      "stream": true,
+      "token": "1230074:18:86712420965606"
+    },
+    {
+      "backend_time_ns": 1794310621087830045,
+      "event": "message",
+      "payload": {
+        "error": "Error: Rendered frame deadline exceeded: withheld second frame; {\"predicate_ms\":2880,\"deadline_ms\":2960,\"attempt_count\":1,\"first\":{\"raf_ms\":2893,\"callback_ms\":2893.0000000000005},\"last\":{\"raf_ms\":2893,\"callback_ms\":2893.0000000000005}}",
+        "js_now_ms": 2959,
+        "js_started_ms": 2880,
+        "kind": "error",
+        "ok": false,
+        "sequence": 1,
+        "stack": "invalidFrame@\nwaitRendered@",
+        "time_origin_ms": 1794310618127,
+        "token": "1230074:18:86712420965606"
+      },
+      "request_id": "19",
+      "token": "1230074:18:86712420965606"
+    },
+    {
+      "backend_time_ns": 1794310621090715369,
+      "code_sha256": "80a534b16b3f17972df7c797f4131652ce019ffd7156c604d7ce3b6ecf343789",
+      "event": "request",
+      "request_id": "20",
+      "stream": true,
+      "token": "1230074:19:86712503805762"
+    },
+    {
+      "backend_time_ns": 1794310621240635319,
+      "error": "context canceled",
+      "event": "cancelled",
+      "request_id": "20",
+      "token": "1230074:19:86712503805762"
+    },
+    {
+      "backend_time_ns": 1794310621245266608,
+      "code_sha256": "16911515fa1e394246f63b25559a2c093dc44b96909c5e039636545315ef55a0",
+      "event": "request",
+      "request_id": "21",
+      "stream": true,
+      "token": "1230074:20:86712658014033"
+    },
+    {
+      "backend_time_ns": 1794310621278957417,
+      "event": "message",
+      "payload": {
+        "js_now_ms": 3150,
+        "js_started_ms": 3118,
+        "kind": "result",
+        "ok": true,
+        "sequence": 1,
+        "time_origin_ms": 1794310618127,
+        "token": "1230074:20:86712658014033",
+        "value": {
+          "render": {
+            "completed_ms": 3150,
+            "deadline_ms": 1803118,
+            "first_frame_ms": 3134,
+            "frame_attempts": [
+              {
+                "callback_ms": 3134,
+                "raf_ms": 3134
+              },
+              {
+                "callback_ms": 3150,
+                "raf_ms": 3150
+              }
+            ],
+            "frame_count": 2,
+            "predicate_after": true,
+            "predicate_before": true,
+            "predicate_ms": 3118,
+            "render_proof_version": 2,
+            "second_frame_ms": 3150
+          }
+        }
+      },
+      "request_id": "21",
+      "token": "1230074:20:86712658014033"
+    },
+    {
+      "backend_time_ns": 1794310621284243659,
+      "code_sha256": "23edf17adb5c5402025680930db028d4a438516c584cff12e3ccfdd21d18d053",
+      "event": "request",
+      "request_id": "22",
+      "stream": true,
+      "token": "1230074:21:86712697192958"
+    },
+    {
+      "backend_time_ns": 1794310621519038194,
+      "event": "message",
+      "payload": {
+        "js_now_ms": 3386,
+        "js_started_ms": 3157,
+        "kind": "result",
+        "ok": true,
+        "sequence": 1,
+        "time_origin_ms": 1794310618127,
+        "token": "1230074:21:86712697192958",
+        "value": {
+          "elapsedMs": 228.00000000000045,
+          "render": {
+            "completed_ms": 3385.0000000000005,
+            "deadline_ms": 1803371,
+            "first_frame_ms": 3372,
+            "frame_attempts": [
+              {
+                "callback_ms": 3372,
+                "raf_ms": 3372
+              },
+              {
+                "callback_ms": 3385.0000000000005,
+                "raf_ms": 3385
+              }
+            ],
+            "frame_count": 2,
+            "predicate_after": true,
+            "predicate_before": true,
+            "predicate_ms": 3372,
+            "render_proof_version": 2,
+            "second_frame_ms": 3385.0000000000005
+          },
+          "rows": [
+            {
+              "id": "perf-profile-00000",
+              "name": "性能实例 00000"
+            },
+            {
+              "id": "perf-profile-00001",
+              "name": "性能实例 00001"
+            },
+            {
+              "id": "perf-profile-00002",
+              "name": "性能实例 00002"
+            },
+            {
+              "id": "perf-profile-00003",
+              "name": "性能实例 00003"
+            },
+            {
+              "id": "perf-profile-00004",
+              "name": "性能实例 00004"
+            },
+            {
+              "id": "perf-profile-00005",
+              "name": "性能实例 00005"
+            },
+            {
+              "id": "perf-profile-00006",
+              "name": "性能实例 00006"
+            },
+            {
+              "id": "perf-profile-00007",
+              "name": "性能实例 00007"
+            },
+            {
+              "id": "perf-profile-00008",
+              "name": "性能实例 00008"
+            },
+            {
+              "id": "perf-profile-00009",
+              "name": "性能实例 00009"
+            },
+            {
+              "id": "perf-profile-00010",
+              "name": "性能实例 00010"
+            },
+            {
+              "id": "perf-profile-00011",
+              "name": "性能实例 00011"
+            },
+            {
+              "id": "perf-profile-00012",
+              "name": "性能实例 00012"
+            },
+            {
+              "id": "perf-profile-00013",
+              "name": "性能实例 00013"
+            },
+            {
+              "id": "perf-profile-00014",
+              "name": "性能实例 00014"
+            },
+            {
+              "id": "perf-profile-00015",
+              "name": "性能实例 00015"
+            },
+            {
+              "id": "perf-profile-00016",
+              "name": "性能实例 00016"
+            },
+            {
+              "id": "perf-profile-00017",
+              "name": "性能实例 00017"
+            },
+            {
+              "id": "perf-profile-00018",
+              "name": "性能实例 00018"
+            },
+            {
+              "id": "perf-profile-00019",
+              "name": "性能实例 00019"
+            },
+            {
+              "id": "perf-profile-00020",
+              "name": "性能实例 00020"
+            },
+            {
+              "id": "perf-profile-00021",
+              "name": "性能实例 00021"
+            },
+            {
+              "id": "perf-profile-00022",
+              "name": "性能实例 00022"
+            },
+            {
+              "id": "perf-profile-00023",
+              "name": "性能实例 00023"
+            },
+            {
+              "id": "perf-profile-00024",
+              "name": "性能实例 00024"
+            },
+            {
+              "id": "perf-profile-00025",
+              "name": "性能实例 00025"
+            },
+            {
+              "id": "perf-profile-00026",
+              "name": "性能实例 00026"
+            },
+            {
+              "id": "perf-profile-00027",
+              "name": "性能实例 00027"
+            },
+            {
+              "id": "perf-profile-00028",
+              "name": "性能实例 00028"
+            },
+            {
+              "id": "perf-profile-00029",
+              "name": "性能实例 00029"
+            },
+            {
+              "id": "perf-profile-00030",
+              "name": "性能实例 00030"
+            },
+            {
+              "id": "perf-profile-00031",
+              "name": "性能实例 00031"
+            },
+            {
+              "id": "perf-profile-00032",
+              "name": "性能实例 00032"
+            },
+            {
+              "id": "perf-profile-00033",
+              "name": "性能实例 00033"
+            },
+            {
+              "id": "perf-profile-00034",
+              "name": "性能实例 00034"
+            },
+            {
+              "id": "perf-profile-00035",
+              "name": "性能实例 00035"
+            },
+            {
+              "id": "perf-profile-00036",
+              "name": "性能实例 00036"
+            },
+            {
+              "id": "perf-profile-00037",
+              "name": "性能实例 00037"
+            },
+            {
+              "id": "perf-profile-00038",
+              "name": "性能实例 00038"
+            },
+            {
+              "id": "perf-profile-00039",
+              "name": "性能实例 00039"
+            },
+            {
+              "id": "perf-profile-00040",
+              "name": "性能实例 00040"
+            },
+            {
+              "id": "perf-profile-00041",
+              "name": "性能实例 00041"
+            },
+            {
+              "id": "perf-profile-00042",
+              "name": "性能实例 00042"
+            },
+            {
+              "id": "perf-profile-00043",
+              "name": "性能实例 00043"
+            },
+            {
+              "id": "perf-profile-00044",
+              "name": "性能实例 00044"
+            },
+            {
+              "id": "perf-profile-00045",
+              "name": "性能实例 00045"
+            },
+            {
+              "id": "perf-profile-00046",
+              "name": "性能实例 00046"
+            },
+            {
+              "id": "perf-profile-00047",
+              "name": "性能实例 00047"
+            },
+            {
+              "id": "perf-profile-00048",
+              "name": "性能实例 00048"
+            },
+            {
+              "id": "perf-profile-00049",
+              "name": "性能实例 00049"
+            },
+            {
+              "id": "perf-profile-00050",
+              "name": "性能实例 00050"
+            },
+            {
+              "id": "perf-profile-00051",
+              "name": "性能实例 00051"
+            },
+            {
+              "id": "perf-profile-00052",
+              "name": "性能实例 00052"
+            },
+            {
+              "id": "perf-profile-00053",
+              "name": "性能实例 00053"
+            },
+            {
+              "id": "perf-profile-00054",
+              "name": "性能实例 00054"
+            },
+            {
+              "id": "perf-profile-00055",
+              "name": "性能实例 00055"
+            },
+            {
+              "id": "perf-profile-00056",
+              "name": "性能实例 00056"
+            },
+            {
+              "id": "perf-profile-00057",
+              "name": "性能实例 00057"
+            },
+            {
+              "id": "perf-profile-00058",
+              "name": "性能实例 00058"
+            },
+            {
+              "id": "perf-profile-00059",
+              "name": "性能实例 00059"
+            },
+            {
+              "id": "perf-profile-00060",
+              "name": "性能实例 00060"
+            },
+            {
+              "id": "perf-profile-00061",
+              "name": "性能实例 00061"
+            },
+            {
+              "id": "perf-profile-00062",
+              "name": "性能实例 00062"
+            },
+            {
+              "id": "perf-profile-00063",
+              "name": "性能实例 00063"
+            },
+            {
+              "id": "perf-profile-00064",
+              "name": "性能实例 00064"
+            },
+            {
+              "id": "perf-profile-00065",
+              "name": "性能实例 00065"
+            },
+            {
+              "id": "perf-profile-00066",
+              "name": "性能实例 00066"
+            },
+            {
+              "id": "perf-profile-00067",
+              "name": "性能实例 00067"
+            },
+            {
+              "id": "perf-profile-00068",
+              "name": "性能实例 00068"
+            },
+            {
+              "id": "perf-profile-00069",
+              "name": "性能实例 00069"
+            },
+            {
+              "id": "perf-profile-00070",
+              "name": "性能实例 00070"
+            },
+            {
+              "id": "perf-profile-00071",
+              "name": "性能实例 00071"
+            },
+            {
+              "id": "perf-profile-00072",
+              "name": "性能实例 00072"
+            },
+            {
+              "id": "perf-profile-00073",
+              "name": "性能实例 00073"
+            },
+            {
+              "id": "perf-profile-00074",
+              "name": "性能实例 00074"
+            },
+            {
+              "id": "perf-profile-00075",
+              "name": "性能实例 00075"
+            },
+            {
+              "id": "perf-profile-00076",
+              "name": "性能实例 00076"
+            },
+            {
+              "id": "perf-profile-00077",
+              "name": "性能实例 00077"
+            },
+            {
+              "id": "perf-profile-00078",
+              "name": "性能实例 00078"
+            },
+            {
+              "id": "perf-profile-00079",
+              "name": "性能实例 00079"
+            },
+            {
+              "id": "perf-profile-00080",
+              "name": "性能实例 00080"
+            },
+            {
+              "id": "perf-profile-00081",
+              "name": "性能实例 00081"
+            },
+            {
+              "id": "perf-profile-00082",
+              "name": "性能实例 00082"
+            },
+            {
+              "id": "perf-profile-00083",
+              "name": "性能实例 00083"
+            },
+            {
+              "id": "perf-profile-00084",
+              "name": "性能实例 00084"
+            },
+            {
+              "id": "perf-profile-00085",
+              "name": "性能实例 00085"
+            },
+            {
+              "id": "perf-profile-00086",
+              "name": "性能实例 00086"
+            },
+            {
+              "id": "perf-profile-00087",
+              "name": "性能实例 00087"
+            },
+            {
+              "id": "perf-profile-00088",
+              "name": "性能实例 00088"
+            },
+            {
+              "id": "perf-profile-00089",
+              "name": "性能实例 00089"
+            },
+            {
+              "id": "perf-profile-00090",
+              "name": "性能实例 00090"
+            },
+            {
+              "id": "perf-profile-00091",
+              "name": "性能实例 00091"
+            },
+            {
+              "id": "perf-profile-00092",
+              "name": "性能实例 00092"
+            },
+            {
+              "id": "perf-profile-00093",
+              "name": "性能实例 00093"
+            },
+            {
+              "id": "perf-profile-00094",
+              "name": "性能实例 00094"
+            },
+            {
+              "id": "perf-profile-00095",
+              "name": "性能实例 00095"
+            },
+            {
+              "id": "perf-profile-00096",
+              "name": "性能实例 00096"
+            },
+            {
+              "id": "perf-profile-00097",
+              "name": "性能实例 00097"
+            },
+            {
+              "id": "perf-profile-00098",
+              "name": "性能实例 00098"
+            },
+            {
+              "id": "perf-profile-00099",
+              "name": "性能实例 00099"
+            }
+          ],
+          "value": ""
+        }
+      },
+      "request_id": "22",
+      "token": "1230074:21:86712697192958"
+    },
+    {
+      "backend_time_ns": 1794310621524828233,
+      "code_sha256": "2b7a3aa1dc184bad5d1d8bc98f245a30194d5b88e961a87d2af6915d79f0d6a4",
+      "event": "request",
+      "request_id": "23",
+      "stream": true,
+      "token": "1230074:22:86712937688306"
+    },
+    {
+      "backend_time_ns": 1794310621605384038,
+      "event": "message",
+      "payload": {
+        "js_now_ms": 3475,
+        "js_started_ms": 3397.0000000000005,
+        "kind": "result",
+        "ok": true,
+        "sequence": 1,
+        "time_origin_ms": 1794310618127,
+        "token": "1230074:22:86712937688306",
+        "value": {
+          "after": "30ms",
+          "before": "未测速",
+          "event": {
+            "engine": "native",
+            "error": "",
+            "fingerprint": "",
+            "latencyMs": 30,
+            "ok": true,
+            "proxyId": "perf-proxy-00042",
+            "testedAt": "2026-11-10T19:37:01+08:00"
+          },
+          "profileId": "perf-profile-00042",
+          "proxyId": "perf-proxy-00042",
+          "render": {
+            "completed_ms": 3475,
+            "deadline_ms": 1803463,
+            "first_frame_ms": 3470,
+            "frame_attempts": [
+              {
+                "callback_ms": 3470,
+                "raf_ms": 3469
+              },
+              {
+                "callback_ms": 3475,
+                "raf_ms": 3475
+              }
+            ],
+            "frame_count": 2,
+            "predicate_after": true,
+            "predicate_before": true,
+            "predicate_ms": 3464,
+            "render_proof_version": 2,
+            "second_frame_ms": 3475
+          },
+          "result": {
+            "engine": "native",
+            "error": "",
+            "fingerprint": "",
+            "latencyMs": 30,
+            "ok": true,
+            "proxyId": "perf-proxy-00042",
+            "testedAt": "2026-11-10T19:37:01+08:00"
+          }
+        }
+      },
+      "request_id": "23",
+      "token": "1230074:22:86712937688306"
+    },
+    {
+      "backend_time_ns": 1794310621622246389,
+      "code_sha256": "192c0be1efc7078b286c2a2afb721b40363d261bf3f6936562637bf8cc2f70eb",
+      "event": "request",
+      "request_id": "24",
+      "stream": true,
+      "token": "1230074:23:86713035012529"
+    },
+    {
+      "backend_time_ns": 1794310621649399283,
+      "event": "message",
+      "payload": {
+        "js_now_ms": 3521,
+        "js_started_ms": 3495,
+        "kind": "result",
+        "ok": true,
+        "sequence": 1,
+        "time_origin_ms": 1794310618127,
+        "token": "1230074:23:86713035012529",
+        "value": {
+          "after": "失败",
+          "before": "30ms",
+          "event": {
+            "engine": "native",
+            "error": "Head \"http://www.gstatic.com/generate_204\": proxyconnect tcp: dial tcp 127.0.0.1:20042: connect: connection refused",
+            "fingerprint": "",
+            "latencyMs": 0,
+            "ok": false,
+            "proxyId": "perf-proxy-00042",
+            "testedAt": "2026-11-10T19:37:01+08:00"
+          },
+          "profileId": "perf-profile-00042",
+          "proxyId": "perf-proxy-00042",
+          "render": {
+            "completed_ms": 3521,
+            "deadline_ms": 1803497,
+            "first_frame_ms": 3504,
+            "frame_attempts": [
+              {
+                "callback_ms": 3504,
+                "raf_ms": 3504
+              },
+              {
+                "callback_ms": 3520,
+                "raf_ms": 3520
+              }
+            ],
+            "frame_count": 2,
+            "predicate_after": true,
+            "predicate_before": true,
+            "predicate_ms": 3498,
+            "render_proof_version": 2,
+            "second_frame_ms": 3520
+          },
+          "result": {
+            "engine": "native",
+            "error": "Head \"http://www.gstatic.com/generate_204\": proxyconnect tcp: dial tcp 127.0.0.1:20042: connect: connection refused",
+            "fingerprint": "",
+            "latencyMs": 0,
+            "ok": false,
+            "proxyId": "perf-proxy-00042",
+            "testedAt": "2026-11-10T19:37:01+08:00"
+          }
+        }
+      },
+      "request_id": "24",
+      "token": "1230074:23:86713035012529"
+    }
+  ],
+  "metric_samples": {
+    "catalog.100.initial_render": {
+      "journal": "c100-0/operations.log",
+      "token": "1230074:2:86709615550026",
+      "operation_id": 2,
+      "phase": null,
+      "application_ready": true
+    },
+    "catalog.100.profiles_api": {
+      "journal": "c100-0/operations.log",
+      "token": "1230074:4:86711122015688",
+      "operation_id": 4,
+      "phase": null,
+      "application_ready": false
+    },
+    "catalog.100.groups_api": {
+      "journal": "c100-0/operations.log",
+      "token": "1230074:5:86711125516872",
+      "operation_id": 5,
+      "phase": null,
+      "application_ready": false
+    },
+    "catalog.100.proxies_api": {
+      "journal": "c100-0/operations.log",
+      "token": "1230074:6:86711127600467",
+      "operation_id": 6,
+      "phase": null,
+      "application_ready": false
+    },
+    "catalog.100.profile_filter": {
+      "journal": "c100-0/operations.log",
+      "token": "1230074:7:86711131573048",
+      "operation_id": 7,
+      "phase": null,
+      "application_ready": false
+    },
+    "catalog.100.keyword_save_visible": {
+      "journal": "c100-0/operations.log",
+      "token": "1230074:9:86711365586226",
+      "operation_id": 9,
+      "phase": "keyword_visible",
+      "application_ready": false
+    },
+    "catalog.100.keyword_save_closed": {
+      "journal": "c100-0/operations.log",
+      "token": "1230074:9:86711365586226",
+      "operation_id": 9,
+      "phase": "keyword_closed",
+      "application_ready": false
+    },
+    "catalog.100.profile_restore": {
+      "journal": "c100-0/operations.log",
+      "token": "1230074:21:86712697192958",
+      "operation_id": 21,
+      "phase": null,
+      "application_ready": false
+    }
+  },
+  "first_lifecycle": {
+    "event": "start",
+    "time_ns": 1794310617867902115,
+    "root": "/tmp/ant-linux-perf-cntr19l1/agents/frontend/formal-v2/rc1/c100-0/runtime",
+    "pid": 1230074,
+    "started_identity": [
+      "1230074",
+      8670928
+    ],
+    "returncode": null,
+    "forced_shutdown": false,
+    "remaining_owned": [],
+    "host_started_monotonic_ns": 86709280468354
+  },
+  "event_observations": {
+    "success": {
+      "value": {
+        "after": "30ms",
+        "before": "未测速",
+        "event": {
+          "engine": "native",
+          "error": "",
+          "fingerprint": "",
+          "latencyMs": 30,
+          "ok": true,
+          "proxyId": "perf-proxy-00042",
+          "testedAt": "2026-11-10T19:37:01+08:00"
+        },
+        "profileId": "perf-profile-00042",
+        "proxyId": "perf-proxy-00042",
+        "render": {
+          "completed_ms": 3475,
+          "deadline_ms": 1803463,
+          "first_frame_ms": 3470,
+          "frame_attempts": [
+            {
+              "callback_ms": 3470,
+              "raf_ms": 3469
+            },
+            {
+              "callback_ms": 3475,
+              "raf_ms": 3475
+            }
+          ],
+          "frame_count": 2,
+          "predicate_after": true,
+          "predicate_before": true,
+          "predicate_ms": 3464,
+          "render_proof_version": 2,
+          "second_frame_ms": 3475
+        },
+        "result": {
+          "engine": "native",
+          "error": "",
+          "fingerprint": "",
+          "latencyMs": 30,
+          "ok": true,
+          "proxyId": "perf-proxy-00042",
+          "testedAt": "2026-11-10T19:37:01+08:00"
+        }
+      },
+      "elapsed_ms": 81.360872,
+      "phases": {},
+      "operation_id": 22,
+      "phase_ms": {},
+      "journal_path": "/tmp/ant-linux-perf-cntr19l1/agents/frontend/formal-v2/rc1/c100-0/operations.log",
+      "token": "1230074:22:86712937688306",
+      "request_id": "23",
+      "started_monotonic_ns": 86712937688306,
+      "received_monotonic_ns": 86713019049178
+    },
+    "failure": {
+      "value": {
+        "after": "失败",
+        "before": "30ms",
+        "event": {
+          "engine": "native",
+          "error": "Head \"http://www.gstatic.com/generate_204\": proxyconnect tcp: dial tcp 127.0.0.1:20042: connect: connection refused",
+          "fingerprint": "",
+          "latencyMs": 0,
+          "ok": false,
+          "proxyId": "perf-proxy-00042",
+          "testedAt": "2026-11-10T19:37:01+08:00"
+        },
+        "profileId": "perf-profile-00042",
+        "proxyId": "perf-proxy-00042",
+        "render": {
+          "completed_ms": 3521,
+          "deadline_ms": 1803497,
+          "first_frame_ms": 3504,
+          "frame_attempts": [
+            {
+              "callback_ms": 3504,
+              "raf_ms": 3504
+            },
+            {
+              "callback_ms": 3520,
+              "raf_ms": 3520
+            }
+          ],
+          "frame_count": 2,
+          "predicate_after": true,
+          "predicate_before": true,
+          "predicate_ms": 3498,
+          "render_proof_version": 2,
+          "second_frame_ms": 3520
+        },
+        "result": {
+          "engine": "native",
+          "error": "Head \"http://www.gstatic.com/generate_204\": proxyconnect tcp: dial tcp 127.0.0.1:20042: connect: connection refused",
+          "fingerprint": "",
+          "latencyMs": 0,
+          "ok": false,
+          "proxyId": "perf-proxy-00042",
+          "testedAt": "2026-11-10T19:37:01+08:00"
+        }
+      },
+      "elapsed_ms": 28.014673,
+      "phases": {},
+      "operation_id": 23,
+      "phase_ms": {},
+      "journal_path": "/tmp/ant-linux-perf-cntr19l1/agents/frontend/formal-v2/rc1/c100-0/operations.log",
+      "token": "1230074:23:86713035012529",
+      "request_id": "24",
+      "started_monotonic_ns": 86713035012529,
+      "received_monotonic_ns": 86713063027202
+    }
+  }
+}

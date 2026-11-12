@@ -19,6 +19,13 @@ func (m *Manager) Update(profileId string, input ProfileInput) (*Profile, error)
 		log.Error("浏览器配置不存在", logger.F("profile_id", profileId))
 		return nil, fmt.Errorf("profile not found")
 	}
+	previous := *profile
+	saved := false
+	defer func() {
+		if !saved {
+			*profile = previous
+		}
+	}()
 	resolvedProxy, err := m.resolveProfileProxyInput(input)
 	if err != nil {
 		log.Error("代理绑定失败", logger.F("profile_id", profileId), logger.F("proxy_id", strings.TrimSpace(input.ProxyId)), logger.F("error", err.Error()))
@@ -55,9 +62,10 @@ func (m *Manager) Update(profileId string, input ProfileInput) (*Profile, error)
 	profile.UpdatedAt = time.Now().Format(time.RFC3339)
 
 	log.Info("浏览器配置更新", logger.F("profile_id", profileId), logger.F("profile_name", input.ProfileName))
-	if err := m.SaveProfiles(); err != nil {
+	if err := m.SaveProfile(profile); err != nil {
 		return nil, err
 	}
+	saved = true
 	return profile, nil
 }
 
@@ -72,11 +80,13 @@ func (m *Manager) SetKeywords(profileId string, keywords []string) (*Profile, er
 	if !exists {
 		return nil, fmt.Errorf("profile not found")
 	}
+	previous := *profile
 	profile.Keywords = append([]string{}, keywords...)
 	profile.UpdatedAt = time.Now().Format(time.RFC3339)
 
 	log.Info("关键字更新", logger.F("profile_id", profileId))
-	if err := m.SaveProfiles(); err != nil {
+	if err := m.SaveProfile(profile); err != nil {
+		*profile = previous
 		return nil, err
 	}
 	return profile, nil

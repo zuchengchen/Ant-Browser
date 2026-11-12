@@ -33,12 +33,27 @@ func (a *App) ListGroups() []BrowserGroupWithCount {
 	}
 
 	// 统计每个分组的实例数量
-	profiles, _ := a.browserMgr.ProfileDAO.List()
 	countMap := make(map[string]int)
-	for _, p := range profiles {
-		if p.GroupId != "" {
-			countMap[p.GroupId]++
+	if a.browserMgr.ProfileDAO == nil {
+		log.Error("ProfileDAO 未初始化")
+		return []BrowserGroupWithCount{}
+	}
+	if counter, ok := a.browserMgr.ProfileDAO.(browser.ProfileGroupCounter); ok {
+		countMap, err = counter.CountByGroup()
+	} else {
+		var profiles []*browser.Profile
+		profiles, err = a.browserMgr.ProfileDAO.List()
+		if err == nil {
+			for _, p := range profiles {
+				if p.GroupId != "" {
+					countMap[p.GroupId]++
+				}
+			}
 		}
+	}
+	if err != nil {
+		log.Error("获取分组实例数量失败", logger.F("error", err))
+		return []BrowserGroupWithCount{}
 	}
 
 	result := make([]BrowserGroupWithCount, 0, len(groups))

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { toast } from '../../../../shared/components'
 import { EventsOn } from '../../../../wailsjs/runtime/runtime'
 import {
@@ -11,10 +11,12 @@ import type { ProxyIPHealthResult } from '../../types'
 import { useProxySpeedStore, type ProxySpeedSource } from '../../proxySpeedStore'
 import { ensureProxySpeedListener, recordProxySpeedResult, testProxySpeeds, testProxySpeedOnce } from '../../proxySpeedService'
 import type { ProxyDisplayInfo } from './helpers'
-import { readIPHealthCache, writeIPHealthCache, isProxySpeedResultFresh, toLatencyValue } from './storage'
+import { readIPHealthCache, writeIPHealthCache, isProxySpeedResultFresh } from './storage'
+import { useProxyPoolSpeedMaps } from './proxyPoolSpeed'
 
 interface UseProxyChecksOptions {
   proxies: ProxySpeedSource[]
+  aggregateSpeed?: boolean
 }
 
 function resolveErrorMessage(error: unknown, fallback: string): string {
@@ -24,7 +26,7 @@ function resolveErrorMessage(error: unknown, fallback: string): string {
 }
 
 // 测速结果统一存放在 useProxySpeedStore（全局唯一），本 hook 只负责展示派生与批量操作编排。
-export function useProxyChecks({ proxies }: UseProxyChecksOptions) {
+export function useProxyChecks({ proxies, aggregateSpeed = true }: UseProxyChecksOptions) {
   const [testingAll, setTestingAll] = useState(false)
   const [ipHealthMap, setIPHealthMap] = useState<Record<string, ProxyIPHealthResult>>({})
   const [checkingIPHealthIds, setCheckingIPHealthIds] = useState<Set<string>>(new Set())
@@ -34,21 +36,7 @@ export function useProxyChecks({ proxies }: UseProxyChecksOptions) {
   const [ipHealthDetailOpen, setIPHealthDetailOpen] = useState(false)
   const [currentIPHealthDetail, setCurrentIPHealthDetail] = useState<ProxyIPHealthResult | null>(null)
 
-  const speedResults = useProxySpeedStore((state) => state.results)
-  const testingIds = useProxySpeedStore((state) => state.testingIds)
-
-  const { latencyMap, latencyEngineMap, latencyErrorMap } = useMemo(() => {
-    const latency: Record<string, number> = {}
-    const engine: Record<string, string> = {}
-    const error: Record<string, string> = {}
-    Object.entries(speedResults).forEach(([proxyId, result]) => {
-      latency[proxyId] = toLatencyValue(result.ok, result.latencyMs, result.error)
-      if (result.engine) engine[proxyId] = result.engine
-      if (result.error) error[proxyId] = result.error
-    })
-    Object.keys(testingIds).forEach((proxyId) => { latency[proxyId] = -1 })
-    return { latencyMap: latency, latencyEngineMap: engine, latencyErrorMap: error }
-  }, [speedResults, testingIds])
+  const { latencyMap, latencyEngineMap, latencyErrorMap } = useProxyPoolSpeedMaps(aggregateSpeed)
 
   useEffect(() => {
     const store = useProxySpeedStore.getState()

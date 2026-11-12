@@ -12,7 +12,7 @@ import (
 )
 
 func (a *App) testSharedProxySpeed(proxyID string, forceRefresh bool) ProxyTestResult {
-	proxies := a.getLatestProxies()
+	proxies := a.latestProxiesForSpeedTest(proxyID)
 	// 实例固定绑定虚拟分组时，测速针对本次选中的成员代理，结果写回该成员。
 	if resolvedID, ok := a.resolveVirtualGroupSpeedTestTarget(strings.TrimSpace(proxyID), proxies); ok {
 		proxyID = resolvedID

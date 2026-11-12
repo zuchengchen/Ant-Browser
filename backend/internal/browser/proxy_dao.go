@@ -308,11 +308,11 @@ func (d *SQLiteProxyDAO) UpdateIPHealthResult(proxyId string, healthJSON string)
 
 func scanProxies(rows *sql.Rows) ([]Proxy, error) {
 	var list []Proxy
+	// Scan overwrites every persisted field; append copies the completed value.
+	// Reuse these addressable destinations instead of allocating them per row.
+	var p Proxy
+	var okInt, autoRefreshInt, sourceMissingInt int
 	for rows.Next() {
-		var p Proxy
-		var okInt int
-		var autoRefreshInt int
-		var sourceMissingInt int
 		if err := rows.Scan(
 			&p.ProxyId, &p.ProxyName, &p.ProxyConfig, &p.PreferredKernel, &p.DnsServers, &p.GroupName,
 			&p.SourceID, &p.SourceURL, &p.SourceNamePrefix, &autoRefreshInt, &p.SourceRefreshIntervalM, &p.SourceLastRefreshAt,

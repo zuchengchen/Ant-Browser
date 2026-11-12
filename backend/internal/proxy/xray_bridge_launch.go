@@ -228,6 +228,8 @@ func (m *XrayManager) launchBridgeAttemptContext(ctx context.Context, log *logge
 
 	stderrFile, _ := os.Create(stderrPath)
 	if stderrFile != nil {
+		// Xray reports server.Start failures to stdout before exiting.
+		cmd.Stdout = stderrFile
 		cmd.Stderr = stderrFile
 	}
 

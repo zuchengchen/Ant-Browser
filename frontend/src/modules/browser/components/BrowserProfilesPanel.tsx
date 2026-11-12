@@ -11,6 +11,7 @@ import { testProxyConnectivity } from '../api'
 import { useProxySpeedFreshness } from '../proxySpeedFreshness'
 import { isProxySpeedResultFresh } from '../pages/proxyPool/storage'
 import { useProxySpeedStore } from '../proxySpeedStore'
+import { useProfileProxySpeedResult } from '../profileProxySpeed'
 import { ensureProxySpeedListener, recordProxySpeedResult, testProxySpeedOnce } from '../proxySpeedService'
 import { EventsOn } from '../../../wailsjs/runtime/runtime'
 import type { BrowserViewMode } from './BrowserListLayout'
@@ -205,7 +206,6 @@ function ProxyInlineActions({
   speedResultMaxAgeMs: number
 }) {
   const [testing, setTesting] = useState(false)
-  const speedResults = useProxySpeedStore((state) => state.results)
   const isDynamic = isDynamicProfile(profile)
   const dynamicProxy = useMemo(
     () => isDynamic ? selectDynamicProxyCandidate(profile, proxies, virtualGroups, now, speedResultMaxAgeMs) : undefined,
@@ -234,31 +234,7 @@ function ProxyInlineActions({
     }
     return ids
   }, [boundVirtualGroup, proxies])
-  useEffect(() => {
-    useProxySpeedStore.getState().applyBackendResults(proxies, (testedAt) => isProxySpeedResultFresh(testedAt, now, speedResultMaxAgeMs))
-  }, [proxies, now, speedResultMaxAgeMs])
-  useEffect(() => {
-    ensureProxySpeedListener()
-  }, [])
-  const speedTargetKey = normalizeProxyKey(speedTargetProxyId)
-  const displayResult = useMemo(() => {
-    if (virtualGroupMemberIds) {
-      let best: (typeof speedResults)[string] | null = null
-      virtualGroupMemberIds.forEach(memberKey => {
-        const result = Object.values(speedResults).find(item => normalizeProxyKey(item.proxyId) === memberKey)
-        if (!result || !result.ok) return
-        if (!isProxySpeedResultFresh(result.testedAt, now, speedResultMaxAgeMs)) return
-        if (!best || result.latencyMs < best.latencyMs) best = result
-      })
-      return best
-    }
-    if (!speedTargetKey) return null
-    const exact = speedResults[speedTargetProxyId]
-    const match = exact || Object.values(speedResults).find((result) => normalizeProxyKey(result.proxyId) === speedTargetKey)
-    if (!match) return null
-    if (!isProxySpeedResultFresh(match.testedAt, now, speedResultMaxAgeMs)) return null
-    return match
-  }, [speedResults, speedTargetProxyId, speedTargetKey, virtualGroupMemberIds, now, speedResultMaxAgeMs])
+  const displayResult = useProfileProxySpeedResult(speedTargetProxyId, virtualGroupMemberIds, now, speedResultMaxAgeMs)
   const canTest = isDynamic
     ? !!dynamicProxy
     : !!profile.proxyId || !!profile.proxyConfig.trim()
@@ -607,6 +583,23 @@ export function BrowserProfilesPanel({
   onDelete,
 }: BrowserProfilesPanelProps) {
   const { now, speedResultMaxAgeMs } = useProxySpeedFreshness()
+  const proxiesById = useMemo(() => {
+    const index = new Map<string, BrowserProxy>()
+    proxies.forEach(proxy => {
+      // Match Array.find's first result if a catalog contains duplicate IDs.
+      if (!index.has(proxy.proxyId)) index.set(proxy.proxyId, proxy)
+    })
+    return index
+  }, [proxies])
+
+  // All rows share this catalog and freshness clock. Hydrate the store once per
+  // catalog/tick, instead of copying and scanning it for every profile row.
+  useEffect(() => {
+    useProxySpeedStore.getState().applyBackendResults(proxies, (testedAt) => isProxySpeedResultFresh(testedAt, now, speedResultMaxAgeMs))
+  }, [proxies, now, speedResultMaxAgeMs])
+  useEffect(() => {
+    ensureProxySpeedListener()
+  }, [])
 
   // 安全控制：并发启动闸门的排队/放行反馈（事件由后端启动闸门发出）。
   useEffect(() => {
@@ -701,7 +694,7 @@ export function BrowserProfilesPanel({
       key: 'proxyId',
       title: '代理',
       render: (value, record) => {
-        const proxy = proxies.find(item => item.proxyId === value)
+        const proxy = proxiesById.get(value)
         const isBusy = isProfileBusy(record.profileId)
         return <ProxyInlineActions profile={record} proxy={proxy} proxies={proxies} virtualGroups={virtualGroups} isBusy={isBusy} onOpenProxyPicker={onOpenProxyPicker} now={now} speedResultMaxAgeMs={speedResultMaxAgeMs} />
       },
@@ -783,7 +776,7 @@ export function BrowserProfilesPanel({
             <div key={profile.profileId} className="min-w-0">
               <BrowserProfileCard
                 profile={profile}
-                proxy={proxies.find(item => item.proxyId === profile.proxyId)}
+                proxy={proxiesById.get(profile.proxyId)}
                 proxies={proxies}
                 virtualGroups={virtualGroups}
                 isSelected={selectedIds.has(profile.profileId)}

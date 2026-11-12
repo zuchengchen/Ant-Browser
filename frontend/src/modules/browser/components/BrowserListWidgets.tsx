@@ -77,6 +77,7 @@ function resolveCustomCodeError(error: unknown): string {
 export function LaunchCodeCell({ profileId, code, onRefresh }: LaunchCodeCellProps) {
   const [loading, setLoading] = useState(false)
   const [customCodeOpen, setCustomCodeOpen] = useState(false)
+  const [customCodeMounted, setCustomCodeMounted] = useState(false)
   const [customCodeValue, setCustomCodeValue] = useState(code || '')
   const [customCodeError, setCustomCodeError] = useState('')
 
@@ -99,6 +100,7 @@ export function LaunchCodeCell({ profileId, code, onRefresh }: LaunchCodeCellPro
   }
 
   const handleCustomCode = () => {
+    setCustomCodeMounted(true)
     setCustomCodeValue(code || '')
     setCustomCodeError('')
     setCustomCodeOpen(true)
@@ -154,7 +156,7 @@ export function LaunchCodeCell({ profileId, code, onRefresh }: LaunchCodeCellPro
         </button>
       </div>
 
-      <Modal
+      {customCodeMounted && <Modal
         open={customCodeOpen}
         onClose={() => {
           if (!loading) {
@@ -209,7 +211,7 @@ export function LaunchCodeCell({ profileId, code, onRefresh }: LaunchCodeCellPro
             4-32 位，仅支持字母、数字、下划线和短横线
           </p>
         </FormItem>
-      </Modal>
+      </Modal>}
     </>
   )
 }

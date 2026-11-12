@@ -101,6 +101,7 @@ func waitSocks5ReadyContext(ctx context.Context, host string, port int, timeout 
 	}
 	addr := net.JoinHostPort(host, strconv.Itoa(port))
 	deadline := time.Now().Add(timeout)
+	retryInterval := 10 * time.Millisecond
 	var lastErr error
 	for time.Now().Before(deadline) {
 		if err := ctx.Err(); err != nil {
@@ -120,7 +121,16 @@ func waitSocks5ReadyContext(ctx context.Context, host string, port int, timeout 
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		pause := 100 * time.Millisecond
+		// Local kernels are normally ready within a few milliseconds. Retry
+		// promptly at startup, then cap the interval at the previous 100ms
+		// cadence so slow/failing kernels do not create a busy polling loop.
+		pause := retryInterval
+		if retryInterval < 100*time.Millisecond {
+			retryInterval *= 2
+			if retryInterval > 100*time.Millisecond {
+				retryInterval = 100 * time.Millisecond
+			}
+		}
 		if remaining := time.Until(deadline); remaining < pause {
 			pause = remaining
 		}

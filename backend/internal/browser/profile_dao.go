@@ -20,6 +20,12 @@ type ProfileDAO interface {
 	ListExpiredDeleted(expiredBefore string) ([]*Profile, error)
 }
 
+// ProfileGroupCounter is optional so alternate ProfileDAO implementations keep
+// their existing contract. Counts always reflect persisted, non-deleted rows.
+type ProfileGroupCounter interface {
+	CountByGroup() (map[string]int, error)
+}
+
 // SQLiteProfileDAO 基于 SQLite 的 ProfileDAO 实现
 type SQLiteProfileDAO struct {
 	db *sql.DB
@@ -28,6 +34,31 @@ type SQLiteProfileDAO struct {
 // NewSQLiteProfileDAO 创建 SQLiteProfileDAO
 func NewSQLiteProfileDAO(db *sql.DB) *SQLiteProfileDAO {
 	return &SQLiteProfileDAO{db: db}
+}
+
+// CountByGroup avoids loading and decoding entire profiles just for the group
+// sidebar. Empty groups are filled from GroupDAO by the caller.
+func (d *SQLiteProfileDAO) CountByGroup() (map[string]int, error) {
+	rows, err := d.db.Query(`SELECT group_id, COUNT(*) FROM browser_profiles
+		WHERE COALESCE(deleted_at, '') = '' AND group_id IS NOT NULL AND group_id != ''
+		GROUP BY group_id`)
+	if err != nil {
+		return nil, fmt.Errorf("统计分组实例数量失败: %w", err)
+	}
+	defer rows.Close()
+	counts := make(map[string]int)
+	for rows.Next() {
+		var groupID string
+		var count int
+		if err := rows.Scan(&groupID, &count); err != nil {
+			return nil, fmt.Errorf("读取分组实例数量失败: %w", err)
+		}
+		counts[groupID] = count
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("遍历分组实例数量失败: %w", err)
+	}
+	return counts, nil
 }
 
 // List 查询所有实例配置，按创建时间升序

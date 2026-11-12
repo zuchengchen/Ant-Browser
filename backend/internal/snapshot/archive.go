@@ -2,6 +2,8 @@ package snapshot
 
 import (
 	"archive/zip"
+	"bufio"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -17,16 +19,18 @@ type UnzipLimits struct {
 	MaxCompressedBytes   uint64
 }
 
-func ZipDir(src, dest string) error {
+func ZipDir(src, dest string) (result error) {
 	f, err := os.Create(dest)
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	output := bufio.NewWriterSize(f, 128*1024)
+	w := zip.NewWriter(output)
+	defer func() {
+		result = errors.Join(result, w.Close(), output.Flush(), f.Close())
+	}()
 
-	w := zip.NewWriter(f)
-	defer w.Close()
-
+	buffer := make([]byte, 32*1024)
 	return filepath.WalkDir(src, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -52,7 +56,7 @@ func ZipDir(src, dest string) error {
 			return err
 		}
 		defer file.Close()
-		_, err = io.Copy(fw, file)
+		_, err = io.CopyBuffer(fw, struct{ io.Reader }{file}, buffer)
 		return err
 	})
 }
@@ -78,6 +82,7 @@ func UnzipToWithLimits(src, dest string, limits UnzipLimits) error {
 	}
 	defer r.Close()
 
+	buffer := make([]byte, 32*1024)
 	seen := make(map[string]struct{}, len(r.File))
 	entryCount := 0
 	var totalBytes uint64
@@ -142,7 +147,7 @@ func UnzipToWithLimits(src, dest string, limits UnzipLimits) error {
 		if copyLimit > 0 {
 			copyReader = io.LimitReader(rc, int64(copyLimit)+1)
 		}
-		written, copyErr := io.Copy(out, copyReader)
+		written, copyErr := io.CopyBuffer(struct{ io.Writer }{out}, copyReader, buffer)
 		readCloseErr := rc.Close()
 		writeCloseErr := out.Close()
 		if copyErr != nil {
