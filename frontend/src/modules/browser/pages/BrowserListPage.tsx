@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { toast } from '../../../shared/components'
 import type { BrowserProfile, BrowserProfileCopyOptions, BrowserProfilePackageImportAction, BrowserProfilePackageImportPreview, BrowserProxy } from '../types'
 import { BrowserCoreEditorModal, BrowserListHeader, BrowserListSettingsModal } from '../components/BrowserListLayout'
+import { ChatGPTAccountModal } from '../components/ChatGPTAccountModal'
 import { GroupTreeNav } from '../components/GroupTreeNav'
 import { InstanceGroupMembershipModal, type GroupMembershipRequest } from '../components/InstanceGroupMembershipModal'
 import { profileGroupIds } from '../utils/instanceGroups'
@@ -38,6 +39,7 @@ const directProxyID = '__direct__'
 
 export function BrowserListPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [chatGPTRequest, setChatGPTRequest] = useState<{ profile: BrowserProfile; fetchOnOpen: boolean } | null>(null)
   const [batchLoading, setBatchLoading] = useState(false)
   const [profilePackageBusy, setProfilePackageBusy] = useState(false)
   const [profileImportPreview, setProfileImportPreview] = useState<BrowserProfilePackageImportPreview | null>(null)
@@ -674,6 +676,7 @@ export function BrowserListPage() {
         onStop={(profileId) => { void handleStop(profileId) }}
         onRestart={(profileId) => { void handleRestart(profileId) }}
         onOpenKeywords={openKwModal}
+        onOpenChatGPT={(profile, fetchOnOpen = false) => setChatGPTRequest({ profile, fetchOnOpen })}
         onOpenExtensions={openExtensionModal}
         onOpenDataDir={(profile) => { void handleOpenUserDataDir(profile) }}
         onExport={(profile) => { void handleExportProfile(profile) }}
@@ -684,6 +687,7 @@ export function BrowserListPage() {
 
       </div>
       </div>
+      {chatGPTRequest && <ChatGPTAccountModal {...chatGPTRequest} onClose={() => setChatGPTRequest(null)} onUpdated={() => { void loadProfiles() }} />}
       <InstanceGroupMembershipModal request={groupRequest} groups={groups} onClose={() => setGroupRequest(null)} onSaved={() => loadProfiles()} />
 
       <ProxyPickerModal

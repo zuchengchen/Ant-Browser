@@ -412,6 +412,16 @@ var migrations = []migration{
 		},
 		run: migrateInstanceGroups,
 	},
+	{
+		version: 35,
+		desc:    "保存实例最近一次 ChatGPT 账户信息",
+		stmts: []string{
+			`CREATE TABLE IF NOT EXISTS browser_chatgpt_accounts (
+				profile_id TEXT PRIMARY KEY REFERENCES browser_profiles(profile_id) ON DELETE CASCADE,
+				snapshot_json TEXT NOT NULL
+			)`,
+		},
+	},
 	// ── 新版本在此追加，格式：
 	// {
 	//     version: 4,

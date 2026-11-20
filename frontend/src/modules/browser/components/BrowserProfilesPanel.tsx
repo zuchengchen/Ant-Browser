@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Link } from 'react-router-dom'
-import { Copy, Download, FolderOpen, Key, Loader2, MoreHorizontal, Play, Puzzle, Repeat2, RotateCcw, Settings, Square, Trash2, Wifi } from 'lucide-react'
+import { Copy, Download, FolderOpen, Key, Loader2, MessageSquare, MoreHorizontal, Play, Puzzle, Repeat2, RotateCcw, Settings, Square, Trash2, Wifi } from 'lucide-react'
 
 import { Badge, Button, Card, Table, toast } from '../../../shared/components'
 import type { TableColumn } from '../../../shared/components/Table'
@@ -92,6 +92,7 @@ interface BrowserProfilesPanelProps {
   onStart: (profileId: string) => void
   onStop: (profileId: string) => void
   onRestart: (profileId: string) => void
+  onOpenChatGPT: (profile: BrowserProfile, fetchOnOpen?: boolean) => void
   onOpenKeywords: (profile: BrowserProfile) => void
   onOpenExtensions: (profile: BrowserProfile) => void
   onOpenDataDir: (profile: BrowserProfile) => void
@@ -291,6 +292,7 @@ function ProfileMoreActions({
   onToggle,
   onClose,
   onRestart,
+  onOpenChatGPT,
   onOpenKeywords,
   onOpenExtensions,
   onOpenDataDir,
@@ -301,6 +303,7 @@ function ProfileMoreActions({
   onToggle: () => void
   onClose: () => void
   onRestart: () => void
+  onOpenChatGPT: () => void
   onOpenKeywords: () => void
   onOpenExtensions: () => void
   onOpenDataDir: () => void
@@ -315,8 +318,8 @@ function ProfileMoreActions({
     const updateMenuPosition = () => {
       const rect = triggerRef.current?.getBoundingClientRect()
       if (!rect) return
-      const menuWidth = 128
-      const menuHeight = 208
+      const menuWidth = 208
+      const menuHeight = 248
       const gap = 8
       const left = Math.max(8, Math.min(rect.right - menuWidth, window.innerWidth - menuWidth - 8))
       const belowTop = rect.bottom + gap
@@ -365,9 +368,12 @@ function ProfileMoreActions({
       {open && createPortal(
         <div
           ref={menuRef}
-          className="fixed z-[9999] w-32 rounded-xl border border-[var(--color-border-default)] bg-[var(--color-bg-surface)] p-1.5 shadow-xl"
+          className="fixed z-[9999] w-52 rounded-xl border border-[var(--color-border-default)] bg-[var(--color-bg-surface)] p-1.5 shadow-xl"
           style={{ top: menuPosition.top, left: menuPosition.left }}
         >
+          <button type="button" className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-muted)] hover:text-[var(--color-text-primary)]" onClick={() => runAndClose(onOpenChatGPT)}>
+            <MessageSquare className="w-3.5 h-3.5" />查看 GPT 账户信息
+          </button>
           <button
             type="button"
             className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-muted)] hover:text-[var(--color-text-primary)]"
@@ -449,6 +455,7 @@ function BrowserProfileCard({
   onStart,
   onStop,
   onRestart,
+  onOpenChatGPT,
   onOpenKeywords,
   onOpenExtensions,
   onOpenCopy,
@@ -474,6 +481,7 @@ function BrowserProfileCard({
   onStart: (profileId: string) => void
   onStop: (profileId: string) => void
   onRestart: (profileId: string) => void
+  onOpenChatGPT: (profile: BrowserProfile, fetchOnOpen?: boolean) => void
   onOpenKeywords: (profile: BrowserProfile) => void
   onOpenExtensions: (profile: BrowserProfile) => void
   onOpenCopy: (profile: BrowserProfile) => void
@@ -527,6 +535,8 @@ function BrowserProfileCard({
           )}
           <span className="w-px h-4 bg-[var(--color-border-muted)] mx-1"></span>
           <Button size="sm" variant="ghost" onClick={() => onRestart(profile.profileId)} title="重启" className="px-3" disabled={isBusy}><RotateCcw className="w-4 h-4 mr-1.5" />重启</Button>
+          <Button size="sm" variant="ghost" onClick={() => onOpenChatGPT(profile, true)} className="px-3" disabled={isBusy}><Download className="w-4 h-4 mr-1.5" />获取 GPT 账户信息</Button>
+          <Button size="sm" variant="ghost" onClick={() => onOpenChatGPT(profile)} className="px-3"><MessageSquare className="w-4 h-4 mr-1.5" />查看 GPT 账户信息</Button>
           <Button size="sm" variant="ghost" onClick={() => onOpenKeywords(profile)} title="关键字管理" className="px-3" disabled={isBusy}><Key className="w-4 h-4 mr-1.5" />关键字</Button>
           <Button size="sm" variant="ghost" onClick={() => onOpenExtensions(profile)} title="插件配置" className="px-3" disabled={isBusy}><Puzzle className="w-4 h-4 mr-1.5" />插件</Button>
           <Link to={`/browser/edit/${profile.profileId}`}><Button size="sm" variant="ghost" title="配置" className="px-3" disabled={isBusy}><Settings className="w-4 h-4 mr-1.5" />配置</Button></Link>
@@ -596,6 +606,7 @@ export function BrowserProfilesPanel({
   onStart,
   onStop,
   onRestart,
+  onOpenChatGPT,
   onOpenKeywords,
   onOpenExtensions,
   onOpenDataDir,
@@ -736,7 +747,7 @@ export function BrowserProfilesPanel({
     {
       key: 'actions',
       title: '操作',
-      width: 248,
+      width: 408,
       align: 'right',
       render: (_, record) => {
         const isStarting = isProfileStarting(record.profileId)
@@ -755,6 +766,7 @@ export function BrowserProfilesPanel({
                 {!isStarting && <Play className="w-3.5 h-3.5 fill-current" />}
               </Button>
             )}
+            <Button size="sm" variant="ghost" onClick={() => onOpenChatGPT(record, true)} disabled={isBusy}><Download className="w-3.5 h-3.5" />获取 GPT 账户信息</Button>
             <Link to={`/browser/edit/${record.profileId}`}><Button size="sm" variant="ghost" title="配置" disabled={isBusy}><Settings className="w-3.5 h-3.5" /></Button></Link>
             <Button size="sm" variant="ghost" onClick={() => onOpenCopy(record)} title="克隆" disabled={isBusy}><Copy className="w-3.5 h-3.5" /></Button>
             <ProfileMoreActions
@@ -763,6 +775,7 @@ export function BrowserProfilesPanel({
               onToggle={() => setOpenMoreProfileId(isMoreOpen ? null : record.profileId)}
               onClose={() => setOpenMoreProfileId(null)}
               onRestart={() => onRestart(record.profileId)}
+              onOpenChatGPT={() => onOpenChatGPT(record)}
               onOpenKeywords={() => onOpenKeywords(record)}
               onOpenExtensions={() => onOpenExtensions(record)}
               onOpenDataDir={() => onOpenDataDir(record)}
@@ -810,6 +823,7 @@ export function BrowserProfilesPanel({
                 onStart={onStart}
                 onStop={onStop}
                 onRestart={onRestart}
+                onOpenChatGPT={onOpenChatGPT}
                 onOpenKeywords={onOpenKeywords}
                 onOpenExtensions={onOpenExtensions}
                 onOpenCopy={onOpenCopy}

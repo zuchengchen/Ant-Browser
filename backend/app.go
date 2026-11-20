@@ -74,6 +74,8 @@ type App struct {
 	deferredStartTargets          map[string]deferredStartTargetsPlan
 	automationTargetMu            sync.Mutex
 	automationTargetCursor        map[string]string
+	chatGPTMu                     sync.Mutex
+	chatGPTSessions               map[string]*chatGPTInspectionSession
 	browserPasswordAutosaveMu     sync.Mutex
 	browserPasswordAutosaveWorker *browserPasswordAutosaveWorker
 	profileWindowMarkersMu        sync.Mutex

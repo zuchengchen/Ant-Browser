@@ -234,6 +234,14 @@ export function BookmarkSyncToProfiles() {
   return window['go']['main']['App']['BookmarkSyncToProfiles']();
 }
 
+export function BrowserChatGPTAccountGet(arg1) {
+  return window['go']['main']['App']['BrowserChatGPTAccountGet'](arg1);
+}
+
+export function BrowserChatGPTAccountRead(arg1) {
+  return window['go']['main']['App']['BrowserChatGPTAccountRead'](arg1);
+}
+
 export function BrowserClearCookies(arg1) {
   return window['go']['main']['App']['BrowserClearCookies'](arg1);
 }

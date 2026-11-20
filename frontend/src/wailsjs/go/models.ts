@@ -728,6 +728,82 @@ export namespace backend {
 	}
 	
 	
+	export class ChatGPTUsageWindow {
+	    remainingPercent?: number;
+	    resetText: string;
+
+	    static createFrom(source: any = {}) {
+	        return new ChatGPTUsageWindow(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.remainingPercent = source["remainingPercent"];
+	        this.resetText = source["resetText"];
+	    }
+	}
+	export class ChatGPTAccountInfo {
+	    profileId: string;
+	    status: string;
+	    checkedAt: string;
+	    savedAt: string;
+	    displayName: string;
+	    username: string;
+	    email: string;
+	    plan: string;
+	    renewalDate: string;
+	    expiryDate: string;
+	    subscriptionDetail: string;
+	    weekly: ChatGPTUsageWindow;
+	    fiveHour: ChatGPTUsageWindow;
+	    credits?: number;
+	    resetCards?: number;
+	    usageScope: string;
+	    warnings: string[];
+
+	    static createFrom(source: any = {}) {
+	        return new ChatGPTAccountInfo(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.profileId = source["profileId"];
+	        this.status = source["status"];
+	        this.checkedAt = source["checkedAt"];
+	        this.savedAt = source["savedAt"];
+	        this.displayName = source["displayName"];
+	        this.username = source["username"];
+	        this.email = source["email"];
+	        this.plan = source["plan"];
+	        this.renewalDate = source["renewalDate"];
+	        this.expiryDate = source["expiryDate"];
+	        this.subscriptionDetail = source["subscriptionDetail"];
+	        this.weekly = this.convertValues(source["weekly"], ChatGPTUsageWindow);
+	        this.fiveHour = this.convertValues(source["fiveHour"], ChatGPTUsageWindow);
+	        this.credits = source["credits"];
+	        this.resetCards = source["resetCards"];
+	        this.usageScope = source["usageScope"];
+	        this.warnings = source["warnings"];
+	    }
+
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class CookieInfo {
 	    name: string;
 	    value: string;

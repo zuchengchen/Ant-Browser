@@ -126,6 +126,10 @@ export function BookmarkSave(arg1:Array<config.BrowserBookmark>):Promise<void>;
 
 export function BookmarkSyncToProfiles():Promise<backend.BookmarkSyncResult>;
 
+export function BrowserChatGPTAccountGet(arg1:string):Promise<backend.ChatGPTAccountInfo>;
+
+export function BrowserChatGPTAccountRead(arg1:string):Promise<backend.ChatGPTAccountInfo>;
+
 export function BrowserClearCookies(arg1:string):Promise<void>;
 
 export function BrowserCoreDelete(arg1:string):Promise<void>;

@@ -62,6 +62,7 @@ docs/*
 !docs/feature-difference-approval.md
 !docs/upstream-sync.md
 !docs/instance-groups.md
+!docs/chatgpt-account.md
 !docs/browser-password-autosave.md
 DEPLOYMENT_GUIDE.md
 plan.md
