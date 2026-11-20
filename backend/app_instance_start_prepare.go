@@ -357,6 +357,15 @@ func (a *App) prepareBrowserLaunchContext(input browserStartInput, profile *Brow
 		)
 	}
 
+	if err := ensureBrowserPasswordManagerDefaults(userDataDir); err != nil {
+		startErr := fmt.Errorf("实例启动失败：无法初始化密码管理器默认设置：%w", err)
+		profile.LastError = startErr.Error()
+		return nil, nil, nil, "", "", startErr
+	}
+	if err := ensureBrowserInstanceTitleBar(userDataDir); err != nil {
+		log.Warn("实例窗口标题栏初始化失败", logger.F("profile_id", input.ProfileID), logger.F("error", err.Error()))
+	}
+
 	if !profileRestoreLastSession(profile, a.config) {
 		if err := clearBrowserSessionRestoreData(userDataDir); err != nil {
 			if terminated, terminateErr := terminateBrowserProcessesByUserDataDir(userDataDir, 5*time.Second); terminateErr == nil && terminated {
@@ -414,5 +423,5 @@ func buildBrowserLaunchArgs(userDataDir string, debugPort int, effectiveProxy st
 	args = append(args, normalizeNonEmptyStrings(fingerprintLaunchArgs)...)
 	args = append(args, sanitizedProfileLaunchArgs...)
 	args = append(args, sanitizedExtraLaunchArgs...)
-	return browser.BuildLaunchArgs(args, launchTargets)
+	return browser.BuildLaunchArgs(browserPasswordAutosaveLaunchArgs(args), launchTargets)
 }

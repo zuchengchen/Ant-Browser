@@ -97,6 +97,7 @@ func (a *App) resumeBackgroundTasks() {
 	}
 	a.runtimeMu.Unlock()
 	a.ensureKeyPouchRuntime()
+	a.ensureBrowserPasswordAutosave()
 }
 
 // backgroundTaskWaitTimeout 是关闭/维护流程等待后台任务的上限。

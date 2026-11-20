@@ -18,6 +18,7 @@ func (a *App) startBrowserProfileWithPlan(input browserStartInput, plan *browser
 
 	cmd := exec.Command(plan.chromeBinaryPath, plan.args...)
 	cmd.Dir = filepath.Dir(plan.chromeBinaryPath)
+	configureBrowserPasswordEnvironment(cmd)
 
 	monitor, err := newBrowserProcessMonitor(cmd)
 	if err != nil {

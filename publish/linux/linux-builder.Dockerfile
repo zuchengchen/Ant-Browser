@@ -13,6 +13,7 @@ RUN sed -i 's|http://deb.debian.org|https://deb.debian.org|g' /etc/apt/sources.l
     gnupg \
     libayatana-appindicator3-dev \
     libgtk-3-dev \
+    libxcb1-dev \
     libwebkit2gtk-4.0-dev \
     patchelf \
     pkg-config \

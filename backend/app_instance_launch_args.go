@@ -15,6 +15,7 @@ import (
 var startBrowserWindowProcess = func(chromeBinaryPath string, args []string) (*exec.Cmd, error) {
 	cmd := exec.Command(chromeBinaryPath, args...)
 	cmd.Dir = filepath.Dir(chromeBinaryPath)
+	configureBrowserPasswordEnvironment(cmd)
 	if err := cmd.Start(); err != nil {
 		return nil, err
 	}

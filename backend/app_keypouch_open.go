@@ -223,7 +223,7 @@ func (a *App) keyPouchOpen(ctx context.Context, c keyPouchOpenClaim, device *key
 			if detachedPID > 0 && detachedPID != pid && focusWindow(detachedPID) {
 				return id, ""
 			}
-		} else if port > 0 && keyPouchFocusTab(focus, port) == nil {
+		} else if (pid > 0 && focusKeyPouchBrowserWindow(pid)) || (port > 0 && keyPouchFocusTab(focus, port) == nil) {
 			return id, ""
 		}
 		select {

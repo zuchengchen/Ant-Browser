@@ -74,6 +74,8 @@ type App struct {
 	deferredStartTargets          map[string]deferredStartTargetsPlan
 	automationTargetMu            sync.Mutex
 	automationTargetCursor        map[string]string
+	browserPasswordAutosaveMu     sync.Mutex
+	browserPasswordAutosaveWorker *browserPasswordAutosaveWorker
 	profileWindowMarkersMu        sync.Mutex
 	profileWindowMarkers          map[string]*profileWindowMarker
 	browserProcessMonitors        map[string]*browserProcessMonitor

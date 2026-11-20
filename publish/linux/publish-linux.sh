@@ -328,7 +328,7 @@ Architecture: ${ARCH}
 Maintainer: ${APP_MAINTAINER} <${APP_MAINTAINER_EMAIL}>
 Homepage: ${APP_HOMEPAGE}
 Installed-Size: ${INSTALLED_SIZE_KB}
-Depends: libc6 (>= 2.31), libgtk-3-0, libglib2.0-0, libwebkit2gtk-4.1-0 | libwebkit2gtk-4.0-37
+Depends: libc6 (>= 2.31), libgtk-3-0, libglib2.0-0, libxcb1, libwebkit2gtk-4.1-0 | libwebkit2gtk-4.0-37
 Description: ${APP_NAME} desktop app
  Multi-profile browser launcher with proxy-pool management.
  Ant Browser manages isolated browser profiles, proxy binding, and

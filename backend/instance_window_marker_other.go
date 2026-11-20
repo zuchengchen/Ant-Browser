@@ -1,5 +1,6 @@
-//go:build !windows
+//go:build !windows && (!linux || !cgo)
 // +build !windows
+// +build !linux !cgo
 
 package backend
 

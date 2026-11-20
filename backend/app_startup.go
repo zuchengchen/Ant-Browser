@@ -104,6 +104,7 @@ func (a *App) startup(ctx context.Context) {
 	a.restoreKeyPouchRuntime()
 	a.startupReady.Store(true)
 	a.emitRuntimeEvent("app:ready")
+	a.startupRestoreBrowserWindows()
 
 	log.Info("应用启动成功")
 }
