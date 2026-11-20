@@ -342,6 +342,7 @@ type BrowserEnvironment struct {
 }
 
 type BrowserProfileConfig struct {
+	GroupIds           []string `yaml:"group_ids" json:"groupIds"`
 	ProfileId          string   `yaml:"profile_id" json:"profileId"`
 	ProfileName        string   `yaml:"profile_name" json:"profileName"`
 	UserDataDir        string   `yaml:"user_data_dir" json:"userDataDir"`

@@ -23,6 +23,7 @@ func (a *App) setRuntimeContext(ctx context.Context) {
 }
 
 func (a *App) stopRuntimeEvents() {
+	a.startupReady.Store(false)
 	a.runtimeMu.Lock()
 	a.runtimeStopped = true
 	a.backgroundTasksBlocked = true

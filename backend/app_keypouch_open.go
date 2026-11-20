@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"regexp"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -31,7 +32,7 @@ func keyPouchProfileID(recordID int64) string {
 	return uuid.NewSHA1(uuid.NameSpaceURL, []byte(keyPouchSite()+"/records/"+strconv.FormatInt(recordID, 10))).String()
 }
 
-func (a *App) keyPouchGroup(name, boundGroup string) (string, string) {
+func (a *App) keyPouchGroup(name string, bound *BrowserProfile) (string, string) {
 	groups, err := a.browserMgr.GroupDAO.List()
 	if err != nil {
 		return "", "group_unavailable"
@@ -46,8 +47,11 @@ func (a *App) keyPouchGroup(name, boundGroup string) (string, string) {
 		}
 		id = g.GroupId
 	}
-	if boundGroup != "" && id != boundGroup {
-		return "", "group_conflict"
+	if bound != nil {
+		member := slices.Contains(bound.GroupIds, id) || (bound.GroupIds == nil && bound.GroupId == id)
+		if id == "" || !member {
+			return "", "group_conflict"
+		}
 	}
 	if id != "" {
 		return id, ""
@@ -118,14 +122,7 @@ func (a *App) keyPouchProfile(c keyPouchOpenClaim, links *keypouch.ProfileLinks,
 	if bound == nil && template == nil && templateDeleted {
 		return "", "template_missing"
 	}
-	boundGroup := ""
-	if bound != nil {
-		boundGroup = bound.GroupId
-		if boundGroup == "" {
-			return "", "group_conflict"
-		}
-	}
-	group, reason := a.keyPouchGroup(c.GroupName, boundGroup)
+	group, reason := a.keyPouchGroup(c.GroupName, bound)
 	if reason != "" {
 		return "", reason
 	}
@@ -154,10 +151,8 @@ func (a *App) adoptKeyPouchProfile(c keyPouchOpenClaim, p *BrowserProfile, links
 	if !keyPouchLocalID.MatchString(p.ProfileId) || (err == nil && uid.Version() == 5) || !links.Available(c.RecordID, p.ProfileId) {
 		return "", "profile_conflict"
 	}
-	if p.GroupId == "" {
-		return "", "group_conflict"
-	}
-	if _, reason := a.keyPouchGroup(c.GroupName, p.GroupId); reason != "" {
+	group, reason := a.keyPouchGroup(c.GroupName, p)
+	if reason != "" {
 		return "", reason
 	}
 	if !accept() {
@@ -168,11 +163,15 @@ func (a *App) adoptKeyPouchProfile(c keyPouchOpenClaim, p *BrowserProfile, links
 	if err != nil || current == nil || current.DeletedAt != "" {
 		return "", "profile_unavailable"
 	}
-	if current.ProfileName != c.Email || current.GroupId != p.GroupId {
+	if current.ProfileName != c.Email {
 		return "", "profile_conflict"
 	}
-	if _, reason := a.keyPouchGroup(c.GroupName, current.GroupId); reason != "" {
+	currentGroup, reason := a.keyPouchGroup(c.GroupName, current)
+	if reason != "" {
 		return "", reason
+	}
+	if currentGroup != group {
+		return "", "group_conflict"
 	}
 	if err = links.Bind(c.RecordID, p.ProfileId); err != nil {
 		return "", "storage_error"

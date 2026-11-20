@@ -1,4 +1,4 @@
-﻿import type { StructuredApiEndpointDoc } from './structuredApiDocs.types'
+import type { StructuredApiEndpointDoc } from './structuredApiDocs.types'
 
 export const PROFILE_API_ENDPOINT_DOCS: StructuredApiEndpointDoc[] = [
   {
@@ -26,7 +26,7 @@ export const PROFILE_API_ENDPOINT_DOCS: StructuredApiEndpointDoc[] = [
       "profileName": "buyer-001",
       "launchCode": "BUYER_001",
       "keywords": ["buyer-001"],
-      "tags": ["电商"],
+      "groupIds": ["group-sales", "group-north-america"],
       "proxyId": "proxy-us",
       "running": false,
       "debugReady": false
@@ -49,7 +49,7 @@ export const PROFILE_API_ENDPOINT_DOCS: StructuredApiEndpointDoc[] = [
     purpose: '创建一个新实例，可选创建后立即启动。',
     description: '写入实例配置，必要时同时申请 launchCode，并支持通过 autoLaunch 在创建后直接启动浏览器。',
     fields: [
-      { name: 'profile', type: 'object', required: true, location: 'Body', description: '实例配置主体。' },
+      { name: 'profile', type: 'object', required: true, location: 'Body', description: '实例配置主体。groupIds 指定多个已有分组 ID；[] 清空，省略保留旧归属。' },
       { name: 'launchCode', type: 'string', required: false, location: 'Body', description: '指定实例 launchCode。' },
       { name: 'autoLaunch', type: 'boolean', required: false, location: 'Body', description: '是否在创建后立即启动。' },
       { name: 'start', type: 'object', required: false, location: 'Body', description: '仅本次自动启动时附加的启动参数。' },
@@ -64,7 +64,7 @@ export const PROFILE_API_ENDPOINT_DOCS: StructuredApiEndpointDoc[] = [
       "profileName": "buyer-001",
       "proxyId": "proxy-us",
       "keywords": ["buyer-001"],
-      "tags": ["电商"]
+      "groupIds": ["group-sales", "group-north-america"]
     },
     "launchCode": "BUYER_001"
   }'`,
@@ -125,7 +125,7 @@ export const PROFILE_API_ENDPOINT_DOCS: StructuredApiEndpointDoc[] = [
     "profileId": "550e8400-e29b-41d4-a716-446655440000",
     "profileName": "buyer-001",
     "keywords": ["buyer-001"],
-    "tags": ["电商"],
+    "groupIds": ["group-sales", "group-north-america"],
     "proxyId": "proxy-us"
   }
 }`,
@@ -342,8 +342,8 @@ export const PROFILE_API_ENDPOINT_DOCS: StructuredApiEndpointDoc[] = [
       { name: 'profileId', type: 'string', required: false, location: 'Body', description: '兼容写法：等价于 selector.profileId。' },
       { name: 'profileName', type: 'string', required: false, location: 'Body', description: '兼容写法：等价于 selector.profileName。' },
       { name: 'keyword / keywords', type: 'string / string[]', required: false, location: 'Body', description: '兼容写法：等价于 selector.keyword / selector.keywords。' },
-      { name: 'tag / tags', type: 'string / string[]', required: false, location: 'Body', description: '兼容写法：等价于 selector.tag / selector.tags。' },
-      { name: 'groupId', type: 'string', required: false, location: 'Body', description: '兼容写法：等价于 selector.groupId。' },
+      { name: 'tag / tags', type: 'string / string[]', required: false, location: 'Body', description: '旧分组名称条件：多个名称同时匹配，每个名称必须在全目录唯一；有歧义时改用 groupId。' },
+      { name: 'groupId', type: 'string', required: false, location: 'Body', description: '实例分组 ID，匹配该分组及后代中的任一归属。' },
       { name: 'matchMode', type: 'unique | first | all', required: false, location: 'Body', description: '兼容写法：等价于 selector.matchMode。' },
       { name: 'launchArgs', type: 'string[]', required: false, location: 'Body', description: '本次启动的临时附加参数。' },
       { name: 'startUrls', type: 'string[]', required: false, location: 'Body', description: '本次启动后额外打开的网址。' },
@@ -357,7 +357,7 @@ export const PROFILE_API_ENDPOINT_DOCS: StructuredApiEndpointDoc[] = [
   -d '{
     "selector": {
       "keyword": "checkout",
-      "tags": ["电商", "北美"],
+      "groupId": "group-sales",
       "matchMode": "unique"
     },
     "skipDefaultStartUrls": true

@@ -171,9 +171,6 @@ func (a *App) resolveAutomationScriptTarget(script automation.ScriptRecord) (map
 }
 
 func (a *App) resolveAutomationExactTargetProfile(selector automation.ScriptTargetSelector, actionLabel string) (browser.Profile, error) {
-	if profile, ok := a.findAutomationTargetProfileByIDOrCode(selector); ok {
-		return profile, nil
-	}
 	return a.resolveAutomationTargetProfile(selector, actionLabel)
 }
 
@@ -218,16 +215,11 @@ func (a *App) resolveAutomationTargetProfiles(selector automation.ScriptTargetSe
 			return strings.EqualFold(strings.TrimSpace(item.ProfileName), normalized.ProfileName)
 		})
 	}
-	if normalized.GroupID != "" {
-		snapshots = filterAutomationProfiles(snapshots, func(item browser.Profile) bool {
-			return strings.TrimSpace(item.GroupId) == normalized.GroupID
-		})
+	matcher, err := a.browserMgr.InstanceGroupMatcher(normalized.GroupID, normalized.Tags)
+	if err != nil {
+		return nil, err
 	}
-	if len(normalized.Tags) > 0 {
-		snapshots = filterAutomationProfiles(snapshots, func(item browser.Profile) bool {
-			return automationProfileHasAllTags(item, normalized.Tags)
-		})
-	}
+	snapshots = filterAutomationProfiles(snapshots, matcher)
 	if len(normalized.Keywords) > 0 {
 		snapshots = filterAutomationProfiles(snapshots, func(item browser.Profile) bool {
 			return automationProfileMatchesAllKeywordQueries(item, normalized.Keywords)
@@ -286,14 +278,16 @@ func (a *App) findAutomationTargetProfileByIDOrCode(selector automation.ScriptTa
 
 func (a *App) enrichAutomationExactTargetSelector(selector automation.ScriptTargetSelector) automation.ScriptTargetSelector {
 	normalized := normalizeAutomationTargetSelector(selector)
-	profile, ok := a.findAutomationTargetProfileByIDOrCode(normalized)
-	if !ok {
+	profile, err := a.resolveAutomationTargetProfile(normalized, "解析实例")
+	if err != nil {
 		return normalized
 	}
 
-	normalized.ProfileID = strings.TrimSpace(profile.ProfileId)
-	if code := strings.ToUpper(strings.TrimSpace(profile.LaunchCode)); code != "" {
-		normalized.Code = code
+	if normalized.ProfileID == "" {
+		normalized.ProfileID = strings.TrimSpace(profile.ProfileId)
+	}
+	if normalized.Code == "" {
+		normalized.Code = strings.ToUpper(strings.TrimSpace(profile.LaunchCode))
 	}
 	return normalized
 }

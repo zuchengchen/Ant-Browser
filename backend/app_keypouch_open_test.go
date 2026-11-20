@@ -59,7 +59,11 @@ func TestKeyPouchOpenResolvesStableProfileAndKeepsTheTemplateInPlace(t *testing.
 		t.Fatalf("adopted unbound same-name profile: %s", reason)
 	}
 	c.Email = "Another@example.invalid"
-	legacy, err := app.BrowserProfileCreate(BrowserProfileInput{GroupId: group.GroupId, ProfileName: c.Email})
+	legacy, err := app.BrowserProfileCreate(BrowserProfileInput{
+		GroupId:     "original-group",
+		GroupIds:    []string{"original-group", group.GroupId},
+		ProfileName: c.Email,
+	})
 	if err != nil {
 		t.Fatal(err)
 	}

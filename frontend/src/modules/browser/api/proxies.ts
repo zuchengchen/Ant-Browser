@@ -1,5 +1,6 @@
 ﻿import type { BrowserProxy, ProxyBridgeWarmupResult, ProxyCoreDownloadInfoResult, ProxyCoreStatusResult, ProxyIPHealthResult, ProxyLocationResolveResult, ProxySourceRefreshResult, ProxySpeedTestResult, ProxyVirtualGroupHealth, ProxyVirtualGroupProbeResult, SourceAlignRecord } from '../types'
 import { getBindings, getGoApp, getMockProxies, nowISOString, setMockProxies } from './runtime'
+import { waitForAppReady } from '../../../utils/appReady'
 
 import type { BrowserProxyVirtualGroup } from '../types'
 
@@ -58,45 +59,15 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-const BACKEND_STARTUP_RETRY_DELAYS_MS = [100, 250, 500, 1000, 2000]
-
-function errorMessage(value: unknown): string {
-  if (value instanceof Error) return value.message
-  if (typeof value === 'string') return value
-  if (!value || typeof value !== 'object') return String(value)
-
-  const source = value as Record<string, unknown>
-  for (const key of ['message', 'error', 'detail']) {
-    if (typeof source[key] === 'string') return source[key] as string
-  }
-  return String(value)
-}
-
-function isBackendStartupError(value: unknown): boolean {
-  const message = errorMessage(value)
-  return message.includes('代理数据加载上下文不可用')
-    || message.includes('应用未初始化')
-    || message.includes('应用上下文未初始化')
-}
-
-async function withBackendStartupRetry<T>(operation: () => Promise<T>): Promise<T> {
-  for (let attempt = 0; ; attempt += 1) {
-    try {
-      return await operation()
-    } catch (error) {
-      const delay = BACKEND_STARTUP_RETRY_DELAYS_MS[attempt]
-      if (!isBackendStartupError(error) || delay === undefined) {
-        throw error
-      }
-      await sleep(delay)
-    }
-  }
+async function withBackendReady<T>(operation: () => Promise<T>): Promise<T> {
+  await waitForAppReady()
+  return operation()
 }
 
 export async function fetchBrowserProxies(): Promise<BrowserProxy[]> {
   const bindings: any = await getBindings()
   if (bindings?.BrowserProxyList) {
-    return (await withBackendStartupRetry(() => bindings.BrowserProxyList())) || []
+    return (await withBackendReady(() => bindings.BrowserProxyList())) || []
   }
   return getMockProxies()
 }
@@ -104,7 +75,7 @@ export async function fetchBrowserProxies(): Promise<BrowserProxy[]> {
 export async function fetchBrowserProxyGroups(): Promise<string[]> {
   const bindings: any = await getBindings()
   if (bindings?.BrowserProxyListGroups) {
-    return (await withBackendStartupRetry(() => bindings.BrowserProxyListGroups())) || []
+    return (await withBackendReady(() => bindings.BrowserProxyListGroups())) || []
   }
   return []
 }
@@ -113,13 +84,13 @@ export async function fetchBrowserProxyVirtualGroups(): Promise<BrowserProxyVirt
   const bindings: any = await getBindings()
   if (bindings?.BrowserProxyVirtualGroupList) {
     return normalizeBrowserProxyVirtualGroups(
-      await withBackendStartupRetry(() => bindings.BrowserProxyVirtualGroupList()),
+      await withBackendReady(() => bindings.BrowserProxyVirtualGroupList()),
     )
   }
   const goApp = getGoApp()
   if (goApp?.BrowserProxyVirtualGroupList) {
     return normalizeBrowserProxyVirtualGroups(
-      await withBackendStartupRetry(() => goApp.BrowserProxyVirtualGroupList()),
+      await withBackendReady(() => goApp.BrowserProxyVirtualGroupList()),
     )
   }
   return normalizeBrowserProxyVirtualGroups(mockProxyVirtualGroups)
@@ -128,7 +99,7 @@ export async function fetchBrowserProxyVirtualGroups(): Promise<BrowserProxyVirt
 export async function fetchBrowserProxyVirtualGroupHealth(): Promise<ProxyVirtualGroupHealth[]> {
   const bindings: any = await getBindings()
   if (bindings?.BrowserProxyVirtualGroupHealthList) {
-    const list = await withBackendStartupRetry(() => bindings.BrowserProxyVirtualGroupHealthList())
+    const list = await withBackendReady(() => bindings.BrowserProxyVirtualGroupHealthList())
     return Array.isArray(list) ? (list as ProxyVirtualGroupHealth[]) : []
   }
   return []
@@ -194,7 +165,7 @@ export async function deleteBrowserProxyVirtualGroup(groupId: string): Promise<b
 export async function fetchBrowserProxiesByGroup(groupName: string): Promise<BrowserProxy[]> {
   const bindings: any = await getBindings()
   if (bindings?.BrowserProxyListByGroup) {
-    return (await bindings.BrowserProxyListByGroup(groupName)) || []
+    return (await withBackendReady(() => bindings.BrowserProxyListByGroup(groupName))) || []
   }
   return getMockProxies().filter((proxy) => proxy.groupName === groupName)
 }

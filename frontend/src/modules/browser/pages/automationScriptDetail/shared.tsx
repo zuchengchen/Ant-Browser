@@ -96,7 +96,7 @@ export function TargetSelectorEditor({
         ) : null}
       </FormItem>
 
-      <FormItem label="分组 ID">
+      <FormItem label="实例分组（含子组）">
         <Select
           value={selector.groupId}
           onChange={(event) =>
@@ -107,17 +107,17 @@ export function TargetSelectorEditor({
         />
       </FormItem>
 
-      <FormItem label="标签">
+      {selector.tags.length > 0 && <FormItem label="旧分组名称条件（兼容）">
         <Textarea
           rows={3}
           value={formatSelectorTerms(selector.tags)}
           onChange={(event) =>
             onChange({ tags: parseSelectorTerms(event.target.value) })
           }
-          placeholder={"sales-us\nbuyer"}
+          placeholder="名称须在所有分组中唯一；多个条件需同时满足"
           disabled={disabled}
         />
-      </FormItem>
+      </FormItem>}
 
       <FormItem label="关键字">
         <Textarea

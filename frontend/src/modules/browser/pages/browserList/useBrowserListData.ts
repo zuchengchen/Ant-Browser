@@ -4,9 +4,10 @@ import type { BrowserGroupWithCount, BrowserProfile, BrowserProxy, BrowserProxyV
 import { fetchBrowserProfiles, fetchBrowserProxies, fetchBrowserProxyVirtualGroups, fetchGroups } from '../../api'
 import { EventsOn } from '../../../../wailsjs/runtime/runtime'
 import { reuseProfileSnapshot } from './profileSnapshot'
+import { waitForAppReady } from '../../../../utils/appReady'
+import { errorMessage } from '../../../../utils/errors'
 
 const PROFILE_LIST_FALLBACK_REFRESH_MS = 15_000
-const APP_READY_EVENT = 'app:ready'
 
 interface UseBrowserListDataOptions {
   loadCores: () => Promise<void>
@@ -18,12 +19,14 @@ export function useBrowserListData({ loadCores }: UseBrowserListDataOptions) {
   const [proxies, setProxies] = useState<BrowserProxy[]>([])
   const [proxyVirtualGroups, setProxyVirtualGroups] = useState<BrowserProxyVirtualGroup[]>([])
   const [groups, setGroups] = useState<BrowserGroupWithCount[]>([])
+  const [groupsLoaded, setGroupsLoaded] = useState(false)
+  const [groupsError, setGroupsError] = useState('')
+  const groupRequestRef = useRef(0)
+  const profileRequestRef = useRef(0)
   const [startingIds, setStartingIds] = useState<Set<string>>(new Set())
   const [stoppingIds, setStoppingIds] = useState<Set<string>>(new Set())
   const profilesRef = useRef<BrowserProfile[]>([])
   const silentRefreshInFlightRef = useRef(false)
-  const initialLoadInFlightRef = useRef(false)
-  const initialLoadQueuedRef = useRef(false)
 
   const updatePendingIds = (
     setter: React.Dispatch<React.SetStateAction<Set<string>>>,
@@ -88,9 +91,10 @@ export function useBrowserListData({ loadCores }: UseBrowserListDataOptions) {
     } else {
       silentRefreshInFlightRef.current = true
     }
+    const request = ++profileRequestRef.current
     try {
-      const items = await fetchBrowserProfiles()
-      syncProfiles(items, syncRuntimeState)
+      const [items] = await Promise.all([fetchBrowserProfiles(), loadGroups()])
+      if (request === profileRequestRef.current) syncProfiles(items, syncRuntimeState)
       return items
     } finally {
       if (silent) {
@@ -102,7 +106,14 @@ export function useBrowserListData({ loadCores }: UseBrowserListDataOptions) {
   }
 
   const loadGroups = async () => {
-    setGroups(await fetchGroups())
+    const request = ++groupRequestRef.current
+    try {
+      const items = await fetchGroups()
+      if (request !== groupRequestRef.current) return
+      setGroups(items); setGroupsLoaded(true); setGroupsError('')
+    } catch (error) {
+      if (request === groupRequestRef.current) setGroupsError(errorMessage(error, '加载实例分组失败'))
+    }
   }
 
   const updateProxiesState = (items: BrowserProxy[]) => {
@@ -118,7 +129,7 @@ export function useBrowserListData({ loadCores }: UseBrowserListDataOptions) {
       setProxies(proxyResult.value)
     } else {
       setProxies([])
-      toast.error(proxyResult.reason instanceof Error ? proxyResult.reason.message : '加载代理目录失败')
+      toast.error(errorMessage(proxyResult.reason, '加载代理目录失败'))
     }
     if (virtualGroupResult.status === 'fulfilled') {
       setProxyVirtualGroups(virtualGroupResult.value)
@@ -129,28 +140,38 @@ export function useBrowserListData({ loadCores }: UseBrowserListDataOptions) {
 
   useEffect(() => {
     let disposed = false
+    let backendReady = false
+    let initialLoadInFlight = false
+    let initialLoadQueued = false
     let runtimeRetryTimer: number | null = null
     let runtimeSubscriptionFailed = false
     const runtimeUnsubscribers: Array<() => void> = []
 
     const loadInitialData = () => {
       if (disposed) return
-      if (initialLoadInFlightRef.current) {
-        initialLoadQueuedRef.current = true
+      if (initialLoadInFlight) {
+        initialLoadQueued = true
         return
       }
 
-      initialLoadQueuedRef.current = false
-      initialLoadInFlightRef.current = true
-      void Promise.allSettled([
-        loadProfiles(),
-        loadGroups(),
-        loadProxyCatalog(),
-        loadCores(),
-      ]).finally(() => {
-        initialLoadInFlightRef.current = false
-        if (!disposed && initialLoadQueuedRef.current) {
-          initialLoadQueuedRef.current = false
+      initialLoadQueued = false
+      initialLoadInFlight = true
+      void waitForAppReady().then(() => {
+        if (disposed) return
+        backendReady = true
+        return Promise.allSettled([
+          loadProfiles(),
+          loadProxyCatalog(),
+          loadCores(),
+        ])
+      }).catch((error) => {
+        if (disposed) return
+        setLoading(false)
+        toast.error(errorMessage(error, '等待应用初始化失败'))
+      }).finally(() => {
+        initialLoadInFlight = false
+        if (!disposed && initialLoadQueued) {
+          initialLoadQueued = false
           loadInitialData()
         }
       })
@@ -194,10 +215,6 @@ export function useBrowserListData({ loadCores }: UseBrowserListDataOptions) {
           clearPending(payload)
           void loadProfiles({ silent: true, syncRuntimeState: true })
         })
-        subscribe(APP_READY_EVENT, () => {
-          loadInitialData()
-        })
-
         runtimeUnsubscribers.push(...subscriptions)
         if (runtimeSubscriptionFailed) {
           runtimeSubscriptionFailed = false
@@ -218,7 +235,7 @@ export function useBrowserListData({ loadCores }: UseBrowserListDataOptions) {
     subscribeRuntimeEvents()
 
     const timer = window.setInterval(() => {
-      if (document.visibilityState !== 'visible') return
+      if (!backendReady || document.visibilityState !== 'visible') return
       void loadProfiles({ silent: true, syncRuntimeState: true })
     }, PROFILE_LIST_FALLBACK_REFRESH_MS)
 
@@ -238,6 +255,8 @@ export function useBrowserListData({ loadCores }: UseBrowserListDataOptions) {
     proxies,
     proxyVirtualGroups,
     groups,
+    groupsLoaded,
+    groupsError,
     startingIds,
     stoppingIds,
     setStartingIds,

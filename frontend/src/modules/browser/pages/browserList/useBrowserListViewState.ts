@@ -1,6 +1,7 @@
-﻿import { useEffect, useMemo, useState } from 'react'
-import type { BrowserCore, BrowserProfile } from '../../types'
+import { useEffect, useMemo, useState } from 'react'
+import type { BrowserCore, BrowserProfile, BrowserGroup } from '../../types'
 import { EMPTY_FILTERS, type InstanceFilters } from '../../components/InstanceFilterBar'
+import { migrateGroupFilter, profileMatchesGroup, groupPath, profileGroupIds } from '../../utils/instanceGroups'
 import type { BrowserViewMode } from '../../components/BrowserListLayout'
 
 export const resolveProfileStatus = (running: boolean, debugReady: boolean, starting: boolean, stopping: boolean, lastError = '') => {
@@ -22,28 +23,38 @@ export const resolveProfileStatus = (running: boolean, debugReady: boolean, star
   return { variant: 'default' as const, label: '已停止' }
 }
 
-export function useBrowserListViewState() {
+export function useBrowserListViewState(groups: BrowserGroup[], groupsLoaded: boolean) {
+  const [savedFilters] = useState<Record<string, unknown>>(() => {
+    try { const value = JSON.parse(localStorage.getItem('browser:filters') || '{}'); return value && typeof value === 'object' && !Array.isArray(value) ? value : {} }
+    catch { return {} }
+  })
+  const [filtersMigrated, setFiltersMigrated] = useState(false)
   const [viewMode, setViewMode] = useState<BrowserViewMode>(() => {
     return (localStorage.getItem('browser:viewMode') as BrowserViewMode) || 'table'
   })
-  const [filters, setFilters] = useState<InstanceFilters>(() => {
-    try {
-      const saved = localStorage.getItem('browser:filters')
-      if (saved) {
-        const parsed = JSON.parse(saved)
-        return { ...EMPTY_FILTERS, ...parsed, tags: new Set(parsed.tags || []) }
-      }
-    } catch { /* ignore */ }
-    return EMPTY_FILTERS
-  })
+  const [filters, setFilters] = useState<InstanceFilters>(() => ({
+    ...EMPTY_FILTERS,
+    keyword: typeof savedFilters.keyword === 'string' ? savedFilters.keyword : '',
+    kwSearch: typeof savedFilters.kwSearch === 'string' ? savedFilters.kwSearch : '',
+    status: savedFilters.status === 'running' || savedFilters.status === 'stopped' ? savedFilters.status : '',
+    proxyId: typeof savedFilters.proxyId === 'string' ? savedFilters.proxyId : '',
+    coreId: typeof savedFilters.coreId === 'string' ? savedFilters.coreId : '',
+    ...migrateGroupFilter(savedFilters, []),
+  }))
+  useEffect(() => {
+    if (!groupsLoaded || filtersMigrated) return
+    const initial = migrateGroupFilter(savedFilters, [])
+    setFilters(previous => previous.groupId === initial.groupId && JSON.stringify(previous.groupIds) === JSON.stringify(initial.groupIds)
+      ? { ...previous, ...migrateGroupFilter(savedFilters, groups) } : previous)
+    setFiltersMigrated(true)
+  }, [groups, groupsLoaded, filtersMigrated, savedFilters])
   const [headerCollapsed, setHeaderCollapsed] = useState(() => {
     return localStorage.getItem('browser:headerCollapsed') === 'true'
   })
 
   useEffect(() => {
-    const serializable = { ...filters, tags: Array.from(filters.tags) }
-    localStorage.setItem('browser:filters', JSON.stringify(serializable))
-  }, [filters])
+    if (filtersMigrated) localStorage.setItem('browser:filters', JSON.stringify({ version: 2, ...filters }))
+  }, [filters, filtersMigrated])
 
   useEffect(() => {
     localStorage.setItem('browser:viewMode', viewMode)
@@ -66,17 +77,12 @@ export function useBrowserListViewState() {
 export function useBrowserListDerived(
   profiles: BrowserProfile[],
   cores: BrowserCore[],
+  groups: BrowserGroup[],
   filters: InstanceFilters,
   startingIds: Set<string>,
   stoppingIds: Set<string>
 ) {
   const runningCount = useMemo(() => profiles.filter(profile => profile.running).length, [profiles])
-  const allTags = useMemo(() => {
-    const set = new Set<string>()
-    profiles.forEach(profile => profile.tags?.forEach(tag => set.add(tag)))
-    return Array.from(set).sort()
-  }, [profiles])
-
   const defaultCore = useMemo(() => {
     return cores.find(core => core.isDefault) || cores[0] || null
   }, [cores])
@@ -113,9 +119,9 @@ export function useBrowserListDerived(
   const filteredProfiles = useMemo(() => {
     const unifiedKeyword = filters.keyword || filters.kwSearch
     return profiles.filter(profile => {
-      if (filters.groupId === '__ungrouped__' && profile.groupId) return false
-      if (filters.groupId && filters.groupId !== '__ungrouped__' && profile.groupId !== filters.groupId) return false
-      if (unifiedKeyword && !matchesProfileKeyword(profile, unifiedKeyword)) return false
+      if (!profileMatchesGroup(profile, filters.groupId, groups)) return false
+      if (filters.groupIds.length && !filters.groupIds.some(id => profileMatchesGroup(profile, id, groups))) return false
+      if (unifiedKeyword && !matchesProfileKeyword(profile, unifiedKeyword, groups)) return false
       if (filters.status === 'running' && !profile.running) return false
       if (filters.status === 'stopped' && profile.running) return false
       if (filters.proxyId === '__none__' && (profile.proxyId || profile.proxyConfig)) return false
@@ -124,14 +130,12 @@ export function useBrowserListDerived(
         const effectiveCore = resolveProfileCore(profile)
         if (!effectiveCore || effectiveCore.coreId !== filters.coreId) return false
       }
-      if (filters.tags.size > 0 && !profile.tags?.some(tag => filters.tags.has(tag))) return false
       return true
     }).sort((a, b) => naturalCompare(a.profileName, b.profileName))
-  }, [profiles, filters, defaultCore, cores])
+  }, [profiles, filters, defaultCore, cores, groups])
 
   return {
     runningCount,
-    allTags,
     filteredProfiles,
     resolveProfileCore,
     getProfileCoreLabel,
@@ -150,7 +154,7 @@ function normalizeCompactSearchText(value: string): string {
   return normalizeSearchText(value).replace(/[\s_-]+/g, '')
 }
 
-function matchesProfileKeyword(profile: BrowserProfile, keyword: string): boolean {
+function matchesProfileKeyword(profile: BrowserProfile, keyword: string, groups: BrowserGroup[]): boolean {
   const query = normalizeSearchText(keyword)
   if (!query) return true
 
@@ -163,8 +167,7 @@ function matchesProfileKeyword(profile: BrowserProfile, keyword: string): boolea
     profile.proxyId,
     profile.proxyBindName,
     profile.proxyBindSourceUrl,
-    profile.groupId,
-    ...(profile.tags || []),
+    ...profileGroupIds(profile).map(id => groupPath(id, groups)),
     ...(profile.keywords || []),
   ]
 

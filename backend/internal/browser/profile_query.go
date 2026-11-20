@@ -29,21 +29,32 @@ func (m *Manager) List() []Profile {
 	return list
 }
 
-// ListByTag 按标签筛选配置列表
-func (m *Manager) ListByTag(tag string) []Profile {
-	tag = strings.TrimSpace(tag)
+// ListByGroupName adapts legacy tag selectors to unambiguous instance groups.
+func (m *Manager) ListByGroupName(tag string) ([]Profile, error) {
 	all := m.List()
-	if tag == "" {
-		return all
+	names := []string{}
+	if strings.TrimSpace(tag) != "" {
+		names = append(names, strings.TrimSpace(tag))
+	}
+	matches, err := m.InstanceGroupMatcher("", names)
+	if err != nil {
+		return nil, err
 	}
 	result := make([]Profile, 0)
 	for _, p := range all {
-		for _, t := range p.Tags {
-			if strings.EqualFold(t, tag) {
-				result = append(result, p)
-				break
-			}
+		if matches(p) {
+			result = append(result, p)
 		}
+	}
+	return result, nil
+}
+
+// ListByTag is retained for internal legacy callers. Public APIs use the error-aware adapter.
+func (m *Manager) ListByTag(tag string) []Profile {
+	result, err := m.ListByGroupName(tag)
+	if err != nil {
+		logger.New("Browser").Error("分组名称筛选失败", logger.F("error", err))
+		return []Profile{}
 	}
 	return result
 }

@@ -61,6 +61,7 @@ publish/output/
 docs/*
 !docs/feature-difference-approval.md
 !docs/upstream-sync.md
+!docs/instance-groups.md
 DEPLOYMENT_GUIDE.md
 plan.md
 pic/

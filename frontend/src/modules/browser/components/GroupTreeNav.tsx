@@ -1,290 +1,97 @@
-import { useState, useMemo } from 'react'
-import { ChevronRight, ChevronDown, Folder, FolderOpen, Plus, Pencil, Trash2, FolderInput } from 'lucide-react'
-import type { BrowserGroupWithCount, BrowserGroupInput } from '../types'
-import { createGroup, updateGroup, deleteGroup } from '../api'
+import { useEffect, useState } from 'react'
+import { useLocation } from 'react-router-dom'
+import { ChevronDown, ChevronRight, Folder, FolderPlus, PanelLeftClose, PanelLeftOpen, Pencil, Plus, Trash2 } from 'lucide-react'
+import { Button, FormItem, Input, Modal, Select, toast } from '../../../shared/components'
+import { errorMessage } from '../../../utils/errors'
+import { createGroup, deleteGroup, updateGroup } from '../api/groups'
+import type { BrowserGroup, BrowserGroupWithCount } from '../types'
+import { descendantGroupIds, groupPath } from '../utils/instanceGroups'
 
-interface GroupTreeNavProps {
+type Editor = { mode: 'create' | 'edit' | 'delete'; group?: BrowserGroup; name: string; parentId: string }
+interface Props {
   groups: BrowserGroupWithCount[]
-  selectedGroupId: string | null
-  onSelectGroup: (groupId: string | null) => void
-  onRefresh: () => void
+  selectedGroupId: string
+  totalCount: number
+  ungroupedCount: number
+  error?: string
+  ready: boolean
+  onSelect: (id: string) => void
+  onChanged: () => Promise<unknown>
 }
 
-interface TreeNode extends BrowserGroupWithCount {
-  children: TreeNode[]
-  level: number
-}
-
-// 构建树形结构
-function buildTree(groups: BrowserGroupWithCount[]): TreeNode[] {
-  const map = new Map<string, TreeNode>()
-  const roots: TreeNode[] = []
-
-  // 初始化所有节点
-  groups.forEach(g => {
-    map.set(g.groupId, { ...g, children: [], level: 0 })
-  })
-
-  // 构建父子关系
-  groups.forEach(g => {
-    const node = map.get(g.groupId)!
-    if (g.parentId && map.has(g.parentId)) {
-      const parent = map.get(g.parentId)!
-      node.level = parent.level + 1
-      parent.children.push(node)
-    } else {
-      roots.push(node)
-    }
-  })
-
-  // 按 sortOrder 排序
-  const sortNodes = (nodes: TreeNode[]) => {
-    nodes.sort((a, b) => a.sortOrder - b.sortOrder)
-    nodes.forEach(n => sortNodes(n.children))
-  }
-  sortNodes(roots)
-
-  return roots
-}
-
-export function GroupTreeNav({ groups, selectedGroupId, onSelectGroup, onRefresh }: GroupTreeNavProps) {
-  const [expanded, setExpanded] = useState<Set<string>>(new Set())
-  const [showCreateModal, setShowCreateModal] = useState(false)
-  const [createParentId, setCreateParentId] = useState<string>('')
-  const [newGroupName, setNewGroupName] = useState('')
-  const [editingGroup, setEditingGroup] = useState<BrowserGroupWithCount | null>(null)
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; group: BrowserGroupWithCount } | null>(null)
-
-  const tree = useMemo(() => buildTree(groups), [groups])
-
-  const toggleExpand = (groupId: string) => {
-    setExpanded(prev => {
-      const next = new Set(prev)
-      if (next.has(groupId)) {
-        next.delete(groupId)
+export function GroupTreeNav({ groups, selectedGroupId, totalCount, ungroupedCount, error, ready, onSelect, onChanged }: Props) {
+  const location = useLocation()
+  const [collapsed, setCollapsed] = useState(() => new URLSearchParams(location.search).get('groups') !== 'open' && localStorage.getItem('browser:groupTreeCollapsed') === 'true')
+  useEffect(() => { if (new URLSearchParams(location.search).get('groups') === 'open') setCollapsed(false) }, [location.search])
+  const [folded, setFolded] = useState<Set<string>>(new Set())
+  const [editor, setEditor] = useState<Editor | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [formError, setFormError] = useState('')
+  const toggleCollapsed = () => setCollapsed(value => { localStorage.setItem('browser:groupTreeCollapsed', String(!value)); return !value })
+  const openEditor = (next: Editor) => { setFormError(''); setEditor(next) }
+  const closeEditor = () => { if (!saving) setEditor(null) }
+  const save = async () => {
+    if (!editor || saving) return
+    setSaving(true); setFormError('')
+    try {
+      if (editor.mode === 'delete') {
+        await deleteGroup(editor.group!.groupId)
+        if (selectedGroupId === editor.group!.groupId) onSelect('')
       } else {
-        next.add(groupId)
+        const input = { groupName: editor.name.trim(), parentId: editor.parentId, sortOrder: editor.group?.sortOrder || 0 }
+        if (editor.mode === 'create') await createGroup(input)
+        else await updateGroup(editor.group!.groupId, input)
       }
-      return next
-    })
+      setEditor(null)
+      try { await onChanged() } catch (cause) { toast.error(`分组已保存，刷新失败：${errorMessage(cause, '请点击刷新重试')}`) }
+    } catch (cause) { setFormError(errorMessage(cause, '分组操作失败')) }
+    finally { setSaving(false) }
   }
-
-  const handleCreate = async () => {
-    if (!newGroupName.trim()) return
-    const input: BrowserGroupInput = {
-      groupName: newGroupName.trim(),
-      parentId: createParentId,
-      sortOrder: 0,
-    }
-    await createGroup(input)
-    setShowCreateModal(false)
-    setNewGroupName('')
-    setCreateParentId('')
-    onRefresh()
-  }
-
-  const handleRename = async () => {
-    if (!editingGroup || !newGroupName.trim()) return
-    const input: BrowserGroupInput = {
-      groupName: newGroupName.trim(),
-      parentId: editingGroup.parentId,
-      sortOrder: editingGroup.sortOrder,
-    }
-    await updateGroup(editingGroup.groupId, input)
-    setEditingGroup(null)
-    setNewGroupName('')
-    onRefresh()
-  }
-
-  const handleDelete = async (groupId: string) => {
-    if (!confirm('确定删除此分组？子分组和实例将移动到父分组。')) return
-    await deleteGroup(groupId)
-    if (selectedGroupId === groupId) {
-      onSelectGroup(null)
-    }
-    onRefresh()
-  }
-
-  const handleContextMenu = (e: React.MouseEvent, group: BrowserGroupWithCount) => {
-    e.preventDefault()
-    setContextMenu({ x: e.clientX, y: e.clientY, group })
-  }
-
-  const renderNode = (node: TreeNode) => {
-    const isExpanded = expanded.has(node.groupId)
-    const isSelected = selectedGroupId === node.groupId
-    const hasChildren = node.children.length > 0
-
-    return (
-      <div key={node.groupId}>
-        <div
-          className={`flex items-center gap-2 px-3 py-1.5 cursor-pointer rounded hover:bg-gray-100 dark:hover:bg-gray-700 ${
-            isSelected ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400' : ''
-          }`}
-          style={{ paddingLeft: `${node.level * 16 + 12}px` }}
-          onClick={() => onSelectGroup(node.groupId)}
-          onContextMenu={(e) => handleContextMenu(e, node)}
-        >
-          {hasChildren ? (
-            <button
-              className="p-0 hover:bg-gray-200 dark:hover:bg-gray-600 rounded shrink-0"
-              onClick={(e) => { e.stopPropagation(); toggleExpand(node.groupId) }}
-            >
-              {isExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
-            </button>
-          ) : null}
-          {isExpanded && hasChildren ? (
-            <FolderOpen className="w-4 h-4 text-yellow-500 shrink-0" />
-          ) : (
-            <Folder className="w-4 h-4 text-yellow-500 shrink-0" />
-          )}
-          <span className="flex-1 truncate text-sm">{node.groupName}</span>
-          <span className="text-xs text-gray-400">{node.instanceCount}</span>
-        </div>
-        {isExpanded && node.children.map(child => renderNode(child))}
-      </div>
-    )
-  }
-
-  return (
-    <div className="w-48 border-r border-gray-200 dark:border-gray-700 flex flex-col h-full">
-      <div className="p-2 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
-        <span className="text-sm font-medium">分组</span>
-        <button
-          className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
-          onClick={() => { setCreateParentId(''); setShowCreateModal(true) }}
-          title="新建分组"
-        >
-          <Plus className="w-4 h-4" />
+  const rowClass = (id: string) => `flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm transition-colors ${selectedGroupId === id ? 'bg-[var(--color-accent)]/10 text-[var(--color-accent)]' : 'hover:bg-[var(--color-bg-muted)]'}`
+  const renderBranch = (group: BrowserGroupWithCount, ancestors: Set<string>): React.ReactNode => {
+    if (ancestors.has(group.groupId)) return null
+    const path = new Set([...ancestors, group.groupId])
+    const children = groups.filter(item => item.parentId === group.groupId)
+    return <div key={group.groupId}>
+      <div className="group flex items-center gap-0.5" style={{ paddingLeft: ancestors.size * 12 }}>
+        {children.length ? <button type="button" className="p-1" aria-label={`${folded.has(group.groupId) ? '展开' : '收起'}子分组：${group.groupName}`} aria-expanded={!folded.has(group.groupId)}
+          onClick={() => setFolded(previous => { const next = new Set(previous); if (next.has(group.groupId)) next.delete(group.groupId); else next.add(group.groupId); return next })}>
+          {folded.has(group.groupId) ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
+        </button> : <span className="w-[22px] shrink-0" />}
+        <button type="button" className={`${rowClass(group.groupId)} min-w-0 flex-1`} title={groupPath(group.groupId, groups)} aria-current={selectedGroupId === group.groupId ? 'true' : undefined} onClick={() => onSelect(group.groupId)}>
+          <Folder size={14} className="shrink-0" /><span className="truncate">{group.groupName}</span><span className="ml-auto text-xs tabular-nums">{group.instanceCount}</span>
         </button>
+        <div className="flex shrink-0">
+          <button type="button" title={`新建子分组：${group.groupName}`} aria-label={`新建子分组：${group.groupName}`} className="rounded p-1 hover:bg-[var(--color-bg-muted)]" disabled={!ready || !!error} onClick={() => openEditor({ mode: 'create', name: '', parentId: group.groupId })}><Plus size={13} /></button>
+          <button type="button" title={`重命名或移动：${group.groupName}`} aria-label={`重命名分组：${group.groupName}`} className="rounded p-1 hover:bg-[var(--color-bg-muted)]" disabled={!ready || !!error} onClick={() => openEditor({ mode: 'edit', group, name: group.groupName, parentId: group.parentId })}><Pencil size={13} /></button>
+          <button type="button" title={`删除分组：${group.groupName}`} aria-label={`删除分组：${group.groupName}`} className="rounded p-1 hover:bg-[var(--color-bg-muted)] hover:text-[var(--color-error)]" disabled={!ready || !!error} onClick={() => openEditor({ mode: 'delete', group, name: group.groupName, parentId: group.parentId })}><Trash2 size={13} /></button>
+        </div>
       </div>
-
-      <div className="flex-1 overflow-y-auto py-1">
-        {/* 全部 */}
-        <div
-          className={`flex items-center gap-2 px-3 py-1.5 cursor-pointer rounded mx-1 hover:bg-gray-100 dark:hover:bg-gray-700 ${
-            selectedGroupId === null ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400' : ''
-          }`}
-          onClick={() => onSelectGroup(null)}
-        >
-          <Folder className="w-4 h-4 text-gray-400" />
-          <span className="flex-1 text-sm">全部</span>
-        </div>
-
-        {/* 未分组 */}
-        <div
-          className={`flex items-center gap-2 px-3 py-1.5 cursor-pointer rounded mx-1 hover:bg-gray-100 dark:hover:bg-gray-700 ${
-            selectedGroupId === '__ungrouped__' ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400' : ''
-          }`}
-          onClick={() => onSelectGroup('__ungrouped__')}
-        >
-          <FolderInput className="w-4 h-4 text-gray-400" />
-          <span className="flex-1 text-sm">未分组</span>
-        </div>
-
-        {/* 分组树 */}
-        {tree.length > 0 && (
-          <div className="mt-2 mx-1">
-            <div className="px-2 py-1 text-xs font-medium text-gray-400 uppercase tracking-wider">我的分组</div>
-            {tree.map(node => renderNode(node))}
-          </div>
-        )}
-      </div>
-
-      {/* 创建分组弹窗 */}
-      {showCreateModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowCreateModal(false)}>
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-4 w-80" onClick={e => e.stopPropagation()}>
-            <h3 className="text-lg font-medium mb-3">新建分组</h3>
-            <input
-              type="text"
-              className="w-full px-3 py-2 border rounded dark:bg-gray-700 dark:border-gray-600"
-              placeholder="分组名称"
-              value={newGroupName}
-              onChange={e => setNewGroupName(e.target.value)}
-              autoFocus
-            />
-            {groups.length > 0 && (
-              <select
-                className="w-full mt-2 px-3 py-2 border rounded dark:bg-gray-700 dark:border-gray-600"
-                value={createParentId}
-                onChange={e => setCreateParentId(e.target.value)}
-              >
-                <option value="">根级分组</option>
-                {groups.map(g => (
-                  <option key={g.groupId} value={g.groupId}>{g.groupName}</option>
-                ))}
-              </select>
-            )}
-            <div className="flex justify-end gap-2 mt-4">
-              <button className="px-3 py-1.5 text-sm rounded hover:bg-gray-100 dark:hover:bg-gray-700" onClick={() => setShowCreateModal(false)}>
-                取消
-              </button>
-              <button className="px-3 py-1.5 text-sm bg-blue-500 text-white rounded hover:bg-blue-600" onClick={handleCreate}>
-                创建
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 重命名弹窗 */}
-      {editingGroup && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setEditingGroup(null)}>
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-4 w-80" onClick={e => e.stopPropagation()}>
-            <h3 className="text-lg font-medium mb-3">重命名分组</h3>
-            <input
-              type="text"
-              className="w-full px-3 py-2 border rounded dark:bg-gray-700 dark:border-gray-600"
-              placeholder="分组名称"
-              value={newGroupName}
-              onChange={e => setNewGroupName(e.target.value)}
-              autoFocus
-            />
-            <div className="flex justify-end gap-2 mt-4">
-              <button className="px-3 py-1.5 text-sm rounded hover:bg-gray-100 dark:hover:bg-gray-700" onClick={() => setEditingGroup(null)}>
-                取消
-              </button>
-              <button className="px-3 py-1.5 text-sm bg-blue-500 text-white rounded hover:bg-blue-600" onClick={handleRename}>
-                保存
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 右键菜单 */}
-      {contextMenu && (
-        <div
-          className="fixed bg-white dark:bg-gray-800 border dark:border-gray-700 rounded shadow-lg py-1 z-50"
-          style={{ left: contextMenu.x, top: contextMenu.y }}
-          onClick={() => setContextMenu(null)}
-        >
-          <button
-            className="w-full px-4 py-1.5 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
-            onClick={() => { setCreateParentId(contextMenu.group.groupId); setShowCreateModal(true) }}
-          >
-            <Plus className="w-4 h-4" /> 新建子分组
-          </button>
-          <button
-            className="w-full px-4 py-1.5 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
-            onClick={() => { setNewGroupName(contextMenu.group.groupName); setEditingGroup(contextMenu.group) }}
-          >
-            <Pencil className="w-4 h-4" /> 重命名
-          </button>
-          <button
-            className="w-full px-4 py-1.5 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 text-red-500"
-            onClick={() => handleDelete(contextMenu.group.groupId)}
-          >
-            <Trash2 className="w-4 h-4" /> 删除
-          </button>
-        </div>
-      )}
-
-      {/* 点击其他地方关闭右键菜单 */}
-      {contextMenu && (
-        <div className="fixed inset-0 z-40" onClick={() => setContextMenu(null)} />
-      )}
+      {!folded.has(group.groupId) && children.map(child => renderBranch(child, path))}
     </div>
-  )
+  }
+  const forbiddenParents = editor?.group ? descendantGroupIds(editor.group.groupId, groups) : new Set<string>()
+  return <>
+    <aside aria-label="实例分组" className={`shrink-0 rounded-lg border border-[var(--color-border-default)] bg-[var(--color-bg-surface)] p-2 ${collapsed ? 'lg:w-12' : 'w-full lg:w-72'}`}>
+      <div className="flex items-center gap-2 px-1 py-1">
+        {!collapsed && <span className="flex-1 text-sm font-semibold">实例分组</span>}
+        {!collapsed && <button type="button" title="新建分组" aria-label="新建分组" className="rounded p-1.5 hover:bg-[var(--color-bg-muted)]" disabled={!ready || !!error} onClick={() => openEditor({ mode: 'create', name: '', parentId: '' })}><FolderPlus size={16} /></button>}
+        <button type="button" title={collapsed ? '展开实例分组' : '收起实例分组'} aria-label={collapsed ? '展开实例分组' : '收起实例分组'} onClick={toggleCollapsed} className="rounded p-1.5 hover:bg-[var(--color-bg-muted)]">{collapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}</button>
+      </div>
+      {!collapsed && <div className="mt-2 max-h-[65vh] overflow-auto">
+        <button type="button" className={rowClass('')} onClick={() => onSelect('')}><span>全部实例</span><span className="ml-auto text-xs tabular-nums">{totalCount}</span></button>
+        <button type="button" className={rowClass('__ungrouped__')} onClick={() => onSelect('__ungrouped__')}><span>未分组</span><span className="ml-auto text-xs tabular-nums">{ungroupedCount}</span></button>
+        <div className="my-2 border-t border-[var(--color-border-default)]" />
+        {error ? <p role="alert" className="p-2 text-sm text-[var(--color-error)]">{error}</p> : !ready ? <p className="p-2 text-sm text-[var(--color-text-muted)]">正在加载分组…</p> : groups.length === 0 ? <p className="p-2 text-sm text-[var(--color-text-muted)]">点击上方按钮新建分组。</p> : groups.filter(group => !group.parentId || !groups.some(parent => parent.groupId === group.parentId)).map(group => renderBranch(group, new Set()))}
+      </div>}
+    </aside>
+    <Modal open={!!editor} onClose={closeEditor} closable={!saving} title={editor?.mode === 'delete' ? '删除实例分组' : editor?.mode === 'edit' ? '重命名或移动分组' : '新建实例分组'}
+      footer={<><Button variant="secondary" disabled={saving} onClick={closeEditor}>取消</Button><Button variant={editor?.mode === 'delete' ? 'danger' : 'primary'} loading={saving} disabled={!editor || (editor.mode !== 'delete' && !editor.name.trim())} onClick={() => { void save() }}>{editor?.mode === 'delete' ? '删除分组' : '保存分组'}</Button></>}>
+      {editor?.mode === 'delete' ? <p className="text-sm leading-6">删除“{editor.name}”后，实例及其其他分组归属会保留；直接子分组提升一级。同级重名时需要先重命名冲突分组。</p> : <div className="space-y-4">
+        <FormItem label="分组名称"><Input aria-label="分组名称" autoFocus value={editor?.name || ''} onChange={event => setEditor(value => value && { ...value, name: event.target.value })} onKeyDown={event => { if (event.key === 'Enter' && editor?.name.trim()) void save() }} disabled={saving} /></FormItem>
+        <FormItem label="父分组"><Select aria-label="父分组" value={editor?.parentId || ''} disabled={saving} onChange={event => setEditor(value => value && { ...value, parentId: event.target.value })} options={[{ value: '', label: '无（根分组）' }, ...groups.filter(group => !forbiddenParents.has(group.groupId)).map(group => ({ value: group.groupId, label: groupPath(group.groupId, groups) }))]} /></FormItem>
+      </div>}
+      {formError && <p role="alert" className="mt-3 text-sm text-[var(--color-error)]">{formError}</p>}
+    </Modal>
+  </>
 }

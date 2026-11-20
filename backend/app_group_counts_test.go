@@ -13,7 +13,7 @@ func TestListGroupsCountsPersistedActiveProfiles(t *testing.T) {
 	// Preload stale manager data, then move one row directly, as group actions
 	// currently do. Counts must come from persisted data rather than that cache.
 	app.browserMgr.InitData()
-	if _, err := db.GetConn().Exec(`UPDATE browser_profiles SET group_id='perf-group-20' WHERE profile_id='perf-profile-00000'`); err != nil {
+	if _, err := db.GetConn().Exec(`UPDATE browser_profile_groups SET group_id='perf-group-20' WHERE profile_id='perf-profile-00000'`); err != nil {
 		t.Fatal(err)
 	}
 	groups := app.ListGroups()
@@ -38,7 +38,7 @@ func TestListGroupsSupportsDAOWithoutAggregateCapability(t *testing.T) {
 	fallback := &groupCountFallbackDAO{
 		ProfileDAO: app.browserMgr.ProfileDAO,
 		profiles: []*browser.Profile{
-			{GroupId: "perf-group-02"}, {GroupId: "perf-group-02"}, {GroupId: ""},
+			{ProfileId: "first", GroupId: "perf-group-02"}, {ProfileId: "second", GroupId: "perf-group-02"}, {ProfileId: "third", GroupId: ""},
 		},
 	}
 	app.browserMgr.ProfileDAO = fallback

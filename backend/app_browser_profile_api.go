@@ -30,11 +30,11 @@ func (a *App) BrowserProfileList() []BrowserProfile {
 }
 
 // BrowserProfileListByTag 按标签筛选实例列表
-func (a *App) BrowserProfileListByTag(tag string) []BrowserProfile {
+func (a *App) BrowserProfileListByTag(tag string) ([]BrowserProfile, error) {
 	if a == nil || a.browserMgr == nil {
-		return []BrowserProfile{}
+		return []BrowserProfile{}, nil
 	}
-	return a.browserMgr.ListByTag(tag)
+	return a.browserMgr.ListByGroupName(tag)
 }
 
 // BrowserGetAllTags 获取所有已使用的标签
@@ -204,6 +204,7 @@ func (a *App) migrateToSQLite() error {
 					ProxyBindUpdatedAt: pc.ProxyBindUpdatedAt,
 					LaunchArgs:         pc.LaunchArgs,
 					Tags:               pc.Tags,
+					GroupIds:           browser.CloneGroupIDs(pc.GroupIds),
 					Keywords:           pc.Keywords,
 					CreatedAt:          pc.CreatedAt,
 					UpdatedAt:          pc.UpdatedAt,

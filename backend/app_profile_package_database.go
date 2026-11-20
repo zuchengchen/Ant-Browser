@@ -18,7 +18,7 @@ const (
 	profilePackageVersion         = 2
 	profilePackageDatabasePath    = "database.json"
 	profilePackageDatabaseFormat  = "ant-chrome-profile-database"
-	profilePackageDatabaseVersion = 1
+	profilePackageDatabaseVersion = 2
 )
 
 // ProfilePackageDatabase 保存实例及其数据库关联数据，不包含运行时 launch code。
@@ -135,10 +135,13 @@ func (a *App) collectProfilePackageDatabase(profiles []browser.Profile) (Profile
 	seenCores := map[string]struct{}{}
 	seenProxies := map[string]struct{}{}
 	for _, profile := range snapshot.Profiles {
-		if id := strings.TrimSpace(profile.GroupId); id != "" {
-			key := backupImportIDKey(id)
-			if _, exists := seenGroups[key]; !exists {
-				seenGroups[key] = struct{}{}
+		ids := profile.GroupIds
+		if ids == nil && profile.GroupId != "" {
+			ids = []string{profile.GroupId}
+		}
+		for _, id := range ids {
+			if _, exists := seenGroups[id]; !exists {
+				seenGroups[id] = struct{}{}
 				groupIDs = append(groupIDs, id)
 			}
 		}
@@ -356,7 +359,7 @@ func resolveProfilePackagePath(a *App, value string) string {
 func queryProfilePackageGroups(conn *sql.DB, groupIDs []string) ([]ProfilePackageDatabaseGroup, []string, error) {
 	result := make([]ProfilePackageDatabaseGroup, 0)
 	warnings := make([]string, 0)
-	seen := make(map[string]struct{}, len(groupIDs))
+	seen := make(map[string]string, len(groupIDs))
 	pending := append([]string{}, groupIDs...)
 	for index := 0; index < len(pending); index++ {
 		groupID := strings.TrimSpace(pending[index])
@@ -364,10 +367,13 @@ func queryProfilePackageGroups(conn *sql.DB, groupIDs []string) ([]ProfilePackag
 		if key == "" {
 			continue
 		}
-		if _, exists := seen[key]; exists {
+		if original, exists := seen[key]; exists {
+			if original != groupID {
+				return nil, nil, fmt.Errorf("分组 ID 仅大小写不同，无法安全导出，请先处理冲突")
+			}
 			continue
 		}
-		seen[key] = struct{}{}
+		seen[key] = groupID
 		var group ProfilePackageDatabaseGroup
 		err := conn.QueryRow(`
 			SELECT group_id, group_name, COALESCE(parent_id, ''), sort_order, created_at, updated_at
@@ -375,8 +381,7 @@ func queryProfilePackageGroups(conn *sql.DB, groupIDs []string) ([]ProfilePackag
 			&group.GroupId, &group.GroupName, &group.ParentId, &group.SortOrder, &group.CreatedAt, &group.UpdatedAt,
 		)
 		if errors.Is(err, sql.ErrNoRows) {
-			warnings = append(warnings, fmt.Sprintf("实例关联的分组「%s」不存在，未导出该分组", groupID))
-			continue
+			return nil, nil, fmt.Errorf("实例分组或祖先不存在，无法无损导出")
 		}
 		if err != nil {
 			return nil, nil, fmt.Errorf("读取分组失败(%s): %w", groupID, err)
@@ -634,7 +639,7 @@ func queryProfilePackageExtensionRuntime(conn *sql.DB, profileID string) ([]brow
 }
 
 func (a *App) restoreProfilePackageDatabase(snapshot ProfilePackageDatabase, prepared []preparedProfilePackageImport, warnings *[]string) error {
-	if snapshot.Format != profilePackageDatabaseFormat || snapshot.Version != profilePackageDatabaseVersion {
+	if snapshot.Format != profilePackageDatabaseFormat || (snapshot.Version != 1 && snapshot.Version != profilePackageDatabaseVersion) {
 		return fmt.Errorf("不支持的实例数据库快照格式")
 	}
 	if a == nil || a.db == nil || a.db.GetConn() == nil {
@@ -664,6 +669,9 @@ func (a *App) restoreProfilePackageDatabase(snapshot ProfilePackageDatabase, pre
 		if !strings.EqualFold(oldID, strings.TrimSpace(snapshot.Profiles[index].ProfileId)) {
 			return fmt.Errorf("实例数据库快照与实例配置顺序不一致")
 		}
+		if _, exists := profileMappings[backupImportIDKey(oldID)]; exists {
+			return fmt.Errorf("实例包包含歧义实例 ID")
+		}
 		profileMappings[backupImportIDKey(oldID)] = item.Profile.ProfileId
 	}
 	if err := softDeleteProfilePackageOverwriteTargets(tx, prepared, time.Now().Format(time.RFC3339)); err != nil {
@@ -691,15 +699,29 @@ func (a *App) restoreProfilePackageDatabase(snapshot ProfilePackageDatabase, pre
 		return err
 	}
 
+	sourceGroupIDs := make(map[string]bool, len(snapshot.Groups))
+	for _, group := range snapshot.Groups {
+		sourceGroupIDs[group.GroupId] = true
+	}
 	for index := range prepared {
 		profile := &prepared[index].Profile
-		if originalGroupID := strings.TrimSpace(profile.GroupId); originalGroupID != "" {
-			if mapped := groupMappings[backupImportIDKey(originalGroupID)]; mapped != "" {
-				profile.GroupId = mapped
-			} else {
-				appendProfilePackageWarning(warnings, fmt.Sprintf("实例「%s」的分组未找到，已清空分组", profile.ProfileName))
-				profile.GroupId = ""
+		if profile.GroupIds != nil {
+			mappedIDs := make([]string, 0, len(profile.GroupIds))
+			for _, id := range profile.GroupIds {
+				mapped := groupMappings[backupImportIDKey(id)]
+				if !sourceGroupIDs[id] || mapped == "" {
+					return fmt.Errorf("实例包缺少分组引用，导入已取消")
+				}
+				mappedIDs = append(mappedIDs, mapped)
 			}
+			profile.GroupIds = mappedIDs
+			profile.GroupId = groupMappings[backupImportIDKey(profile.GroupId)]
+		} else if original := strings.TrimSpace(profile.GroupId); original != "" {
+			mapped := groupMappings[backupImportIDKey(original)]
+			if !sourceGroupIDs[original] || mapped == "" {
+				return fmt.Errorf("旧实例包缺少分组引用，无法无损导入")
+			}
+			profile.GroupId = mapped
 		}
 		if originalCoreID := strings.TrimSpace(profile.CoreId); originalCoreID != "" {
 			if mapped := coreMappings[backupImportIDKey(originalCoreID)]; mapped != "" {
@@ -740,7 +762,7 @@ func (a *App) restoreProfilePackageDatabase(snapshot ProfilePackageDatabase, pre
 				appendProfilePackageWarning(warnings, fmt.Sprintf("实例「%s」的代理记录未随实例包导入，已保留原代理绑定（proxyId=%s），启动前请确认代理可用", profile.ProfileName, originalProxyID))
 			}
 		}
-		if err := insertProfilePackageProfile(tx, *profile); err != nil {
+		if err := insertProfilePackageProfile(tx, profile); err != nil {
 			return err
 		}
 	}
@@ -838,8 +860,8 @@ func (a *App) restoreLegacyProfilePackageDatabase(prepared []preparedProfilePack
 		return err
 	}
 
-	for _, item := range prepared {
-		if err := insertProfilePackageProfile(tx, item.Profile); err != nil {
+	for i := range prepared {
+		if err := insertProfilePackageProfile(tx, &prepared[i].Profile); err != nil {
 			return err
 		}
 	}
@@ -926,6 +948,10 @@ func (a *App) restoreProfilePackageGroups(tx *sql.Tx, source []ProfilePackageDat
 		if key == "" {
 			continue
 		}
+		if _, exists := targetByID[key]; exists {
+			rows.Close()
+			return nil, fmt.Errorf("本地存在歧义分组 ID，导入已取消")
+		}
 		targetByID[key] = item
 		usedIDs[key] = struct{}{}
 		targetByName[profilePackageGroupNameKey(item.ParentID, item.Name)] = item.ID
@@ -934,9 +960,19 @@ func (a *App) restoreProfilePackageGroups(tx *sql.Tx, source []ProfilePackageDat
 		return nil, err
 	}
 
+	catalog := make([]backupImportGroupRecord, 0, len(source))
+	for _, item := range source {
+		catalog = append(catalog, backupImportGroupRecord{ID: item.GroupId, Name: item.GroupName, ParentID: item.ParentId})
+	}
+	if err := validateImportedGroupCatalog(catalog, "实例包"); err != nil {
+		return nil, err
+	}
 	sourceByID := make(map[string]ProfilePackageDatabaseGroup, len(source))
 	for _, item := range source {
 		if key := backupImportIDKey(item.GroupId); key != "" {
+			if _, exists := sourceByID[key]; exists {
+				return nil, fmt.Errorf("实例包包含重复分组 ID")
+			}
 			sourceByID[key] = item
 		}
 	}
@@ -952,9 +988,7 @@ func (a *App) restoreProfilePackageGroups(tx *sql.Tx, source []ProfilePackageDat
 			return mapped, nil
 		}
 		if states[key] == 1 {
-			appendProfilePackageWarning(warnings, fmt.Sprintf("分组「%s」存在循环父级，已断开父级关系", sourceID))
-			mappings[key] = ""
-			return "", nil
+			return "", fmt.Errorf("实例包分组层级存在循环，导入已取消")
 		}
 		row, exists := sourceByID[key]
 		if !exists {
@@ -975,14 +1009,17 @@ func (a *App) restoreProfilePackageGroups(tx *sql.Tx, source []ProfilePackageDat
 					return "", err
 				}
 				parentResolved = parentTargetID != ""
-			} else if target, targetExists := targetByID[backupImportIDKey(parentSourceID)]; targetExists {
-				parentTargetID = target.ID
-				parentResolved = true
 			}
 		}
 
-		nameKey := strings.TrimSpace(row.GroupName)
-		if existing, targetExists := targetByID[key]; targetExists && strings.EqualFold(strings.TrimSpace(existing.Name), nameKey) && strings.EqualFold(strings.TrimSpace(existing.ParentID), strings.TrimSpace(parentTargetID)) {
+		if !parentResolved {
+			return "", fmt.Errorf("实例包缺少父分组，无法无损导入")
+		}
+		nameKey := row.GroupName
+		if strings.TrimSpace(nameKey) == "" {
+			return "", fmt.Errorf("实例包包含空分组名称")
+		}
+		if existing, targetExists := targetByID[key]; targetExists && existing.Name == row.GroupName && strings.EqualFold(strings.TrimSpace(existing.ParentID), strings.TrimSpace(parentTargetID)) {
 			mappings[key] = existing.ID
 			states[key] = 2
 			return existing.ID, nil
@@ -994,7 +1031,7 @@ func (a *App) restoreProfilePackageGroups(tx *sql.Tx, source []ProfilePackageDat
 				return existingID, nil
 			}
 		} else if parentSourceID != "" {
-			appendProfilePackageWarning(warnings, fmt.Sprintf("分组「%s」的父分组不存在，已导入为根分组", row.GroupName))
+			return "", fmt.Errorf("实例包缺少父分组，无法无损导入")
 		}
 
 		targetID := strings.TrimSpace(row.GroupId)
@@ -1032,7 +1069,7 @@ func (a *App) restoreProfilePackageGroups(tx *sql.Tx, source []ProfilePackageDat
 }
 
 func profilePackageGroupNameKey(parentID, name string) string {
-	return strings.ToLower(strings.TrimSpace(parentID)) + "\x00" + strings.ToLower(strings.TrimSpace(name))
+	return strings.TrimSpace(parentID) + "\x00" + name
 }
 
 type profilePackageTargetCore struct {
@@ -1393,7 +1430,7 @@ func restoreProfilePackageExtensions(tx *sql.Tx, source []browser.Extension, war
 	return mappings, nil
 }
 
-func insertProfilePackageProfile(tx *sql.Tx, profile browser.Profile) error {
+func insertProfilePackageProfile(tx *sql.Tx, profile *browser.Profile) error {
 	fingerprintArgs, err := json.Marshal(profile.FingerprintArgs)
 	if err != nil {
 		return fmt.Errorf("序列化实例指纹参数失败: %w", err)
@@ -1454,7 +1491,7 @@ func insertProfilePackageProfile(tx *sql.Tx, profile browser.Profile) error {
 	if err != nil {
 		return fmt.Errorf("恢复实例配置失败(%s): %w", profile.ProfileName, err)
 	}
-	return nil
+	return browser.PersistLegacyImportedProfileGroups(tx, profile)
 }
 
 func profilePackageBoolToInt(value bool) int {

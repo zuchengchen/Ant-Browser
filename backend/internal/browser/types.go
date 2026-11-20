@@ -30,7 +30,8 @@ type Profile struct {
 	LastLaunchArgs     []string `json:"lastLaunchArgs"`
 	Tags               []string `json:"tags"`
 	Keywords           []string `json:"keywords"`
-	GroupId            string   `json:"groupId"` // 所属分组ID
+	GroupId            string   `json:"groupId"`  // 所属分组ID
+	GroupIds           []string `json:"groupIds"` // 唯一分类来源；groupId/tags 为兼容投影
 	LaunchCode         string   `json:"launchCode"`
 	WindowMarkerCode   string   `json:"windowMarkerCode,omitempty"`
 	Running            bool     `json:"running"`
@@ -61,7 +62,8 @@ type ProfileInput struct {
 	LaunchArgs         []string `json:"launchArgs"`
 	Tags               []string `json:"tags"`
 	Keywords           []string `json:"keywords"`
-	GroupId            string   `json:"groupId"` // 所属分组ID
+	GroupId            string   `json:"groupId"`  // 所属分组ID
+	GroupIds           []string `json:"groupIds"` // nil: 兼容追加；非 nil: 明确设置全部归属
 }
 
 // ProfileCopyOptions 复制实例时的附加选项。

@@ -13,6 +13,9 @@ interface BatchToolbarProps {
   onBatchStop: () => void
   onBatchExport: () => void
   onBatchDelete: () => void
+  onBatchAddGroups: () => void
+  onBatchRemoveGroups: () => void
+  groupsDisabled?: boolean
   batchLoading: boolean
   exporting?: boolean
 }
@@ -26,6 +29,9 @@ export function BatchToolbar({
   onBatchStop,
   onBatchExport,
   onBatchDelete,
+  onBatchAddGroups,
+  onBatchRemoveGroups,
+  groupsDisabled = false,
   batchLoading,
   exporting = false,
 }: BatchToolbarProps) {
@@ -34,9 +40,11 @@ export function BatchToolbar({
   return (
     <div className="flex items-center gap-3 px-4 py-2.5 bg-[var(--color-accent)]/10 border border-[var(--color-accent)]/20 rounded-lg">
       <span className="text-sm font-medium text-[var(--color-accent)]">已选 {selectedCount} / {totalCount}</span>
-      <div className="flex gap-1.5 ml-auto">
+      <div className="flex flex-wrap gap-1.5 ml-auto">
         <Button size="sm" variant="ghost" onClick={onSelectAll}>全选</Button>
         <Button size="sm" variant="ghost" onClick={onDeselectAll}>取消</Button>
+        <Button size="sm" variant="secondary" disabled={groupsDisabled} onClick={onBatchAddGroups}>加入分组</Button>
+        <Button size="sm" variant="secondary" disabled={groupsDisabled} onClick={onBatchRemoveGroups}>移出分组</Button>
         <Button size="sm" onClick={onBatchStart} loading={batchLoading} title="批量启动">
           <Play className="w-3.5 h-3.5" />启动
         </Button>

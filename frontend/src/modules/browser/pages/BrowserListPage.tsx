@@ -1,7 +1,10 @@
-﻿import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { toast } from '../../../shared/components'
 import type { BrowserProfile, BrowserProfileCopyOptions, BrowserProfilePackageImportAction, BrowserProfilePackageImportPreview, BrowserProxy } from '../types'
 import { BrowserCoreEditorModal, BrowserListHeader, BrowserListSettingsModal } from '../components/BrowserListLayout'
+import { GroupTreeNav } from '../components/GroupTreeNav'
+import { InstanceGroupMembershipModal, type GroupMembershipRequest } from '../components/InstanceGroupMembershipModal'
+import { profileGroupIds } from '../utils/instanceGroups'
 import { BatchToolbar } from '../components/BrowserListWidgets'
 import { BrowserProfilesPanel } from '../components/BrowserProfilesPanel'
 import { ProxyPickerModal } from '../components/ProxyPickerModal'
@@ -34,15 +37,6 @@ import {
 const directProxyID = '__direct__'
 
 export function BrowserListPage() {
-  const {
-    viewMode,
-    setViewMode,
-    filters,
-    setFilters,
-    headerCollapsed,
-    setHeaderCollapsed,
-  } = useBrowserListViewState()
-
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [batchLoading, setBatchLoading] = useState(false)
   const [profilePackageBusy, setProfilePackageBusy] = useState(false)
@@ -137,6 +131,8 @@ export function BrowserListPage() {
     proxies,
     proxyVirtualGroups,
     groups,
+    groupsLoaded,
+    groupsError,
     startingIds,
     stoppingIds,
     setStartingIds,
@@ -148,8 +144,23 @@ export function BrowserListPage() {
     loadProfiles,
   } = useBrowserListData({ loadCores })
   const {
+    viewMode,
+    setViewMode,
+    filters,
+    setFilters,
+    headerCollapsed,
+    setHeaderCollapsed,
+  } = useBrowserListViewState(groups, groupsLoaded)
+
+  const [groupRequest, setGroupRequest] = useState<GroupMembershipRequest | null>(null)
+  useEffect(() => { setSelectedIds(new Set()) }, [filters])
+  const editProfileGroups = (profile: BrowserProfile) => {
+    if (!groupsLoaded || groupsError) { toast.error(groupsError || '实例分组尚未就绪'); return }
+    setGroupRequest({ mode: 'set', profileIds: [profile.profileId], groupIds: profileGroupIds(profile), label: profile.profileName })
+  }
+
+  const {
     runningCount,
-    allTags,
     filteredProfiles,
     resolveProfileCore,
     getProfileCoreLabel,
@@ -157,7 +168,7 @@ export function BrowserListPage() {
     isProfileStopping,
     isProfileBusy,
     getProfileStatus,
-  } = useBrowserListDerived(profiles, cores, filters, startingIds, stoppingIds)
+  } = useBrowserListDerived(profiles, cores, groups, filters, startingIds, stoppingIds)
   const {
     handleStart,
     handleStartDirect,
@@ -578,7 +589,7 @@ export function BrowserListPage() {
         launchArgs: profile.launchArgs,
         tags: profile.tags,
         keywords: profile.keywords || [],
-        groupId: profile.groupId || '',
+        groupIds: profileGroupIds(profile),
       })
       mergeProfileState(updated || { ...profile, proxyId: proxy.proxyId, proxyConfig: '' })
       toast.success('代理已切换')
@@ -606,7 +617,6 @@ export function BrowserListPage() {
         proxies={proxies}
         cores={cores}
         groups={groups}
-        allTags={allTags}
         filters={filters}
         onFiltersChange={setFilters}
         onToggleHeaderCollapsed={() => setHeaderCollapsed((prev) => !prev)}
@@ -618,6 +628,12 @@ export function BrowserListPage() {
         onViewModeChange={setViewMode}
       />
 
+      <div className="flex flex-col items-stretch gap-3 lg:flex-row lg:items-start">
+      <GroupTreeNav groups={groups} selectedGroupId={filters.groupId} totalCount={profiles.length}
+        ungroupedCount={profiles.filter(profile => profileGroupIds(profile).length === 0).length}
+        error={groupsError} ready={groupsLoaded} onSelect={groupId => setFilters(previous => ({ ...previous, groupId, groupIds: [] }))}
+        onChanged={() => loadProfiles()} />
+      <div className="min-w-0 flex-1 space-y-3">
       {/* 批量操作工具栏 */}
       <BatchToolbar
         selectedCount={selectedIds.size}
@@ -628,6 +644,9 @@ export function BrowserListPage() {
         onBatchStop={handleBatchStop}
         onBatchExport={handleBatchExport}
         onBatchDelete={openBatchDeleteConfirm}
+        onBatchAddGroups={() => setGroupRequest({ mode: 'add', profileIds: [...selectedIds], groupIds: [] })}
+        onBatchRemoveGroups={() => setGroupRequest({ mode: 'remove', profileIds: [...selectedIds], groupIds: [] })}
+        groupsDisabled={!groupsLoaded || !!groupsError}
         batchLoading={batchLoading}
         exporting={profilePackageBusy}
       />
@@ -636,6 +655,8 @@ export function BrowserListPage() {
         loading={loading}
         viewMode={viewMode}
         profiles={filteredProfiles}
+        groups={groups}
+        onEditGroups={editProfileGroups}
         proxies={proxies}
         virtualGroups={proxyVirtualGroups}
         selectedIds={selectedIds}
@@ -660,6 +681,10 @@ export function BrowserListPage() {
         onOpenProxyPicker={setProxyPickerProfile}
         onDelete={openDeleteConfirm}
       />
+
+      </div>
+      </div>
+      <InstanceGroupMembershipModal request={groupRequest} groups={groups} onClose={() => setGroupRequest(null)} onSaved={() => loadProfiles()} />
 
       <ProxyPickerModal
         open={!!proxyPickerProfile}

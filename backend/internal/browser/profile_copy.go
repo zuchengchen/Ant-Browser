@@ -89,11 +89,13 @@ func (m *Manager) copyProfile(profileId string, newName string, dest *copyDestin
 	nowText := now.Format(time.RFC3339)
 	newId := uuid.NewString()
 	groupID := src.GroupId
+	groupIDs := CloneGroupIDs(src.GroupIds)
 	if dest != nil {
 		if m.Profiles[dest.id] != nil {
 			return nil, fmt.Errorf("目标实例已存在")
 		}
 		newId, groupID = dest.id, dest.group
+		groupIDs = uniqueGroupIDs([]string{groupID})
 	}
 
 	profileName := strings.TrimSpace(newName)
@@ -136,6 +138,7 @@ func (m *Manager) copyProfile(profileId string, newName string, dest *copyDestin
 		Tags:               append([]string{}, src.Tags...),
 		Keywords:           append([]string{}, src.Keywords...),
 		GroupId:            groupID,
+		GroupIds:           groupIDs,
 		Running:            false,
 		DebugPort:          0,
 		Pid:                0,

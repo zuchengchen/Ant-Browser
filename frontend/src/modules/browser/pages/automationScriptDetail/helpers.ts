@@ -377,7 +377,7 @@ export function formatTargetSelectorSummary(
     parts.push(`分组 ${selector.groupId.trim()}`);
   }
   if (selector.tags.length > 0) {
-    parts.push(`标签 ${selector.tags.join(" / ")}`);
+    parts.push(`旧分组名称 ${selector.tags.join(" / ")}`);
   }
   if (selector.keywords.length > 0) {
     parts.push(`关键字 ${selector.keywords.join(" / ")}`);

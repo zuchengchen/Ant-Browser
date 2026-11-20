@@ -1,17 +1,5 @@
-﻿import type { BrowserProfile } from '../types'
+import type { BrowserProfile } from '../types'
 
-export interface ProfileTagSection {
-  tag: string
-  items: BrowserProfile[]
-}
-
-export interface GroupFilterOption {
-  id: string
-  name: string
-  count: number
-}
-
-export const UNTAGGED_LABEL = '未打标签'
 export const GROUP_ALL = '__all__'
 export const GROUP_UNGROUPED = '__ungrouped__'
 
@@ -39,9 +27,4 @@ export function sortProfiles(a: BrowserProfile, b: BrowserProfile): number {
     return a.running ? -1 : 1
   }
   return a.profileName.localeCompare(b.profileName, 'zh-CN')
-}
-
-export function pickPrimaryTag(profile: BrowserProfile): string {
-  const tags = (profile.tags || []).map(t => t.trim()).filter(Boolean)
-  return tags.length > 0 ? tags[0] : UNTAGGED_LABEL
 }

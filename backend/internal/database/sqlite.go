@@ -18,6 +18,7 @@ type migration struct {
 	version int    // 版本号，单调递增，永不修改
 	desc    string // 描述，便于日志追踪
 	stmts   []string
+	run     func(*sql.Tx) error
 }
 
 // migrations 所有版本迁移，按 version 升序排列
@@ -398,6 +399,19 @@ var migrations = []migration{
 			)`,
 		},
 	},
+	{
+		version: 34,
+		desc:    "统一实例标签与多个分组归属",
+		stmts: []string{
+			`CREATE TABLE IF NOT EXISTS browser_profile_groups (
+				profile_id TEXT NOT NULL REFERENCES browser_profiles(profile_id) ON DELETE CASCADE,
+				group_id TEXT NOT NULL REFERENCES browser_groups(group_id) ON DELETE CASCADE,
+				PRIMARY KEY (profile_id, group_id)
+			)`,
+			`CREATE INDEX IF NOT EXISTS idx_browser_profile_groups_group ON browser_profile_groups(group_id, profile_id)`,
+		},
+		run: migrateInstanceGroups,
+	},
 	// ── 新版本在此追加，格式：
 	// {
 	//     version: 4,
@@ -466,11 +480,27 @@ func (db *DB) Migrate() error {
 	if err := row.Scan(&currentVersion); err != nil {
 		return fmt.Errorf("查询当前 schema 版本失败: %w", err)
 	}
+	if currentVersion >= 34 {
+		var structures int
+		if err := db.conn.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE
+			(type='table' AND name='browser_profile_groups') OR
+			(type='index' AND name='idx_browser_groups_sibling_name')`).Scan(&structures); err != nil {
+			return err
+		}
+		if structures != 2 {
+			return fmt.Errorf("实例分组结构与迁移版本不一致，已停止启动；请保留数据库并检查迁移前备份")
+		}
+	}
 
 	// 按版本顺序执行未执行的迁移
 	for _, m := range migrations {
 		if m.version <= currentVersion {
 			continue // 已执行，跳过
+		}
+		if m.version == 34 {
+			if err := db.backupBeforeInstanceGroups(); err != nil {
+				return err
+			}
 		}
 
 		// 每个版本在事务内执行，保证原子性
@@ -497,6 +527,11 @@ func (db *DB) applyMigration(m migration) error {
 				continue
 			}
 			return fmt.Errorf("执行语句失败 [%s]: %w", truncate(stmt, 60), err)
+		}
+	}
+	if m.run != nil {
+		if err := m.run(tx); err != nil {
+			return err
 		}
 	}
 

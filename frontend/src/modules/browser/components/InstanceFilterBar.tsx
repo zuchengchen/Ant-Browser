@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { ChevronDown, ChevronRight, Filter, X } from 'lucide-react'
 import { Input, Select } from '../../../shared/components'
-import { TagFilterBar } from './TagFilterBar'
+import { groupPath } from '../utils/instanceGroups'
 import type { BrowserCore, BrowserProxy, BrowserGroupWithCount } from '../types'
 
 export interface InstanceFilters {
@@ -9,7 +9,7 @@ export interface InstanceFilters {
   status: '' | 'running' | 'stopped'
   proxyId: string
   coreId: string
-  tags: Set<string>
+  groupIds: string[]
   kwSearch: string
   groupId: string   // '' = 全部, '__ungrouped__' = 未分组, 其他 = 具体分组ID
 }
@@ -19,13 +19,13 @@ export const EMPTY_FILTERS: InstanceFilters = {
   status: '',
   proxyId: '',
   coreId: '',
-  tags: new Set(),
+  groupIds: [],
   kwSearch: '',
   groupId: '',
 }
 
 export function isFiltersEmpty(f: InstanceFilters) {
-  return !f.keyword && !f.status && !f.proxyId && !f.coreId && f.tags.size === 0 && !f.kwSearch && !f.groupId
+  return !f.keyword && !f.status && !f.proxyId && !f.coreId && f.groupIds.length === 0 && !f.kwSearch && !f.groupId
 }
 
 interface Props {
@@ -33,11 +33,10 @@ interface Props {
   onChange: (f: InstanceFilters) => void
   proxies: BrowserProxy[]
   cores: BrowserCore[]
-  allTags: string[]
   groups: BrowserGroupWithCount[]
 }
 
-export function InstanceFilterBar({ filters, onChange, proxies, cores, allTags, groups }: Props) {
+export function InstanceFilterBar({ filters, onChange, proxies, cores, groups }: Props) {
   const [collapsed, setCollapsed] = useState(false)
 
   const set = <K extends keyof InstanceFilters>(key: K, value: InstanceFilters[K]) =>
@@ -45,7 +44,7 @@ export function InstanceFilterBar({ filters, onChange, proxies, cores, allTags, 
 
   const hasFilter = !isFiltersEmpty(filters)
   const searchValue = filters.keyword || filters.kwSearch
-  const activeCount = [searchValue, filters.status, filters.proxyId, filters.coreId, filters.groupId].filter(Boolean).length + filters.tags.size
+  const activeCount = [searchValue, filters.status, filters.proxyId, filters.coreId, filters.groupId].filter(Boolean).length + filters.groupIds.length
 
   return (
     <div className="space-y-1.5">
@@ -101,19 +100,9 @@ export function InstanceFilterBar({ filters, onChange, proxies, cores, allTags, 
               ]}
               style={{ width: '140px' }}
             />
-            <Select
-              value={filters.groupId}
-              onChange={e => set('groupId', e.target.value)}
-              options={[
-                { value: '', label: '全部分组' },
-                { value: '__ungrouped__', label: '未分组' },
-                ...groups.map(g => ({ value: g.groupId, label: g.groupName })),
-              ]}
-              style={{ width: '140px' }}
-            />
             {hasFilter && (
               <button
-                onClick={() => onChange({ ...EMPTY_FILTERS, tags: new Set() })}
+                onClick={() => onChange({ ...EMPTY_FILTERS, groupIds: [] })}
                 className="flex items-center gap-1 px-2 py-1 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-error)] hover:bg-[var(--color-bg-muted)] rounded transition-colors"
               >
                 <X className="w-3.5 h-3.5" />
@@ -121,11 +110,11 @@ export function InstanceFilterBar({ filters, onChange, proxies, cores, allTags, 
               </button>
             )}
           </div>
-          <TagFilterBar
-            tags={allTags}
-            selected={filters.tags}
-            onChange={tags => set('tags', tags)}
-          />
+          {(filters.groupId || filters.groupIds.length > 0) && <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--color-text-secondary)]" aria-label="当前分组筛选">
+            {filters.groupId && <span>分组：{filters.groupId === '__ungrouped__' ? '未分组' : groupPath(filters.groupId, groups)}</span>}
+            {filters.groupIds.length > 0 && <span>任一分组：{filters.groupIds.map(id => groups.some(group => group.groupId === id) ? groupPath(id, groups) : '待处理的旧分组条件').join('、')}</span>}
+            <button type="button" className="text-[var(--color-accent)] hover:underline" onClick={() => onChange({ ...filters, groupId: '', groupIds: [] })}>清除分组条件</button>
+          </div>}
         </>
       )}
     </div>

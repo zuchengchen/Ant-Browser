@@ -4,6 +4,7 @@ import (
 	"ant-chrome/backend/internal/config"
 	"database/sql"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -207,21 +208,53 @@ func restoreBackupImportDatabase(a *App, snapshotPath string) error {
 	if err != nil {
 		return backupImportError("读取当前数据库表失败", err)
 	}
+	// Memberships depend on both profiles and groups. Restore parents first;
+	// deleting in reverse order also avoids cascades and deferred-FK counters.
+	ordered := make([]string, 0, len(tables))
+	for _, table := range tables {
+		if table != "browser_profile_groups" {
+			ordered = append(ordered, table)
+		}
+	}
+	for _, table := range tables {
+		if table == "browser_profile_groups" {
+			ordered = append(ordered, table)
+		}
+	}
+	tables = ordered
 	for _, table := range tables {
 		exists, err := backupSQLiteTableExists(tx, "backup_restore", table)
 		if err != nil {
-			return errors.New("检查数据库回滚表失败(" + table + "): " + err.Error())
+			return err
 		}
 		if !exists {
-			return errors.New("回滚快照缺少数据表: " + table)
+			return fmt.Errorf("回滚快照缺少数据表: %s", table)
 		}
+	}
+	for index := len(tables) - 1; index >= 0; index-- {
+		table := tables[index]
+		if _, err := tx.Exec(`DELETE FROM main.` + backupQuoteSQLiteIdentifier(table)); err != nil {
+			return fmt.Errorf("清理数据库回滚表失败: %w", err)
+		}
+	}
+	for _, table := range tables {
 		quoted := backupQuoteSQLiteIdentifier(table)
-		if _, err := tx.Exec(`DELETE FROM main.` + quoted); err != nil {
-			return errors.New("清理数据库表失败(" + table + "): " + err.Error())
-		}
 		if _, err := tx.Exec(`INSERT INTO main.` + quoted + ` SELECT * FROM backup_restore.` + quoted); err != nil {
-			return errors.New("恢复数据库表失败(" + table + "): " + err.Error())
+			return fmt.Errorf("恢复数据库表失败(%s): %w", table, err)
 		}
+	}
+	rows, err := tx.Query(`PRAGMA foreign_key_check`)
+	if err != nil {
+		return err
+	}
+	hasViolation := rows.Next()
+	readErr := rows.Err()
+	rows.Close()
+	if readErr != nil {
+		return readErr
+	}
+	if hasViolation {
+		return errors.New("数据库回滚外键完整性检查失败")
 	}
 	if exists, err := backupSQLiteTableExists(tx, "main", "sqlite_sequence"); err != nil {
 		return backupImportError("检查 SQLite 序列表失败", err)

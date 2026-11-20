@@ -11,6 +11,7 @@ import (
 	"context"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -46,6 +47,7 @@ type App struct {
 	quitMu                      sync.RWMutex
 	runtimeMu                   sync.RWMutex
 	runtimeStopped              bool
+	startupReady                atomic.Bool
 	backgroundTaskCtx           context.Context
 	backgroundTaskCancel        context.CancelFunc
 	backgroundTasks             sync.WaitGroup

@@ -23,7 +23,7 @@ const make = (overrides = {}) => ({
   proxyId: 'proxy', proxyConfig: '', proxyGroupName: 'group', proxyBindSourceId: 'source',
   proxyBindSourceUrl: 'https://example.invalid/sub', proxyBindName: 'proxy name',
   proxyBindUpdatedAt: '2026-11-01T00:00:00Z', memoryLimitMb: 256, launchArgs: ['--one', '--two'],
-  lastLaunchArgs: ['--one'], tags: ['A', 'B'], keywords: ['词一', '词二'], groupId: 'group-1',
+  lastLaunchArgs: ['--one'], tags: ['A', 'B'], keywords: ['词一', '词二'], groupId: 'group-1', groupIds: ['group-1', 'group-2'],
   running: false, debugPort: 0, debugReady: false, pid: 0, runtimeWarning: '', lastError: '',
   createdAt: '2026-11-01T00:00:00Z', updatedAt: '2026-11-01T00:00:00Z', deletedAt: '',
   lastStartAt: '', lastStopAt: '', launchCode: 'CODE', windowMarkerCode: 'A', ...overrides,
@@ -78,7 +78,7 @@ test('runtime-only and code/proxy changes are visible even when IDs and updatedA
 
 test('ordered array edits and reorderings stay observable, including duplicates', () => {
   const previous = [make()]
-  for (const key of ['fingerprintArgs', 'launchArgs', 'lastLaunchArgs', 'tags', 'keywords']) {
+  for (const key of ['fingerprintArgs', 'launchArgs', 'lastLaunchArgs', 'tags', 'keywords', 'groupIds']) {
     for (const value of [[], ['new'], ['same', 'same'], ['same', 'different']]) {
       const incoming = [make({ [key]: value })]
       assert.deepEqual(reuse(previous, incoming), incoming)

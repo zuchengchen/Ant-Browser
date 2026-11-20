@@ -19,6 +19,7 @@
   tags: string[]
   keywords: string[]
   groupId?: string
+  groupIds?: string[]
   running: boolean
   debugPort: number
   debugReady: boolean
@@ -49,6 +50,7 @@ export interface BrowserProfileInput {
   tags: string[]
   keywords: string[]
   groupId?: string
+  groupIds?: string[]
 }
 
 export interface BrowserFingerprintRuntimeInfo {

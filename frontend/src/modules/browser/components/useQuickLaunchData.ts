@@ -1,4 +1,5 @@
-﻿import { useEffect, useState, type RefObject } from 'react'
+import { useEffect, useState, type RefObject } from 'react'
+import { errorMessage } from '../../../utils/errors'
 import { toast } from '../../../shared/components'
 import { fetchBrowserProfiles, fetchGroups } from '../api'
 import type { BrowserGroupWithCount, BrowserProfile } from '../types'
@@ -22,10 +23,11 @@ export function useQuickLaunchData(open: boolean, inputRef: RefObject<HTMLInputE
         if (profilesResult.status === 'fulfilled') {
           setProfiles((profilesResult.value || []).slice().sort(sortProfiles))
         } else {
-          toast.error('加载实例列表失败')
+          toast.error(errorMessage(profilesResult.reason, '加载实例列表失败'))
           setProfiles([])
         }
 
+        if (groupsResult.status === 'rejected') toast.error(errorMessage(groupsResult.reason, '加载实例分组失败'))
         setGroups(groupsResult.status === 'fulfilled' ? groupsResult.value || [] : [])
       })
       .finally(() => {

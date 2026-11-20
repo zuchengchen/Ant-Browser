@@ -22,11 +22,17 @@ curl -X POST http://127.0.0.1:19876/api/profiles \\
       "profileName": "buyer-001",
       "proxyId": "proxy-us",
       "keywords": ["buyer-001"],
-      "tags": ["电商"]
+      "groupIds": ["group-sales", "group-north-america"]
     },
     "launchCode": "BUYER_001"
   }'
 \`\`\`
+
+## 实例分组
+
+实例配置使用 \`groupIds\` 保存多个分组 ID；分组先在实例列表左侧创建。\`[]\` 明确清空归属，省略或传 null 按旧接口兼容处理并保留已有归属。旧 \`tags\` 和 \`groupId\` 写入仅追加关系，不会移除额外归属；无法唯一解析的名称返回错误。
+
+读取的 \`groupId\` 是兼容主分组，\`tags\` 是分组名称投影；完整归属以 \`groupIds\` 为准。启动、运行态和自动化 selector 的 \`groupId\` 匹配任一归属及其后代；旧 \`tag/tags\` 按全目录唯一名称解析，多个条件同时满足。不同分支同名时使用 ID。
 
 ## 创建并立即启动
 
@@ -89,7 +95,6 @@ curl -X POST http://127.0.0.1:19876/api/launch \\
   -d '{
     "selector": {
       "keyword": "checkout",
-      "tags": ["电商", "北美"],
       "groupId": "group-sales-us",
       "matchMode": "unique"
     },

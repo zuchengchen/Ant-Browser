@@ -50,17 +50,11 @@ func (s *LaunchServer) findProfilesBySelector(selector LaunchSelector) ([]browse
 		})
 	}
 
-	if selector.GroupID != "" {
-		snapshots = filterProfiles(snapshots, func(item browser.Profile) bool {
-			return strings.TrimSpace(item.GroupId) == selector.GroupID
-		})
+	matcher, err := s.browserMgr.InstanceGroupMatcher(selector.GroupID, selector.Tags)
+	if err != nil {
+		return nil, http.StatusBadRequest, err.Error()
 	}
-
-	if len(selector.Tags) > 0 {
-		snapshots = filterProfiles(snapshots, func(item browser.Profile) bool {
-			return profileHasAllTags(item, selector.Tags)
-		})
-	}
+	snapshots = filterProfiles(snapshots, matcher)
 
 	fuzzyQueries := selector.Keywords
 	if selector.Key != "" {

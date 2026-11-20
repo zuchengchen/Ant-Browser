@@ -1,57 +1,27 @@
-import { useMemo } from 'react'
-import { Select } from '../../../shared/components'
 import type { BrowserGroup } from '../types'
+import { groupPath } from '../utils/instanceGroups'
 
 interface GroupSelectorProps {
   groups: BrowserGroup[]
-  value: string
-  onChange: (groupId: string) => void
-  placeholder?: string
+  value: string[]
+  onChange: (groupIds: string[]) => void
   className?: string
+  disabled?: boolean
 }
 
-interface FlatGroup extends BrowserGroup {
-  level: number
-}
-
-// 将分组列表扁平化并计算层级
-function flattenGroups(groups: BrowserGroup[]): FlatGroup[] {
-  const result: FlatGroup[] = []
-  const addChildren = (parentId: string, level: number) => {
-    groups
-      .filter(g => g.parentId === parentId)
-      .sort((a, b) => a.sortOrder - b.sortOrder)
-      .forEach(g => {
-        result.push({ ...g, level })
-        addChildren(g.groupId, level + 1)
-      })
-  }
-
-  // 先添加根级分组
-  addChildren('', 0)
-
-  return result
-}
-
-export function GroupSelector({ groups, value, onChange, placeholder = '选择分组', className = '' }: GroupSelectorProps) {
-  const flatGroups = useMemo(() => flattenGroups(groups), [groups])
-  const options = useMemo(
-    () => [
-      { value: '', label: placeholder },
-      ...flatGroups.map(g => ({
-        value: g.groupId,
-        label: `${'　'.repeat(g.level)}${g.groupName}`,
-      })),
-    ],
-    [flatGroups, placeholder]
-  )
-
+export function GroupSelector({ groups, value, onChange, className = '', disabled = false }: GroupSelectorProps) {
+  const sorted = [...groups].sort((a, b) => groupPath(a.groupId, groups).localeCompare(groupPath(b.groupId, groups), 'zh-CN', { numeric: true }))
   return (
-    <Select
-      className={className}
-      value={value}
-      onChange={e => onChange(e.target.value)}
-      options={options}
-    />
+    <div className={`max-h-60 overflow-auto rounded-lg border border-[var(--color-border)] p-2 ${className}`} role="group" aria-label="实例分组选择">
+      {sorted.length === 0 && <p className="p-2 text-sm text-[var(--color-text-muted)]">暂无分组，请先在实例列表中新建。</p>}
+      {sorted.map(group => (
+        <label key={group.groupId} className="flex cursor-pointer items-center gap-2 rounded px-2 py-2 text-sm hover:bg-[var(--color-bg-muted)]">
+          <input type="checkbox" disabled={disabled} checked={value.includes(group.groupId)} aria-label={groupPath(group.groupId, groups)}
+            onChange={event => onChange(event.target.checked ? [...new Set([...value, group.groupId])] : value.filter(id => id !== group.groupId))}
+            className="h-4 w-4 accent-[var(--color-accent)]" />
+          <span>{groupPath(group.groupId, groups)}</span>
+        </label>
+      ))}
+    </div>
   )
 }

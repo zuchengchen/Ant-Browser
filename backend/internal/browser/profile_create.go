@@ -53,6 +53,7 @@ func (m *Manager) Create(input ProfileInput) (*Profile, error) {
 		Tags:               input.Tags,
 		Keywords:           append([]string{}, input.Keywords...),
 		GroupId:            strings.TrimSpace(input.GroupId),
+		GroupIds:           CloneGroupIDs(input.GroupIds),
 		Running:            false,
 		DebugPort:          0,
 		Pid:                0,

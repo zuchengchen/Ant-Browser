@@ -186,6 +186,8 @@ export function BrowserGetCookies(arg1:string):Promise<Array<backend.CookieInfo>
 
 export function BrowserInstanceGetTabs(arg1:string):Promise<Array<browser.Tab>>;
 
+export function BrowserInstanceGroupList():Promise<Array<browser.GroupWithCount>>;
+
 export function BrowserInstanceOpenFingerprintCheck(arg1:string):Promise<browser.Profile>;
 
 export function BrowserInstanceOpenUrl(arg1:string,arg2:string):Promise<boolean>;
@@ -207,6 +209,8 @@ export function BrowserInstanceStop(arg1:string):Promise<browser.Profile>;
 export function BrowserProfileBatchRemoveTags(arg1:Array<string>,arg2:Array<string>):Promise<void>;
 
 export function BrowserProfileBatchSetTags(arg1:Array<string>,arg2:Array<string>,arg3:boolean):Promise<void>;
+
+export function BrowserProfileChangeGroups(arg1:Array<string>,arg2:Array<string>,arg3:string):Promise<void>;
 
 export function BrowserProfileCopy(arg1:string,arg2:string):Promise<browser.Profile>;
 
@@ -367,6 +371,8 @@ export function GetProxyCheckSettings():Promise<config.ProxyCheckConfig>;
 export function GetRunningInstances():Promise<Array<browser.Profile>>;
 
 export function InstallAutomationRuntime():Promise<Record<string, any>>;
+
+export function IsAppReady():Promise<boolean>;
 
 export function ListGroups():Promise<Array<browser.GroupWithCount>>;
 

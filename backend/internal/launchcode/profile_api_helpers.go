@@ -42,6 +42,7 @@ func normalizeProfileInput(input browser.ProfileInput) browser.ProfileInput {
 		Tags:               normalizeStringSlice(input.Tags),
 		Keywords:           normalizeStringSlice(input.Keywords),
 		GroupId:            strings.TrimSpace(input.GroupId),
+		GroupIds:           browser.CloneGroupIDs(input.GroupIds),
 	}
 }
 
@@ -64,6 +65,7 @@ func profileToInput(profile *browser.Profile) browser.ProfileInput {
 		Tags:               append([]string{}, profile.Tags...),
 		Keywords:           append([]string{}, profile.Keywords...),
 		GroupId:            strings.TrimSpace(profile.GroupId),
+		GroupIds:           browser.CloneGroupIDs(profile.GroupIds),
 	}
 }
 
@@ -137,6 +139,8 @@ func mapProfileWriteErrorStatus(err error) int {
 		return http.StatusBadRequest
 	case strings.Contains(msg, "proxy id not found"),
 		strings.Contains(msg, "代理id不存在"):
+		return http.StatusBadRequest
+	case strings.Contains(msg, "分组"), strings.Contains(msg, "groupids"):
 		return http.StatusBadRequest
 	case strings.Contains(msg, "实例数量已达上限"):
 		return http.StatusConflict

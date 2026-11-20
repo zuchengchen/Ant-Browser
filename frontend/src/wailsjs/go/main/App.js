@@ -354,6 +354,10 @@ export function BrowserInstanceGetTabs(arg1) {
   return window['go']['main']['App']['BrowserInstanceGetTabs'](arg1);
 }
 
+export function BrowserInstanceGroupList() {
+  return window['go']['main']['App']['BrowserInstanceGroupList']();
+}
+
 export function BrowserInstanceOpenFingerprintCheck(arg1) {
   return window['go']['main']['App']['BrowserInstanceOpenFingerprintCheck'](arg1);
 }
@@ -396,6 +400,10 @@ export function BrowserProfileBatchRemoveTags(arg1, arg2) {
 
 export function BrowserProfileBatchSetTags(arg1, arg2, arg3) {
   return window['go']['main']['App']['BrowserProfileBatchSetTags'](arg1, arg2, arg3);
+}
+
+export function BrowserProfileChangeGroups(arg1, arg2, arg3) {
+  return window['go']['main']['App']['BrowserProfileChangeGroups'](arg1, arg2, arg3);
 }
 
 export function BrowserProfileCopy(arg1, arg2) {
@@ -716,6 +724,10 @@ export function GetRunningInstances() {
 
 export function InstallAutomationRuntime() {
   return window['go']['main']['App']['InstallAutomationRuntime']();
+}
+
+export function IsAppReady() {
+  return window['go']['main']['App']['IsAppReady']();
 }
 
 export function ListGroups() {

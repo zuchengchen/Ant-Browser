@@ -3,6 +3,8 @@ import { ExternalLink, Search } from 'lucide-react'
 import { Button, Input, Modal, Select, toast } from '../../../shared/components'
 import type { BrowserExtension, BrowserGroupWithCount, BrowserProfile, BrowserProfileExtensionSettings } from '../types'
 import { fetchBrowserProfileExtensionSettings, saveBrowserProfileExtensionSettings, type BrowserExtensionManualDownloadFile, type BrowserExtensionManualInstallGuide } from '../api/extensions'
+import { groupPath, profileMatchesGroup } from '../utils/instanceGroups'
+import { errorMessage } from '../../../utils/errors'
 import { fetchGroups } from '../api/groups'
 import { fetchBrowserProfiles } from '../api/profiles'
 import { extensionHistoryActionLabel, formatExtensionTime, sameStringSet, type ExtensionHistoryRecord } from './extensionManagementUtils'
@@ -35,56 +37,19 @@ export function ExtensionProfileLimitModal({ open, extension, allExtensions, onC
   const [profileQuery, setProfileQuery] = useState('')
   const [profileSort, setProfileSort] = useState<ProfileSort>('createdAtDesc')
   const [onlyInstalled, setOnlyInstalled] = useState(false)
+  const [groupFilter, setGroupFilter] = useState('')
+  const [loadError, setLoadError] = useState('')
 
   const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds])
   const defaultExtensionIds = useMemo(
     () => allExtensions.filter((item) => item.enabled && item.defaultInstall).map((item) => item.extensionId),
     [allExtensions],
   )
-  const groupNameMap = useMemo(() => {
-    const map = new Map<string, string>()
-    groups.forEach((group) => map.set(group.groupId, group.groupName))
-    return map
-  }, [groups])
-
-  const profileGroups = useMemo(() => {
-    const buckets = new Map<string, BrowserProfile[]>()
-    profiles.forEach((profile) => {
-      const groupId = (profile.groupId || '').trim() || UNGROUPED_PROFILE_GROUP_ID
-      if (!buckets.has(groupId)) buckets.set(groupId, [])
-      buckets.get(groupId)!.push(profile)
-    })
-
-    const sections = groups
-      .filter((group) => buckets.has(group.groupId))
-      .sort((a, b) => a.sortOrder - b.sortOrder || a.groupName.localeCompare(b.groupName))
-      .map((group) => ({
-        groupId: group.groupId,
-        groupName: group.groupName,
-        profiles: buckets.get(group.groupId) || [],
-      }))
-
-    for (const [groupId, items] of buckets.entries()) {
-      if (groupId === UNGROUPED_PROFILE_GROUP_ID) continue
-      if (!sections.some((section) => section.groupId === groupId)) {
-        sections.push({
-          groupId,
-          groupName: groupNameMap.get(groupId) || `分组 ${groupId}`,
-          profiles: items,
-        })
-      }
-    }
-
-    if (buckets.has(UNGROUPED_PROFILE_GROUP_ID)) {
-      sections.push({
-        groupId: UNGROUPED_PROFILE_GROUP_ID,
-        groupName: '未分组',
-        profiles: buckets.get(UNGROUPED_PROFILE_GROUP_ID) || [],
-      })
-    }
-
-    return sections
-  }, [profiles, groups, groupNameMap])
+  const profileGroups = useMemo(() => [{
+    groupId: groupFilter || '__all__',
+    groupName: !groupFilter ? '全部实例' : groupFilter === UNGROUPED_PROFILE_GROUP_ID ? '未分组' : groupPath(groupFilter, groups),
+    profiles: profiles.filter(profile => profileMatchesGroup(profile, groupFilter, groups)),
+  }], [profiles, groups, groupFilter])
 
   const searchQuery = profileQuery.trim().toLocaleLowerCase()
   const matchesProfile = (profile: BrowserProfile) => (
@@ -127,6 +92,8 @@ export function ExtensionProfileLimitModal({ open, extension, allExtensions, onC
     if (!open || !extension) return
     setLoading(true)
     setProfileQuery('')
+    setGroupFilter('')
+    setLoadError('')
     setOnlyInstalled(false)
     Promise.all([fetchBrowserProfiles(), fetchGroups()]).then(async ([profileItems, groupItems]) => {
       const profileSettings = await Promise.all(profileItems.map(async (profile) => ({
@@ -147,7 +114,9 @@ export function ExtensionProfileLimitModal({ open, extension, allExtensions, onC
         })
         .map((profile) => profile.profileId))
     }).catch((error: any) => {
-      toast.error(error?.message || '加载实例限制失败')
+      const message = errorMessage(error, '加载实例限制失败')
+      setLoadError(message)
+      toast.error(message)
     }).finally(() => setLoading(false))
   }, [open, extension])
 
@@ -170,7 +139,7 @@ export function ExtensionProfileLimitModal({ open, extension, allExtensions, onC
   }
 
   const handleSave = async () => {
-    if (!extension) return
+    if (!extension || loading || loadError) return
     setSaving(true)
     try {
       const selected = new Set(selectedIds)
@@ -208,7 +177,7 @@ export function ExtensionProfileLimitModal({ open, extension, allExtensions, onC
       footer={(
         <>
           <Button variant="secondary" onClick={onClose}>取消</Button>
-          <Button onClick={handleSave} loading={saving} disabled={loading || !extension}>保存</Button>
+          <Button onClick={handleSave} loading={saving} disabled={loading || !!loadError || !extension}>保存</Button>
         </>
       )}
     >
@@ -216,6 +185,9 @@ export function ExtensionProfileLimitModal({ open, extension, allExtensions, onC
         <div className="py-8 text-center text-sm text-[var(--color-text-muted)]">正在加载实例...</div>
       ) : (
         <div className="space-y-3">
+          {loadError && <p role="alert" className="text-[var(--color-error)]">{loadError}</p>}
+          <Select aria-label="实例分组" value={groupFilter} onChange={event => setGroupFilter(event.target.value)}
+            options={[{ value: '', label: '全部实例' }, { value: UNGROUPED_PROFILE_GROUP_ID, label: '未分组' }, ...groups.map(group => ({ value: group.groupId, label: groupPath(group.groupId, groups) }))]} />
           <div className="rounded-xl border border-[var(--color-border-default)] bg-[var(--color-bg-muted)] px-3 py-2 text-sm text-[var(--color-text-secondary)]">
             勾选的实例会写入此插件并改为手动设置；未勾选的实例如果当前是靠「默认安装」继承到该插件，保存后同样会改为手动设置并排除该插件，不再跟随默认安装变化。
           </div>

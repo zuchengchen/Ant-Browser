@@ -87,6 +87,9 @@ func linuxPerfGroupFixture(tb testing.TB, count int) (*App, *database.DB) {
 			tb.Fatal(err)
 		}
 	}
+	if _, err := tx.Exec(`INSERT INTO browser_profile_groups(profile_id,group_id) SELECT profile_id,group_id FROM browser_profiles WHERE group_id!=''`); err != nil {
+		tb.Fatal(err)
+	}
 	if err := tx.Commit(); err != nil {
 		tb.Fatal(err)
 	}

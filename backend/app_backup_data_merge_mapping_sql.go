@@ -62,6 +62,9 @@ func backupApplyImportReferenceMappings(incomingCfg *config.Config, mappings *ba
 	for i := range incomingCfg.Browser.Profiles {
 		profile := &incomingCfg.Browser.Profiles[i]
 		profile.ProfileId = backupImportMappedIDOrOriginal(mappings.Profiles, profile.ProfileId)
+		for j, id := range profile.GroupIds {
+			profile.GroupIds[j] = backupImportMappedIDOrOriginal(mappings.Groups, id)
+		}
 		profile.CoreId = backupImportMappedIDOrOriginal(mappings.Cores, profile.CoreId)
 		profile.ProxyId = backupImportMappedIDOrOriginal(mappings.Proxies, profile.ProxyId)
 		profile.ProxyGroupName = backupImportMappedIDOrOriginal(mappings.ProxyVirtualGroups, profile.ProxyGroupName)

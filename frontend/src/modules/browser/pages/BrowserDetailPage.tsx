@@ -3,10 +3,11 @@ import { Link, useParams } from 'react-router-dom'
 import { Copy, Globe, Play, RefreshCw, RotateCcw, Square } from 'lucide-react'
 import { Badge, Button, Card, Input, Table, toast } from '../../../shared/components'
 import type { TableColumn } from '../../../shared/components/Table'
-import type { BrowserProfile, BrowserTab } from '../types'
+import type { BrowserGroup, BrowserProfile, BrowserTab } from '../types'
 import { EventsOn } from '../../../wailsjs/runtime/runtime'
 import {
   fetchBrowserProfiles,
+  fetchGroups,
   fetchBrowserTabs,
   openBrowserUrl,
   regenerateBrowserProfileCode,
@@ -14,6 +15,8 @@ import {
   startBrowserInstance,
   stopBrowserInstance,
 } from '../api'
+import { groupPath, profileGroupIds } from '../utils/instanceGroups'
+import { errorMessage } from '../../../utils/errors'
 import { CookieManagerCard } from '../components/CookieManagerCard'
 import { SnapshotTab } from '../components/SnapshotTab'
 import { resolveActionErrorMessage, resolveActionFeedback } from '../utils/actionErrors'
@@ -43,6 +46,8 @@ const TABS: { key: TabKey; label: string }[] = [
 export function BrowserDetailPage() {
   const { id } = useParams()
   const [profile, setProfile] = useState<BrowserProfile | null>(null)
+  const [groups, setGroups] = useState<BrowserGroup[]>([])
+  const [groupError, setGroupError] = useState('')
   const [tabs, setTabs] = useState<BrowserTab[]>([])
   const [targetUrl, setTargetUrl] = useState('https://example.com')
   const [activeTab, setActiveTab] = useState<TabKey>('overview')
@@ -65,7 +70,8 @@ export function BrowserDetailPage() {
     void loadProfile().catch(() => undefined)
   }
 
-  useEffect(() => { void loadProfile() }, [id])
+  useEffect(() => { void loadProfile().catch(error => toast.error(errorMessage(error, '加载实例失败'))) }, [id])
+  useEffect(() => { void fetchGroups().then(setGroups).catch(error => setGroupError(errorMessage(error, '加载分组失败'))) }, [id])
   useEffect(() => { void loadTabs() }, [id])
 
   useEffect(() => {
@@ -306,8 +312,8 @@ export function BrowserDetailPage() {
                   <span>{profile.launchArgs?.length || 0} 项</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>标签</span>
-                  <span>{profile.tags?.join(', ') || '-'}</span>
+                  <span>实例分组</span>
+                  <span>{groupError || profileGroupIds(profile).map(groupId => groupPath(groupId, groups)).join('、') || '未分组'}</span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span>快捷码</span>

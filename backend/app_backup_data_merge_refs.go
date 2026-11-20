@@ -201,6 +201,9 @@ func (a *App) backupMapImportGroups(tx *sql.Tx, mappings *backupImportReferenceM
 	if err != nil {
 		return fmt.Errorf("读取目标分组失败: %w", err)
 	}
+	if err := validateImportedGroupCatalog(targetRows, "本地"); err != nil {
+		return err
+	}
 	targetByID := make(map[string]backupImportGroupRecord, len(targetRows))
 	targetByName := make(map[string]string, len(targetRows))
 	usedTargetIDs := make(map[string]struct{}, len(targetRows))
@@ -212,7 +215,7 @@ func (a *App) backupMapImportGroups(tx *sql.Tx, mappings *backupImportReferenceM
 		targetByID[key] = row
 		usedTargetIDs[key] = struct{}{}
 		backupImportSetMapping(mappings.Groups, row.ID, row.ID, false)
-		targetByName[backupImportTextKey(row.ParentID)+"\x00"+backupImportTextKey(row.Name)] = row.ID
+		targetByName[backupImportIDKey(row.ParentID)+"\x00"+row.Name] = row.ID
 	}
 
 	sourceExists, err := backupSrcTableExists(tx, "browser_groups")
@@ -225,6 +228,9 @@ func (a *App) backupMapImportGroups(tx *sql.Tx, mappings *backupImportReferenceM
 	sourceRows, err := backupQueryImportGroups(tx, "src.browser_groups")
 	if err != nil {
 		return fmt.Errorf("读取备份分组失败: %w", err)
+	}
+	if err := validateImportedGroupCatalog(sourceRows, "备份"); err != nil {
+		return err
 	}
 	sourceByID := make(map[string]backupImportGroupRecord, len(sourceRows))
 	for _, row := range sourceRows {
@@ -240,7 +246,7 @@ func (a *App) backupMapImportGroups(tx *sql.Tx, mappings *backupImportReferenceM
 			return nil
 		}
 		if states[key] == 1 {
-			return nil
+			return fmt.Errorf("备份实例分组层级存在循环，导入已取消")
 		}
 		row, ok := sourceByID[key]
 		if !ok {
@@ -255,8 +261,8 @@ func (a *App) backupMapImportGroups(tx *sql.Tx, mappings *backupImportReferenceM
 					return err
 				}
 				parentTargetID = backupImportMappedID(mappings.Groups, row.ParentID)
-			} else if parent, exists := targetByID[parentKey]; exists {
-				parentTargetID = parent.ID
+			} else {
+				return fmt.Errorf("备份缺少父分组，无法无损导入")
 			}
 		}
 		if err := a.backupMapImportGroupRow(row, parentTargetID, targetByID, targetByName, usedTargetIDs, mappings, stats); err != nil {
@@ -279,10 +285,13 @@ func (a *App) backupMapImportGroups(tx *sql.Tx, mappings *backupImportReferenceM
 
 func (a *App) backupMapImportGroupRow(row backupImportGroupRecord, parentTargetID string, targetByID map[string]backupImportGroupRecord, targetByName map[string]string, usedTargetIDs map[string]struct{}, mappings *backupImportReferenceMappings, stats *backupMergeStats) error {
 	sourceKey := backupImportIDKey(row.ID)
-	parentKey := backupImportTextKey(parentTargetID)
-	nameKey := backupImportTextKey(row.Name)
+	parentKey := backupImportIDKey(parentTargetID)
+	nameKey := row.Name
+	if strings.TrimSpace(nameKey) == "" {
+		return fmt.Errorf("备份包含空实例分组名称")
+	}
 	if existing, ok := targetByID[sourceKey]; ok {
-		if backupImportTextKey(existing.Name) == nameKey && backupImportTextKey(existing.ParentID) == parentKey {
+		if existing.Name == nameKey && backupImportTextKey(existing.ParentID) == parentKey {
 			backupImportSetMapping(mappings.Groups, row.ID, existing.ID, false)
 			return nil
 		}
@@ -564,7 +573,10 @@ func (a *App) backupMapImportProfiles(tx *sql.Tx, incomingCfg *config.Config, ma
 	for _, row := range targetRows {
 		key := backupImportIDKey(row.ID)
 		if key == "" {
-			continue
+			return fmt.Errorf("本地存在空实例 ID")
+		}
+		if _, exists := targetByID[key]; exists {
+			return fmt.Errorf("本地存在歧义实例 ID，导入已取消")
 		}
 		targetByID[key] = row
 		usedTargetIDs[key] = struct{}{}
@@ -584,6 +596,14 @@ func (a *App) backupMapImportProfiles(tx *sql.Tx, incomingCfg *config.Config, ma
 	sourceRows, err := backupQueryImportProfiles(tx, "src.browser_profiles")
 	if err != nil {
 		return fmt.Errorf("读取备份实例失败: %w", err)
+	}
+	seenSourceIDs := map[string]bool{}
+	for _, row := range sourceRows {
+		key := backupImportIDKey(row.ID)
+		if key == "" || seenSourceIDs[key] {
+			return fmt.Errorf("备份存在空或歧义实例 ID，导入已取消")
+		}
+		seenSourceIDs[key] = true
 	}
 	incomingPaths := backupIncomingProfilePaths(incomingCfg)
 	for _, row := range sourceRows {

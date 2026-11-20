@@ -1843,6 +1843,7 @@ export namespace browser {
 	    tags: string[];
 	    keywords: string[];
 	    groupId: string;
+	    groupIds: string[];
 	    launchCode: string;
 	    windowMarkerCode?: string;
 	    running: boolean;
@@ -1883,6 +1884,7 @@ export namespace browser {
 	        this.tags = source["tags"];
 	        this.keywords = source["keywords"];
 	        this.groupId = source["groupId"];
+	        this.groupIds = source["groupIds"];
 	        this.launchCode = source["launchCode"];
 	        this.windowMarkerCode = source["windowMarkerCode"];
 	        this.running = source["running"];
@@ -1945,6 +1947,7 @@ export namespace browser {
 	    tags: string[];
 	    keywords: string[];
 	    groupId: string;
+	    groupIds: string[];
 	
 	    static createFrom(source: any = {}) {
 	        return new ProfileInput(source);
@@ -1966,6 +1969,7 @@ export namespace browser {
 	        this.tags = source["tags"];
 	        this.keywords = source["keywords"];
 	        this.groupId = source["groupId"];
+	        this.groupIds = source["groupIds"];
 	    }
 	}
 	export class Settings {

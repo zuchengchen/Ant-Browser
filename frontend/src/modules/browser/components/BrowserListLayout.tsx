@@ -19,7 +19,6 @@ interface BrowserListHeaderProps {
   proxies: BrowserProxy[]
   cores: BrowserCore[]
   groups: BrowserGroupWithCount[]
-  allTags: string[]
   filters: InstanceFilters
   onFiltersChange: (next: InstanceFilters) => void
   onToggleHeaderCollapsed: () => void
@@ -40,7 +39,6 @@ export function BrowserListHeader({
   proxies,
   cores,
   groups,
-  allTags,
   filters,
   onFiltersChange,
   onToggleHeaderCollapsed,
@@ -143,7 +141,6 @@ export function BrowserListHeader({
             onChange={onFiltersChange}
             proxies={proxies}
             cores={cores}
-            allTags={allTags}
             groups={groups}
           />
         </div>

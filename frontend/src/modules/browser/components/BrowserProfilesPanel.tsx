@@ -6,8 +6,9 @@ import { Copy, Download, FolderOpen, Key, Loader2, MoreHorizontal, Play, Puzzle,
 import { Badge, Button, Card, Table, toast } from '../../../shared/components'
 import type { TableColumn } from '../../../shared/components/Table'
 
-import type { BrowserCore, BrowserProfile, BrowserProxy, BrowserProxyVirtualGroup, ProxySpeedTestResult } from '../types'
+import type { BrowserCore, BrowserGroup, BrowserProfile, BrowserProxy, BrowserProxyVirtualGroup, ProxySpeedTestResult } from '../types'
 import { testProxyConnectivity } from '../api'
+import { groupPath, profileGroupIds } from '../utils/instanceGroups'
 import { useProxySpeedFreshness } from '../proxySpeedFreshness'
 import { isProxySpeedResultFresh } from '../pages/proxyPool/storage'
 import { useProxySpeedStore } from '../proxySpeedStore'
@@ -73,6 +74,8 @@ interface BrowserProfilesPanelProps {
   loading: boolean
   viewMode: BrowserViewMode
   profiles: BrowserProfile[]
+  groups: BrowserGroup[]
+  onEditGroups: (profile: BrowserProfile) => void
   proxies: BrowserProxy[]
   virtualGroups: BrowserProxyVirtualGroup[]
   selectedIds: Set<string>
@@ -412,10 +415,28 @@ function ProfileMoreActions({
   )
 }
 
+function ProfileGroupLabels({ profile, groups, onEdit }: {
+  profile: BrowserProfile
+  groups: BrowserGroup[]
+  onEdit: (profile: BrowserProfile) => void
+}) {
+  const paths = profileGroupIds(profile).map(id => groupPath(id, groups))
+  return (
+    <button type="button" onClick={() => onEdit(profile)} aria-label={`编辑实例分组：${profile.profileName}`}
+      title={paths.join('、') || '未分组'} className="flex min-w-0 items-center gap-1 rounded px-1 py-0.5 hover:bg-[var(--color-bg-muted)]">
+      {paths.length ? <>{paths.slice(0, 2).map((path, index) => <Badge key={index} variant="default">{path}</Badge>)}
+        {paths.length > 2 && <Badge variant="default">+{paths.length - 2}</Badge>}</> :
+        <span className="text-xs text-[var(--color-text-muted)]">未分组</span>}
+    </button>
+  )
+}
+
 function BrowserProfileCard({
   profile,
   proxy,
   proxies,
+  groups,
+  onEditGroups,
   virtualGroups,
   isSelected,
   status,
@@ -438,6 +459,8 @@ function BrowserProfileCard({
 }: {
   profile: BrowserProfile
   proxy: BrowserProxy | undefined
+  groups: BrowserGroup[]
+  onEditGroups: (profile: BrowserProfile) => void
   proxies: BrowserProxy[]
   virtualGroups: BrowserProxyVirtualGroup[]
   isSelected: boolean
@@ -475,16 +498,13 @@ function BrowserProfileCard({
               type="checkbox"
               className="w-4 h-4 rounded cursor-pointer accent-[var(--color-accent)] mt-0.5 shrink-0"
               checked={isSelected}
+              aria-label={`选择实例：${profile.profileName}`}
               onChange={() => onToggleSelect(profile.profileId)}
             />
             <Link className="text-[var(--color-accent)] font-medium text-sm hover:text-[var(--color-accent)] transition-colors truncate max-w-[200px]" to={`/browser/detail/${profile.profileId}`}>
               {profile.profileName}
             </Link>
-            {profile.tags && profile.tags.length > 0 && (
-              <div className="flex gap-1 ml-1">
-                {profile.tags.map(tag => <Badge variant="default" key={tag}>{tag}</Badge>)}
-              </div>
-            )}
+            <ProfileGroupLabels profile={profile} groups={groups} onEdit={onEditGroups} />
           </div>
 
           <div className="flex shrink-0 items-center gap-1.5">
@@ -559,6 +579,8 @@ export function BrowserProfilesPanel({
   viewMode,
   profiles,
   proxies,
+  groups,
+  onEditGroups,
   virtualGroups,
   selectedIds,
   resolveProfileCore,
@@ -647,6 +669,7 @@ export function BrowserProfilesPanel({
         <input
           type="checkbox"
           className="w-4 h-4 rounded cursor-pointer accent-[var(--color-accent)]"
+          aria-label={`选择实例：${record.profileName}`}
           checked={selectedIds.has(record.profileId)}
           onChange={() => onToggleSelect(record.profileId)}
         />
@@ -661,12 +684,7 @@ export function BrowserProfilesPanel({
           <Link className="block min-w-0 truncate text-[var(--color-accent)] text-sm font-medium hover:underline" to={`/browser/detail/${record.profileId}`} title={String(value || '')}>
             {value}
           </Link>
-          {record.tags && record.tags.length > 0 && (
-            <div className="flex shrink-0 gap-1 overflow-hidden">
-              {record.tags.slice(0, 2).map(tag => <Badge variant="default" key={tag}>{tag}</Badge>)}
-              {record.tags.length > 2 && <Badge variant="default">+{record.tags.length - 2}</Badge>}
-            </div>
-          )}
+          <ProfileGroupLabels profile={record} groups={groups} onEdit={onEditGroups} />
         </div>
       ),
     },
@@ -776,6 +794,8 @@ export function BrowserProfilesPanel({
             <div key={profile.profileId} className="min-w-0">
               <BrowserProfileCard
                 profile={profile}
+                groups={groups}
+                onEditGroups={onEditGroups}
                 proxy={proxiesById.get(profile.proxyId)}
                 proxies={proxies}
                 virtualGroups={virtualGroups}

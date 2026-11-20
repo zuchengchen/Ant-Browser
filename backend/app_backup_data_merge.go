@@ -418,6 +418,9 @@ WHERE NOT EXISTS (
 		}
 	}
 
+	if err := backupMergeInstanceGroups(tx, mappings); err != nil {
+		return nil, err
+	}
 	if err := a.backupNormalizeImportedDatabasePaths(tx, incomingCfg, mappings); err != nil {
 		return nil, err
 	}

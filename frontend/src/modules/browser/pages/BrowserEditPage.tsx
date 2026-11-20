@@ -3,10 +3,10 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { ChevronDown, ChevronUp, FolderOpen, HelpCircle, Layers, ShieldCheck } from 'lucide-react'
 import { Button, Card, ConfirmModal, FormItem, Input, Modal, Select, Textarea, toast } from '../../../shared/components'
 import type { BrowserCore, BrowserFingerprintCapabilityReport, BrowserFingerprintCapabilityRow, BrowserFingerprintCheckResult, BrowserProfileInput, BrowserProxy, BrowserProxyVirtualGroup, BrowserGroup, ProxyLocationResolveResult } from '../types'
-import { browserProxyResolveLocation, checkBrowserProfileFingerprint, createBrowserProfile, fetchAllTags, fetchBrowserCores, fetchBrowserProfileFingerprintMatrix, fetchBrowserProfiles, fetchBrowserProxies, fetchBrowserProxyVirtualGroups, fetchBrowserSettings, fetchGroups, openBrowserFingerprintCheck, openUserDataDir, updateBrowserProfile, validateProxyConfig } from '../api'
+import { browserProxyResolveLocation, checkBrowserProfileFingerprint, createBrowserProfile, fetchBrowserCores, fetchBrowserProfileFingerprintMatrix, fetchBrowserProfiles, fetchBrowserProxies, fetchBrowserProxyVirtualGroups, fetchBrowserSettings, fetchGroups, openBrowserFingerprintCheck, openUserDataDir, updateBrowserProfile, validateProxyConfig } from '../api'
 import { FingerprintPanel } from '../components/FingerprintPanel'
 import { applyLocaleToFingerprintArgs, validateFingerprintArgs, withAdaptiveDefaultWindowSize } from '../utils/fingerprintSerializer'
-import { TagInput } from '../components/TagInput'
+import { profileGroupIds } from '../utils/instanceGroups'
 import { GroupSelector } from '../components/GroupSelector'
 import { ProxyPickerModal } from '../components/ProxyPickerModal'
 import { BrowserEditSelect, type BrowserEditSelectOption } from '../components/BrowserEditSelect'
@@ -317,15 +317,17 @@ export function BrowserEditPage() {
     lastLaunchArgs: [],
     tags: [],
     keywords: [],
-    groupId: '',
+    groupIds: [],
   })
   const [cores, setCores] = useState<BrowserCore[]>([])
   const [proxies, setProxies] = useState<BrowserProxy[]>([])
   const [proxyVirtualGroups, setProxyVirtualGroups] = useState<BrowserProxyVirtualGroup[]>([])
   const [groups, setGroups] = useState<BrowserGroup[]>([])
   const [launchArgsText, setLaunchArgsText] = useState('')
-  const [allTags, setAllTags] = useState<string[]>([])
   const [saving, setSaving] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
+  const [loadAttempt, setLoadAttempt] = useState(0)
   const [proxyPickerOpen, setProxyPickerOpen] = useState(false)
   const [proxyMode, setProxyMode] = useState<ProxySourceMode>('fixed')
   const [isDirty, setIsDirty] = useState(false)
@@ -344,11 +346,10 @@ export function BrowserEditPage() {
 
   useEffect(() => {
     const loadData = async () => {
-      const [coreList, proxyList, proxyVirtualGroupList, tagList, groupList, settings] = await Promise.all([
+      const [coreList, proxyList, proxyVirtualGroupList, groupList, settings] = await Promise.all([
         fetchBrowserCores(),
         fetchBrowserProxies(),
         fetchBrowserProxyVirtualGroups(),
-        fetchAllTags(),
         fetchGroups(),
         fetchBrowserSettings(),
       ])
@@ -356,7 +357,6 @@ export function BrowserEditPage() {
       setCores(coreList)
       setProxies(proxyList)
       setProxyVirtualGroups(proxyVirtualGroupList)
-      setAllTags(tagList)
       setGroups(groupList)
 
       if (isCreate) {
@@ -376,7 +376,7 @@ export function BrowserEditPage() {
       }
       const list = await fetchBrowserProfiles()
       const current = list.find(item => item.profileId === id)
-      if (!current) return
+      if (!current) throw new Error('实例不存在或已移入回收站')
       const currentLaunchArgs = normalizeLaunchArgs(current.launchArgs)
       const normalizedCoreId = !current.coreId || current.coreId.toLowerCase() === 'default'
         ? ''
@@ -399,12 +399,14 @@ export function BrowserEditPage() {
         lastLaunchArgs: current.lastLaunchArgs || [],
         tags: current.tags,
         keywords: current.keywords || [],
-        groupId: current.groupId || '',
+        groupIds: profileGroupIds(current),
       })
       setLaunchArgsText(currentLaunchArgs.join('\n'))
     }
-    loadData()
-  }, [id, isCreate])
+    setLoading(true)
+    setLoadError('')
+    void loadData().catch(error => setLoadError(typeof error === 'string' ? error : error?.message || '加载实例配置失败')).finally(() => setLoading(false))
+  }, [id, isCreate, loadAttempt])
 
   // 虚拟分组成员集合：这些成员不作为独立选项出现在实体列表中，
   // 只在所属虚拟分组展开后以只读形式展示（默认收起）。
@@ -458,6 +460,7 @@ export function BrowserEditPage() {
   }
 
   const handleSave = async () => {
+    if (loading || loadError) return
     const resolvedProxyId = proxyMode === 'fixed' ? (formData.proxyId || '').trim() : ''
     const resolvedProxyConfig = proxyMode === 'local' ? (formData.proxyConfig || '').trim() : ''
     if (proxyMode === 'local' && !resolvedProxyConfig) {
@@ -474,7 +477,7 @@ export function BrowserEditPage() {
       proxyMode,
       tags: formData.tags,
       keywords: formData.keywords,
-      groupId: formData.groupId,
+      groupIds: formData.groupIds || [],
       proxyId: resolvedProxyId,
       proxyConfig: resolvedProxyConfig,
       proxyGroupName: proxyMode === 'dynamic' ? (formData.proxyGroupName || '').trim() : '',
@@ -632,6 +635,12 @@ export function BrowserEditPage() {
     toast.error('该实例绑定的代理已被删除，请重新选择代理（不会自动改为直连）')
   }
 
+  if (loading || loadError) return <div className="space-y-4 p-6">
+    <p role={loadError ? 'alert' : 'status'}>{loadError || '正在加载实例配置…'}</p>
+    {loadError && <Button onClick={() => setLoadAttempt(value => value + 1)}>重新加载</Button>}
+    <Button variant="secondary" onClick={() => navigate('/browser/list')}>返回实例列表</Button>
+  </div>
+
   return (
     <div className="space-y-4 animate-fade-in">
       <Card padding="none" className="shadow-[var(--shadow-sm)]">
@@ -639,7 +648,7 @@ export function BrowserEditPage() {
           <h1 className="text-xl font-semibold text-[var(--color-text-primary)]">{isCreate ? '新建配置' : '编辑配置'}</h1>
           <div className="flex flex-wrap gap-2 sm:justify-end">
             <Button variant="secondary" size="sm" onClick={handleBack}>返回列表</Button>
-            <Button size="sm" onClick={handleSave} loading={saving}>保存配置</Button>
+            <Button size="sm" onClick={handleSave} loading={saving} disabled={loading || !!loadError}>保存配置</Button>
           </div>
         </div>
       </Card>
@@ -693,20 +702,11 @@ export function BrowserEditPage() {
               placeholder="0 表示不限制"
             />
           </FormItem>
-          <FormItem label="标签">
-            <TagInput
-              value={formData.tags}
-              onChange={tags => handleChange('tags', tags)}
-              suggestions={allTags}
-              placeholder="输入标签后按回车，支持从已有标签选择"
-            />
-          </FormItem>
-          <FormItem label="分组">
+          <FormItem label="实例分组（可多选）">
             <GroupSelector
               groups={groups}
-              value={formData.groupId || ''}
-              onChange={groupId => handleChange('groupId', groupId)}
-              placeholder="未分组"
+              value={formData.groupIds || []}
+              onChange={groupIds => handleChange('groupIds', groupIds)}
               className="w-full"
             />
           </FormItem>

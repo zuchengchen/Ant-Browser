@@ -17,7 +17,7 @@ func TestSingleProfileMutationsPersistOnlyTarget(t *testing.T) {
 			manager, db, dbPath := persistenceTestManager(t)
 			// A DB-side change models independent group management. Saving another
 			// profile must not replace that data with a stale in-memory snapshot.
-			if _, err := db.GetConn().Exec(`UPDATE browser_profiles SET group_id='external-group' WHERE profile_id='untouched'`); err != nil {
+			if _, err := db.GetConn().Exec(`DELETE FROM browser_profile_groups WHERE profile_id='untouched'; INSERT INTO browser_profile_groups(profile_id,group_id) VALUES ('untouched','external-group'); UPDATE browser_profiles SET group_id='external-group' WHERE profile_id='untouched'`); err != nil {
 				t.Fatal(err)
 			}
 			if _, err := db.GetConn().Exec(`CREATE TRIGGER reject_unrelated_profile_write
@@ -183,6 +183,11 @@ func persistenceTestManager(t *testing.T) (*Manager, *database.DB, string) {
 	t.Cleanup(func() { _ = db.Close() })
 	if err := db.Migrate(); err != nil {
 		t.Fatal(err)
+	}
+	for _, id := range []string{"original-group", "edited-group", "external-group"} {
+		if _, err := db.GetConn().Exec(`INSERT INTO browser_groups(group_id,group_name) VALUES (?,?)`, id, id); err != nil {
+			t.Fatal(err)
+		}
 	}
 	manager := NewManager(&config.Config{}, root)
 	manager.ProfileDAO = NewSQLiteProfileDAO(db.GetConn())

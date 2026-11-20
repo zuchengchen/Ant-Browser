@@ -73,10 +73,6 @@ const LaunchApiDocsPage = lazyNamed(
   () => import("../modules/browser/pages/LaunchApiDocsPage"),
   "LaunchApiDocsPage",
 );
-const TagManagementPage = lazyNamed(
-  () => import("../modules/browser/pages/TagManagementPage"),
-  "TagManagementPage",
-);
 const AutomationPage = lazyNamed(
   () => import("../modules/browser/pages/AutomationPage"),
   "AutomationPage",
@@ -121,7 +117,7 @@ export function AppRoutes() {
         path="/browser/launch-api"
         element={<Navigate to="/system/docs" replace />}
       />
-      <Route path="/browser/tags" element={<TagManagementPage />} />
+      <Route path="/browser/tags" element={<Navigate to="/browser/list?groups=open" replace />} />
       <Route
         path="/system/tutorial"
         element={<Navigate to="/system/docs" replace />}

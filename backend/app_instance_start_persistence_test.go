@@ -14,7 +14,7 @@ func TestPrepareBrowserLaunchContextPersistsOnlyChangedProfile(t *testing.T) {
 	app, db := startPersistenceTestApp(t)
 	// The manager deliberately retains the old group, as existing group actions
 	// can update the persisted group without refreshing every in-memory profile.
-	if _, err := db.GetConn().Exec(`UPDATE browser_profiles SET group_id='new-database-group' WHERE profile_id='untouched'`); err != nil {
+	if _, err := db.GetConn().Exec(`DELETE FROM browser_profile_groups WHERE profile_id='untouched'; INSERT INTO browser_profile_groups(profile_id,group_id) VALUES ('untouched','new-database-group'); UPDATE browser_profiles SET group_id='new-database-group' WHERE profile_id='untouched'`); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := db.GetConn().Exec(`CREATE TABLE start_write_audit (profile_id TEXT NOT NULL)`); err != nil {
@@ -89,6 +89,11 @@ func startPersistenceTestApp(t *testing.T) (*App, *database.DB) {
 	t.Cleanup(func() { _ = db.Close() })
 	if err := db.Migrate(); err != nil {
 		t.Fatal(err)
+	}
+	for _, id := range []string{"original-group", "new-database-group"} {
+		if _, err := db.GetConn().Exec(`INSERT INTO browser_groups(group_id,group_name) VALUES (?,?)`, id, id); err != nil {
+			t.Fatal(err)
+		}
 	}
 	cfg := &config.Config{}
 	cfg.Browser.DefaultFingerprintArgs = []string{"--fingerprint=123456"}

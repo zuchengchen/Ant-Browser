@@ -16,16 +16,21 @@ func TestSQLiteProfileDAOCountByGroupExcludesDeletedAndUngrouped(t *testing.T) {
 	if err := db.Migrate(); err != nil {
 		t.Fatal(err)
 	}
+	for _, id := range []string{"A", "B", "a"} {
+		if _, err := db.GetConn().Exec(`INSERT INTO browser_groups(group_id,group_name) VALUES (?,?)`, id, id); err != nil {
+			t.Fatal(err)
+		}
+	}
 	dao := NewSQLiteProfileDAO(db.GetConn())
 	for _, id := range []string{"target", "untouched"} {
 		if err := dao.Upsert(&Profile{ProfileId: id, ProfileName: id}); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if _, err := db.GetConn().Exec(`UPDATE browser_profiles SET group_id='A' WHERE profile_id='target'`); err != nil {
+	if _, err := db.GetConn().Exec(`INSERT INTO browser_profile_groups(profile_id,group_id) VALUES ('target','A')`); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.GetConn().Exec(`UPDATE browser_profiles SET group_id='B', deleted_at='2026-01-02T00:00:00Z' WHERE profile_id='untouched'`); err != nil {
+	if _, err := db.GetConn().Exec(`INSERT INTO browser_profile_groups(profile_id,group_id) VALUES ('untouched','B'); UPDATE browser_profiles SET deleted_at='2026-01-02T00:00:00Z' WHERE profile_id='untouched'`); err != nil {
 		t.Fatal(err)
 	}
 	for _, id := range []string{"no-group", "null-group", "case-distinct"} {

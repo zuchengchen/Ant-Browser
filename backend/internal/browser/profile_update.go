@@ -59,6 +59,7 @@ func (m *Manager) Update(profileId string, input ProfileInput) (*Profile, error)
 	profile.Tags = input.Tags
 	profile.Keywords = append([]string{}, input.Keywords...)
 	profile.GroupId = buildProfileGroupID(input.GroupId)
+	profile.GroupIds = CloneGroupIDs(input.GroupIds)
 	profile.UpdatedAt = time.Now().Format(time.RFC3339)
 
 	log.Info("浏览器配置更新", logger.F("profile_id", profileId), logger.F("profile_name", input.ProfileName))

@@ -491,7 +491,7 @@ func openProfilePackageContents(zipPath string) (*profilePackageContents, error)
 		if err := readProfilePackageJSON(reader.File, profilePackageDatabasePath, &snapshot); err != nil {
 			return nil, err
 		}
-		if snapshot.Format != profilePackageDatabaseFormat || snapshot.Version != profilePackageDatabaseVersion {
+		if snapshot.Format != profilePackageDatabaseFormat || (snapshot.Version != 1 && snapshot.Version != profilePackageDatabaseVersion) {
 			return nil, fmt.Errorf("不支持的实例数据库快照格式")
 		}
 		contents.DatabaseSnapshot = &snapshot

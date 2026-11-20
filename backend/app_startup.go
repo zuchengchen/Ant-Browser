@@ -22,6 +22,7 @@ import (
 
 // startup 应用启动时调用
 func (a *App) startup(ctx context.Context) {
+	a.startupReady.Store(false)
 	a.setRuntimeContext(ctx)
 	if err := apppath.EnsureWritableLayout(a.appRoot); err != nil {
 		runtime.LogFatal(ctx, fmt.Sprintf("初始化 Linux 用户数据目录失败: %v", err))
@@ -101,9 +102,16 @@ func (a *App) startup(ctx context.Context) {
 	a.startupInitProxySourceRefreshScheduler()
 	a.startupInitRuntimeCleanup()
 	a.restoreKeyPouchRuntime()
+	a.startupReady.Store(true)
 	a.emitRuntimeEvent("app:ready")
 
 	log.Info("应用启动成功")
+}
+
+// IsAppReady also works for pages opened after the one-shot app:ready event.
+// Publish readiness only after database migrations and all managers are ready.
+func (a *App) IsAppReady() bool {
+	return a != nil && a.startupReady.Load()
 }
 
 func (a *App) startupLoadConfig() *config.Config {

@@ -116,6 +116,9 @@ profile_id, profile_name, user_data_dir, proxy_mode, proxy_group_name, created_a
 		sourceDB.Close()
 		t.Fatal(err)
 	}
+	if _, err := sourceDB.GetConn().Exec(`INSERT INTO browser_groups(group_id,group_name) VALUES ('group-source','Source group'); INSERT INTO browser_profile_groups(profile_id,group_id) VALUES ('profile-source','group-source')`); err != nil {
+		t.Fatal(err)
+	}
 	if err := sourceDB.Close(); err != nil {
 		t.Fatal(err)
 	}

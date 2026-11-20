@@ -1,137 +1,70 @@
 package backend
 
 import (
-	"ant-chrome/backend/internal/logger"
+	"ant-chrome/backend/internal/browser"
 	"fmt"
-	"strings"
-	"time"
 )
 
-// BrowserProfileBatchSetTags 批量为实例设置标签（追加模式：将 tags 加入已有标签；replace 模式：直接替换）
-func (a *App) BrowserProfileBatchSetTags(profileIds []string, tags []string, replace bool) error {
-	log := logger.New("Browser")
-	a.browserMgr.Mutex.Lock()
-	defer a.browserMgr.Mutex.Unlock()
-
-	for _, profileID := range profileIds {
-		profile, exists := a.browserMgr.Profiles[profileID]
-		if !exists {
-			continue
-		}
-		if replace {
-			profile.Tags = tags
-		} else {
-			existing := make(map[string]struct{})
-			for _, tag := range profile.Tags {
-				existing[tag] = struct{}{}
-			}
-			for _, tag := range tags {
-				if _, ok := existing[tag]; !ok {
-					profile.Tags = append(profile.Tags, tag)
-					existing[tag] = struct{}{}
-				}
-			}
-		}
-		profile.UpdatedAt = time.Now().Format(time.RFC3339)
-		if a.browserMgr.ProfileDAO != nil {
-			if err := a.browserMgr.ProfileDAO.Upsert(profile); err != nil {
-				log.Error("批量设置标签失败", logger.F("profile_id", profileID), logger.F("error", err))
-				return err
-			}
-		}
+// Legacy name inputs are an adapter to the canonical membership relation.
+func (a *App) BrowserProfileBatchSetTags(profileIDs, tags []string, replace bool) error {
+	if replace {
+		return fmt.Errorf("旧标签替换可能丢失多个分组归属，请使用 BrowserProfileChangeGroups 的 set 模式")
 	}
+	return a.changeLegacyProfileTags(profileIDs, tags, false)
+}
+func (a *App) BrowserProfileBatchRemoveTags(profileIDs, tags []string) error {
+	return a.changeLegacyProfileTags(profileIDs, tags, true)
+}
+func (a *App) changeLegacyProfileTags(profileIDs, tags []string, remove bool) error {
+	m, err := a.instanceGroupManager()
+	if err != nil {
+		return err
+	}
+	m.Mutex.Lock()
+	defer m.Mutex.Unlock()
+	dao, ok := m.ProfileDAO.(*browser.SQLiteProfileDAO)
+	if !ok {
+		return fmt.Errorf("当前存储不支持实例分组")
+	}
+	snapshot, err := dao.ChangeLegacyTagsWithSnapshot(profileIDs, tags, remove)
+	if err != nil {
+		return err
+	}
+	m.ApplyGroupSnapshotLocked(snapshot)
 	return nil
 }
-
-// BrowserProfileBatchRemoveTags 批量从实例移除指定标签
-func (a *App) BrowserProfileBatchRemoveTags(profileIds []string, tags []string) error {
-	log := logger.New("Browser")
-	a.browserMgr.Mutex.Lock()
-	defer a.browserMgr.Mutex.Unlock()
-
-	removeSet := make(map[string]struct{})
-	for _, tag := range tags {
-		removeSet[tag] = struct{}{}
+func (a *App) BrowserRenameTag(oldName, newName string) error {
+	m, err := a.instanceGroupManager()
+	if err != nil {
+		return err
 	}
-
-	for _, profileID := range profileIds {
-		profile, exists := a.browserMgr.Profiles[profileID]
-		if !exists {
-			continue
-		}
-		filtered := profile.Tags[:0]
-		for _, tag := range profile.Tags {
-			if _, ok := removeSet[tag]; !ok {
-				filtered = append(filtered, tag)
+	m.Mutex.Lock()
+	defer m.Mutex.Unlock()
+	groups, err := m.GroupDAO.List()
+	if err != nil {
+		return err
+	}
+	var target *browser.Group
+	for _, g := range groups {
+		if g.GroupName == oldName {
+			if target != nil {
+				return fmt.Errorf("分组名称有歧义，请使用分组 ID 重命名")
 			}
-		}
-		profile.Tags = filtered
-		profile.UpdatedAt = time.Now().Format(time.RFC3339)
-		if a.browserMgr.ProfileDAO != nil {
-			if err := a.browserMgr.ProfileDAO.Upsert(profile); err != nil {
-				log.Error("批量移除标签失败", logger.F("profile_id", profileID), logger.F("error", err))
-				return err
-			}
+			target = g
 		}
 	}
-	return nil
-}
-
-// BrowserRenameTag 重命名所有实例中的指定标签
-func (a *App) BrowserRenameTag(oldName string, newName string) error {
-	log := logger.New("Browser")
-	oldName = strings.TrimSpace(oldName)
-	newName = strings.TrimSpace(newName)
-	if oldName == "" || newName == "" {
-		return fmt.Errorf("标签名称不能为空")
+	if target == nil {
+		return fmt.Errorf("分组不存在，请刷新后重试")
 	}
-
-	a.browserMgr.Mutex.Lock()
-	defer a.browserMgr.Mutex.Unlock()
-
-	changedCount := 0
-	for profileID, profile := range a.browserMgr.Profiles {
-		tagChanged := false
-		var newTags []string
-		for _, tag := range profile.Tags {
-			if strings.EqualFold(tag, oldName) {
-				newTags = append(newTags, newName)
-				tagChanged = true
-			} else {
-				newTags = append(newTags, tag)
-			}
-		}
-
-		if tagChanged {
-			uniqueTags := make([]string, 0)
-			seen := make(map[string]struct{})
-			for _, tag := range newTags {
-				if _, ok := seen[tag]; !ok {
-					uniqueTags = append(uniqueTags, tag)
-					seen[tag] = struct{}{}
-				}
-			}
-
-			profile.Tags = uniqueTags
-			profile.UpdatedAt = time.Now().Format(time.RFC3339)
-			if a.browserMgr.ProfileDAO != nil {
-				if err := a.browserMgr.ProfileDAO.Upsert(profile); err != nil {
-					log.Error("重命名标签保存失败", logger.F("profile_id", profileID), logger.F("error", err))
-					return err
-				}
-			}
-			changedCount++
-		}
+	dao, ok := m.ProfileDAO.(*browser.SQLiteProfileDAO)
+	if !ok {
+		return fmt.Errorf("当前存储不支持实例分组")
 	}
-
-	if changedCount > 0 && a.browserMgr.ProfileDAO == nil {
-		if err := a.browserMgr.SaveProfiles(); err != nil {
-			return err
-		}
+	input := browser.GroupInput{GroupName: newName, ParentId: target.ParentId, SortOrder: target.SortOrder}
+	_, snapshot, err := dao.ChangeGroupDefinition(target.GroupId, &input)
+	if err != nil {
+		return err
 	}
-
-	if changedCount > 0 {
-		log.Info("重命名标签成功", logger.F("old", oldName), logger.F("new", newName), logger.F("changed_profiles", changedCount))
-	}
+	m.ApplyGroupSnapshotLocked(snapshot)
 	return nil
 }
