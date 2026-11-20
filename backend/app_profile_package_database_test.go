@@ -643,22 +643,24 @@ func TestProfilePackageImportKeepsProxyBindingWhenProxyMissing(t *testing.T) {
 		Format:  profilePackageDatabaseFormat,
 		Version: profilePackageDatabaseVersion,
 		Profiles: []browser.Profile{{
-			ProfileId:   "old-profile",
-			ProfileName: "缺代理实例",
-			ProxyId:     "missing-proxy",
-			ProxyConfig: "http://missing-proxy:8080",
+			ProfileId:      "old-profile",
+			ProfileName:    "缺代理实例",
+			ProxyId:        "missing-proxy",
+			ProxyConfig:    "http://missing-proxy:8080",
+			ProxyBindError: "source no longer contains this proxy",
 		}},
 	}
 	prepared := []preparedProfilePackageImport{{
 		OldProfileID: "old-profile",
 		Profile: browser.Profile{
-			ProfileId:   "new-profile",
-			ProfileName: "缺代理实例",
-			UserDataDir: "new-profile",
-			ProxyId:     "missing-proxy",
-			ProxyConfig: "http://missing-proxy:8080",
-			CreatedAt:   "2026-08-31T00:00:00Z",
-			UpdatedAt:   "2026-08-31T00:00:00Z",
+			ProfileId:      "new-profile",
+			ProfileName:    "缺代理实例",
+			UserDataDir:    "new-profile",
+			ProxyId:        "missing-proxy",
+			ProxyConfig:    "http://missing-proxy:8080",
+			ProxyBindError: "source no longer contains this proxy",
+			CreatedAt:      "2026-08-31T00:00:00Z",
+			UpdatedAt:      "2026-08-31T00:00:00Z",
 		},
 	}}
 	warnings := make([]string, 0, 1)
@@ -672,6 +674,9 @@ func TestProfilePackageImportKeepsProxyBindingWhenProxyMissing(t *testing.T) {
 	}
 	if stored.ProxyId != "missing-proxy" || stored.ProxyConfig != "http://missing-proxy:8080" {
 		t.Fatalf("导入时清空了代理绑定: proxyId=%q proxyConfig=%q", stored.ProxyId, stored.ProxyConfig)
+	}
+	if stored.ProxyBindError != "source no longer contains this proxy" {
+		t.Fatalf("restored proxy binding error = %q", stored.ProxyBindError)
 	}
 	if joined := strings.Join(warnings, "；"); !strings.Contains(joined, "保留原代理绑定") {
 		t.Fatalf("缺少保留绑定的告警: %v", warnings)

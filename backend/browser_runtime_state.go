@@ -8,6 +8,7 @@ import (
 	"syscall"
 	"time"
 
+	"ant-chrome/backend/internal/browser"
 	"ant-chrome/backend/internal/logger"
 )
 
@@ -25,6 +26,7 @@ func copyBrowserProfileSnapshot(profile *BrowserProfile) *BrowserProfile {
 	snapshot.LaunchArgs = append([]string{}, profile.LaunchArgs...)
 	snapshot.LastLaunchArgs = append([]string{}, profile.LastLaunchArgs...)
 	snapshot.Tags = append([]string{}, profile.Tags...)
+	snapshot.GroupIds = browser.CloneGroupIDs(profile.GroupIds)
 	snapshot.Keywords = append([]string{}, profile.Keywords...)
 	return &snapshot
 }
@@ -98,6 +100,7 @@ func (a *App) markProfileRunningLocked(profileId string, profile *BrowserProfile
 	if cmd != nil {
 		a.browserMgr.BrowserProcesses[profileId] = cmd
 	}
+	a.retainInstanceLaunchSlot(profileId)
 	a.startProfileWindowMarkerLocked(profileId, profile)
 	a.ensureBrowserPasswordAutosave()
 	if debugReady && a.launchServer != nil {

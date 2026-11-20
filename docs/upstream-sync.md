@@ -77,8 +77,8 @@ git push origin master
 - 应用内更新检查、项目链接与下载入口指向 `zuchengchen/Ant-Browser`；保留上游来源和许可证说明。
 - 发布标签固定为 `czc-vX.Y.Z`，例如 `czc-v1.9.0`。上游 `v*` 等标签不会触发这套发布工作流。
 - 包内版本保持数字 `X.Y.Z`。发布前更新 `wails.json`、`frontend/package.json` 与 `frontend/package-lock.json`（包括 `packages[""].version`），提交这些变更。`scripts/resolve-release-version.py` 在三个平台检查版本与标签是否一致。
-- 本项目版本独立递增，发行说明单独注明集成的上游版本与提交。不要复用或移动已有发布标签。
-- 推送单个自有标签触发 Windows、Linux 和 macOS 工作流；手动 `workflow_dispatch` 只构建产物，不创建 Release。其可选 version 输入是版本一致性检查，不会覆盖源码内嵌版本。
+- 本项目版本独立递增。自定义发行说明写入 `docs/changelogs/czc-vX.Y.Z.md`，工作流从最近一次上游合并追加来源 ref 与提交。缺省说明由 GitHub 生成。不要复用或移动已有发布标签。
+- 推送单个自有标签触发 `Publish All Platforms`。它调用三端子工作流，等待全部构建成功后在该标签上发布。手动运行聚合工作流或任一子工作流只构建产物，可选 version 用来核对源码内嵌版本。
 - 工作流通过 `GH_REPO` 明确将 Release 上传到当前仓库。常规发布使用主线的真实提交，不运行 `tools/public-release/` 的聚合快照发布流程。
 
 验证版本并在已通过测试的提交上发布（按实际版本替换示例）：

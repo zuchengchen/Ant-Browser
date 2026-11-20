@@ -90,6 +90,11 @@ func BindProfileToProxy(profile *Profile, proxy Proxy, syncProxyConfig bool) boo
 		profile.ProxyBindName = proxyName
 		changed = true
 	}
+	// 重新绑定成功后清理失效错误态，避免前端一直显示"代理已失效"。
+	if profile.ProxyBindError != "" {
+		profile.ProxyBindError = ""
+		changed = true
+	}
 	if changed {
 		profile.ProxyBindUpdatedAt = time.Now().Format(time.RFC3339)
 	}
@@ -114,6 +119,12 @@ func ClearProfileProxyBinding(profile *Profile) bool {
 		profile.ProxyBindName = ""
 		changed = true
 	}
+	// 绑定快照被整体清空时，持久化的失效错误态也必须清掉，
+	// 否则动态/本地模式还会显示上一次固定代理的失效提示。
+	if profile.ProxyBindError != "" {
+		profile.ProxyBindError = ""
+		changed = true
+	}
 	if changed {
 		profile.ProxyBindUpdatedAt = time.Now().Format(time.RFC3339)
 	}
@@ -135,6 +146,11 @@ func (m *Manager) ResolveProfileProxyBinding(profile *Profile) (bool, bool, stri
 		changed := BindProfileToProxy(profile, proxy, true)
 		return changed, true, "proxy_id"
 	}
+	// A fixed virtual group also owns its ID. Its name or previous snapshot
+	// must never resolve to a physical member during launch preparation.
+	if _, ok := m.getProxyVirtualGroupByIDOrName(profile.ProxyId); ok {
+		return false, true, ""
+	}
 	return resolveProfileProxyBindingBySnapshot(profile, proxies)
 }
 
@@ -142,7 +158,13 @@ func (m *Manager) ResolveProfileProxyBinding(profile *Profile) (bool, bool, stri
 // pass. Keep the returned resolver local to that pass; a later pass must reload
 // the catalog to see proxy edits. The caller holds Mutex while changing profiles.
 func (m *Manager) NewProfileProxyBindingResolver() func(*Profile) (bool, bool, string) {
-	proxies := m.listProxyCatalog()
+	return NewProfileProxyBindingResolver(m.listProxyCatalog())
+}
+
+// NewProfileProxyBindingResolver indexes a single authoritative snapshot,
+// including the built-in direct binding even when it is absent from storage.
+func NewProfileProxyBindingResolver(pool []Proxy) func(*Profile) (bool, bool, string) {
+	proxies := ensureBuiltinDirectProxy(pool)
 	byID := make(map[string]Proxy, len(proxies))
 	for _, proxy := range proxies {
 		key := normalizeProxyBindValue(proxy.ProxyId)
@@ -166,12 +188,15 @@ func (m *Manager) NewProfileProxyBindingResolver() func(*Profile) (bool, bool, s
 }
 
 func resolveProfileProxyBindingBySnapshot(profile *Profile, proxies []Proxy) (bool, bool, string) {
+	if strings.TrimSpace(profile.ProxyId) == "" && profile.ProxyBindError != "" {
+		return false, false, ""
+	}
 	allowConfigFallback := strings.TrimSpace(profile.ProxyId) != "" ||
 		strings.TrimSpace(profile.ProxyBindSourceID) != "" ||
 		strings.TrimSpace(profile.ProxyBindSourceURL) != "" ||
 		strings.TrimSpace(profile.ProxyBindName) != ""
 
-	if proxy, ok, mode := matchProxyBySnapshot(profile, proxies, allowConfigFallback); ok {
+	if proxy, ok, mode := matchProxyBySnapshot(profile, proxies, allowConfigFallback); ok && !strings.EqualFold(strings.TrimSpace(proxy.ProxyConfig), "direct://") {
 		changed := BindProfileToProxy(profile, proxy, true)
 		return changed, true, mode
 	}

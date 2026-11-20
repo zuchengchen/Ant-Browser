@@ -10,7 +10,7 @@ import (
 // 直到有实例停止腾出名额后自动放行。等待期间不持有任何其它锁，
 // 停止实例不会被排队阻塞，避免"等名额→但名额只能靠停止释放→停止被锁"的死锁。
 //
-// 占用计数只统计"经本闸门获准启动、尚未停止"的实例；释放统一挂在
+// 占用计数统计"经本闸门获准启动或已恢复的运行实例"；释放统一挂在
 // markProfileStoppedLocked（全部停止路径的总汇：手动停止/状态巡检/备份恢复/关机）。
 type instanceLaunchGate struct {
 	mu        sync.Mutex
@@ -23,7 +23,8 @@ type instanceLaunchGate struct {
 // release from an earlier start must not release a later start of the profile.
 type instanceLaunchAdmission struct {
 	profileID  string
-	references int // 同实例并发请求共享名额，各自失败时只撤销自己的引用
+	references int  // 同实例并发请求共享名额，各自失败时只撤销自己的引用
+	running    bool // 恢复出的进程独立于启动请求，直到停止才释放
 }
 
 func newLaunchGate() *instanceLaunchGate {
@@ -57,7 +58,7 @@ func (g *instanceLaunchGate) releaseAdmission(admission *instanceLaunchAdmission
 	defer g.mu.Unlock()
 	if g.admitted[admission.profileID] == admission {
 		admission.references--
-		if admission.references == 0 {
+		if admission.references == 0 && !admission.running {
 			delete(g.admitted, admission.profileID)
 			g.broadcast()
 		}
@@ -69,14 +70,25 @@ func (g *instanceLaunchGate) releaseFunc(admission *instanceLaunchAdmission) fun
 	return func() { once.Do(func() { g.releaseAdmission(admission) }) }
 }
 
-func (a *App) instanceLaunchLimit() int {
-	if a == nil || a.config == nil {
-		return 0
+func (g *instanceLaunchGate) retain(profileId string) {
+	g.mu.Lock()
+	if g.admitted[profileId] == nil {
+		g.admitted[profileId] = &instanceLaunchAdmission{profileID: profileId}
 	}
-	if a.config.Browser.MaxConcurrentInstances <= 0 {
-		return 0 // 0/负数 = 不限制
+	g.admitted[profileId].running = true
+	g.mu.Unlock()
+}
+
+// Both settings updates and admission checks hold the gate mutex.
+func (a *App) setInstanceLaunchLimit(limit int) {
+	gate := a.launchGate()
+	gate.mu.Lock()
+	defer gate.mu.Unlock()
+	limit = max(0, limit)
+	if a.config.Browser.MaxConcurrentInstances != limit {
+		a.config.Browser.MaxConcurrentInstances = limit
+		gate.broadcast()
 	}
-	return a.config.Browser.MaxConcurrentInstances
 }
 
 func (a *App) launchGate() *instanceLaunchGate {
@@ -96,19 +108,46 @@ func (a *App) releaseInstanceLaunchSlot(profileID string) {
 	a.launchGate().release(profileID)
 }
 
+// retainInstanceLaunchSlot 将已在运行的恢复实例计入并发上限。
+func (a *App) retainInstanceLaunchSlot(profileId string) {
+	if a == nil || profileId == "" {
+		return
+	}
+	a.launchGate().retain(profileId)
+}
+
+func (a *App) reconcileInstanceLaunchSlots() {
+	if a == nil || a.browserMgr == nil {
+		return
+	}
+	a.browserMgr.Mutex.Lock()
+	defer a.browserMgr.Mutex.Unlock()
+	for profileId, profile := range a.browserMgr.Profiles {
+		if profile != nil && profile.Running {
+			a.retainInstanceLaunchSlot(profileId)
+		}
+	}
+}
+
 // acquireInstanceLaunchSlot 返回名额释放函数。
 // queued=true 表示该请求经历过排队（前端据此提示"已进入启动队列"）。
 // 同一实例重复的启动请求不重复占名额（启动逻辑内部会按"已在运行"处理）。
 func (a *App) acquireInstanceLaunchSlot(profileId string) (release func(), queued bool) {
 	gate := a.launchGate()
-	limit := a.instanceLaunchLimit()
-	noop := func() {}
-	if limit <= 0 {
-		return noop, false
-	}
 	queued = false
 	for {
 		gate.mu.Lock()
+		if !a.browserInstanceStartAllowed() {
+			if queued {
+				gate.waiting--
+			}
+			gate.mu.Unlock()
+			return func() {}, queued
+		}
+		limit := 0
+		if a.config != nil {
+			limit = a.config.Browser.MaxConcurrentInstances
+		}
 		if admission := gate.admitted[profileId]; admission != nil {
 			admission.references++
 			if queued {
@@ -117,14 +156,16 @@ func (a *App) acquireInstanceLaunchSlot(profileId string) (release func(), queue
 			gate.mu.Unlock()
 			return gate.releaseFunc(admission), queued
 		}
-		if gate.occupied() < limit {
+		if limit <= 0 || gate.occupied() < limit {
 			admission := &instanceLaunchAdmission{profileID: profileId, references: 1}
 			gate.admitted[profileId] = admission
 			if queued {
 				gate.waiting--
 			}
 			gate.mu.Unlock()
-			a.emitRuntimeEvent("instance:launch:admitted", map[string]interface{}{"profileId": profileId})
+			if limit > 0 {
+				a.emitRuntimeEvent("instance:launch:admitted", map[string]interface{}{"profileId": profileId})
+			}
 			return gate.releaseFunc(admission), queued
 		}
 		newlyQueued := !queued

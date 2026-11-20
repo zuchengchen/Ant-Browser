@@ -43,7 +43,7 @@ const profileSelect = `SELECT profile_id, profile_name, user_data_dir, core_id,
  fingerprint_args, proxy_id, proxy_config,
  COALESCE(proxy_mode, ''), COALESCE(proxy_group_name, ''),
  COALESCE(proxy_bind_source_id, ''), COALESCE(proxy_bind_source_url, ''),
- COALESCE(proxy_bind_name, ''), COALESCE(proxy_bind_updated_at, ''),
+ COALESCE(proxy_bind_name, ''), COALESCE(proxy_bind_updated_at, ''), COALESCE(proxy_bind_error, ''),
  COALESCE(memory_limit_mb, 0), launch_args,
  (SELECT json_group_array(group_name) FROM (
    SELECT g.group_name FROM browser_profile_groups m JOIN browser_groups g ON g.group_id=m.group_id
@@ -118,8 +118,8 @@ func (d *SQLiteProfileDAO) GetById(profileId string) (*Profile, error) {
 // JSON representations that the normal frontend read projection normalizes.
 func (d *SQLiteProfileDAO) UpdateProxyBinding(p *Profile) error {
 	result, err := d.db.Exec(`UPDATE browser_profiles SET proxy_id=?,proxy_config=?,proxy_bind_source_id=?,proxy_bind_source_url=?,
-		proxy_bind_name=?,proxy_bind_updated_at=?,updated_at=? WHERE profile_id=? AND COALESCE(deleted_at,'')=''`,
-		p.ProxyId, p.ProxyConfig, p.ProxyBindSourceID, p.ProxyBindSourceURL, p.ProxyBindName, p.ProxyBindUpdatedAt, p.UpdatedAt, p.ProfileId)
+		proxy_bind_name=?,proxy_bind_updated_at=?,proxy_bind_error=?,updated_at=? WHERE profile_id=? AND COALESCE(deleted_at,'')=''`,
+		p.ProxyId, p.ProxyConfig, p.ProxyBindSourceID, p.ProxyBindSourceURL, p.ProxyBindName, p.ProxyBindUpdatedAt, p.ProxyBindError, p.UpdatedAt, p.ProfileId)
 	if err != nil {
 		return err
 	}
@@ -159,9 +159,9 @@ func (d *SQLiteProfileDAO) Upsert(profile *Profile) error {
 	_, err = tx.Exec(`
 		INSERT INTO browser_profiles
 		  (profile_id, profile_name, user_data_dir, core_id, fingerprint_args,
-		   proxy_id, proxy_config, proxy_mode, proxy_group_name, proxy_bind_source_id, proxy_bind_source_url, proxy_bind_name, proxy_bind_updated_at,
+		   proxy_id, proxy_config, proxy_mode, proxy_group_name, proxy_bind_source_id, proxy_bind_source_url, proxy_bind_name, proxy_bind_updated_at, proxy_bind_error,
 		   memory_limit_mb, launch_args, tags, keywords, group_id, created_at, updated_at, restore_last_session, deleted_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(profile_id) DO UPDATE SET
 		  profile_name     = excluded.profile_name,
 		  user_data_dir    = excluded.user_data_dir,
@@ -175,6 +175,7 @@ func (d *SQLiteProfileDAO) Upsert(profile *Profile) error {
 		  proxy_bind_source_url = excluded.proxy_bind_source_url,
 		  proxy_bind_name = excluded.proxy_bind_name,
 		  proxy_bind_updated_at = excluded.proxy_bind_updated_at,
+		  proxy_bind_error = excluded.proxy_bind_error,
 		  memory_limit_mb  = excluded.memory_limit_mb,
 		  launch_args      = excluded.launch_args,
 		  tags             = excluded.tags,
@@ -186,7 +187,7 @@ func (d *SQLiteProfileDAO) Upsert(profile *Profile) error {
 		next.ProfileId, next.ProfileName, next.UserDataDir, next.CoreId,
 		string(fingerprintArgs), next.ProxyId, next.ProxyConfig,
 		NormalizeProxyMode(next.ProxyMode), NormalizeProxyGroupName(next.ProxyGroupName),
-		next.ProxyBindSourceID, next.ProxyBindSourceURL, next.ProxyBindName, next.ProxyBindUpdatedAt,
+		next.ProxyBindSourceID, next.ProxyBindSourceURL, next.ProxyBindName, next.ProxyBindUpdatedAt, next.ProxyBindError,
 		normalizeMemoryLimitMB(next.MemoryLimitMB), string(launchArgs), string(tags), string(keywords), next.GroupId,
 		next.CreatedAt, next.UpdatedAt, NormalizeRestoreLastSessionMode(next.RestoreLastSession), next.DeletedAt,
 	)
@@ -282,7 +283,7 @@ func scanProfile(s scanner) (*Profile, error) {
 		&p.ProfileId, &p.ProfileName, &p.UserDataDir, &p.CoreId,
 		&fingerprintArgsJSON, &p.ProxyId, &p.ProxyConfig,
 		&p.ProxyMode, &p.ProxyGroupName,
-		&p.ProxyBindSourceID, &p.ProxyBindSourceURL, &p.ProxyBindName, &p.ProxyBindUpdatedAt,
+		&p.ProxyBindSourceID, &p.ProxyBindSourceURL, &p.ProxyBindName, &p.ProxyBindUpdatedAt, &p.ProxyBindError,
 		&p.MemoryLimitMB, &launchArgsJSON, &tagsJSON, &keywordsJSON, &p.GroupId,
 		&p.CreatedAt, &p.UpdatedAt, &p.RestoreLastSession, &p.DeletedAt, &groupIDsJSON,
 	)

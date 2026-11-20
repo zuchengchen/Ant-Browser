@@ -54,7 +54,7 @@ func TestReconcileProfileProxyBindingsUsesFreshCatalogEachPass(t *testing.T) {
 		}
 	}
 	app.browserMgr.InitData()
-	app.reconcileProfileProxyBindings()
+	app.ReconcileProxyReferences()
 	if proxyDAO.lists != 1 || profileDAO.saves != 2 {
 		t.Fatalf("first pass: catalog reads=%d profile saves=%d", proxyDAO.lists, profileDAO.saves)
 	}
@@ -71,7 +71,7 @@ func TestReconcileProfileProxyBindingsUsesFreshCatalogEachPass(t *testing.T) {
 	if err := proxyDAO.Upsert(browser.Proxy{ProxyId: "node-a-new", ProxyName: "Shared", ProxyConfig: "http://a-new:8080", SourceID: "a"}); err != nil {
 		t.Fatal(err)
 	}
-	app.reconcileProfileProxyBindings()
+	app.ReconcileProxyReferences()
 	if proxyDAO.lists != 2 || profileDAO.saves != 3 {
 		t.Fatalf("second pass: catalog reads=%d profile saves=%d", proxyDAO.lists, profileDAO.saves)
 	}
@@ -79,7 +79,7 @@ func TestReconcileProfileProxyBindingsUsesFreshCatalogEachPass(t *testing.T) {
 	if err != nil || stored.ProxyId != "node-a-new" || stored.ProxyConfig != "http://a-new:8080" || stored.ProxyBindSourceID != "a" || stored.CreatedAt != first.CreatedAt {
 		t.Fatalf("refreshed persisted binding: profile=%+v error=%v", stored, err)
 	}
-	app.reconcileProfileProxyBindings()
+	app.ReconcileProxyReferences()
 	if proxyDAO.lists != 3 || profileDAO.saves != 3 {
 		t.Fatalf("unchanged pass: catalog reads=%d profile saves=%d", proxyDAO.lists, profileDAO.saves)
 	}
@@ -102,7 +102,7 @@ func TestReconcileProfileProxyBindingsDAOFailureKeepsMissingBinding(t *testing.T
 	// A configured fallback must not override an unavailable authoritative DAO.
 	app.browserMgr.Config.Browser.Proxies = []config.BrowserProxy{{ProxyId: "missing", ProxyName: "Old node", ProxyConfig: "http://stale:8080"}}
 	proxyDAO.err = errors.New("synthetic catalog read failure")
-	app.reconcileProfileProxyBindings()
+	app.ReconcileProxyReferences()
 	if proxyDAO.lists != 1 || profileDAO.saves != 0 || !reflect.DeepEqual(*app.browserMgr.Profiles[profile.ProfileId], before) {
 		t.Fatalf("failed catalog read changed a binding: reads=%d saves=%d profile=%+v", proxyDAO.lists, profileDAO.saves, app.browserMgr.Profiles[profile.ProfileId])
 	}
@@ -127,7 +127,7 @@ func TestReconcileDirectProfilesPreservesLegacyProfileBytes(t *testing.T) {
 		CREATE TEMP TRIGGER fixture_group_insert AFTER INSERT ON browser_profile_groups BEGIN INSERT INTO fixture_updated VALUES('membership'); END;
 		CREATE TEMP TRIGGER fixture_group_delete AFTER DELETE ON browser_profile_groups BEGIN INSERT INTO fixture_updated VALUES('membership'); END;`)
 	app.browserMgr.InitData()
-	app.reconcileProfileProxyBindings()
+	app.ReconcileProxyReferences()
 	for _, id := range []string{"legacy", "needs-binding"} {
 		var launch, fingerprint string
 		if err := db.QueryRow(`SELECT launch_args,fingerprint_args FROM browser_profiles WHERE profile_id=?`, id).Scan(&launch, &fingerprint); err != nil || launch != "null" || fingerprint != " [ ] " {
@@ -144,7 +144,7 @@ func TestReconcileDirectProfilesPreservesLegacyProfileBytes(t *testing.T) {
 		}
 	}
 	execProxyBindingFixture(t, db, `DELETE FROM fixture_updated`)
-	app.reconcileProfileProxyBindings()
+	app.ReconcileProxyReferences()
 	if ugCompatCount(t, app, `SELECT count(*) FROM fixture_updated`) != 0 {
 		t.Fatal("unchanged restart rewrote existing rows")
 	}
@@ -160,12 +160,12 @@ func TestReconcileProfileProxyWriteFailureCanRetry(t *testing.T) {
 	app.browserMgr.InitData()
 	p := app.browserMgr.Profiles["direct"]
 	execProxyBindingFixture(t, db, `CREATE TEMP TRIGGER fixture_deny BEFORE UPDATE ON browser_profiles BEGIN SELECT RAISE(ABORT,'fixture'); END`)
-	app.reconcileProfileProxyBindings()
+	app.ReconcileProxyReferences()
 	if p.ProxyBindName != "" {
 		t.Fatal("failed write was published to the runtime cache")
 	}
 	execProxyBindingFixture(t, db, `DROP TRIGGER fixture_deny`)
-	app.reconcileProfileProxyBindings()
+	app.ReconcileProxyReferences()
 	if p.ProxyBindName == "" {
 		t.Fatal("binding did not recover on next reconciliation")
 	}
@@ -200,4 +200,83 @@ func newReconcileBindingTestApp(t *testing.T) (*App, *reconcileCountingProxyDAO,
 	manager.ProxyDAO = proxies
 	manager.ProfileDAO = profiles
 	return &App{db: db, browserMgr: manager}, proxies, profiles
+}
+
+func TestReconcileDanglingProxyKeepsMembershipsAndRequiresReselection(t *testing.T) {
+	app, prox, profiles := newReconcileBindingTestApp(t)
+	app.browserMgr.ProfileDAO = profiles.ProfileDAO
+	profile := &browser.Profile{
+		ProfileId: "missing-node", ProfileName: "test",
+		ProxyId: "removed", ProxyBindName: "Original", ProxyConfig: "http://old:8080",
+		GroupIds: []string{"group-a", "group-b"}, Keywords: []string{"keep"},
+	}
+	if err := app.browserMgr.ProfileDAO.Upsert(profile); err != nil {
+		t.Fatal(err)
+	}
+	app.browserMgr.InitData()
+	// Each pass sees one catalog, even when a removed node needs its snapshot checked.
+	report := app.ReconcileProxyReferences()
+	if report.ProfileBindingsCleared != 1 || prox.lists != 1 {
+		t.Fatalf("report = %+v, reads = %d", report, prox.lists)
+	}
+	stored, err := app.browserMgr.ProfileDAO.GetById(profile.ProfileId)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stored.ProxyBindError == "" || stored.ProxyId != "" || stored.ProxyConfig != "" ||
+		!reflect.DeepEqual(stored.GroupIds, profile.GroupIds) || !reflect.DeepEqual(stored.Keywords, profile.Keywords) {
+		t.Fatalf("cleared profile = %+v", stored)
+	}
+	if err := prox.Upsert(browser.Proxy{ProxyId: "replacement", ProxyName: "Original", ProxyConfig: profile.ProxyConfig}); err != nil {
+		t.Fatal(err)
+	}
+	if report = app.ReconcileProxyReferences(); report.ProfileBindingsCleared != 0 {
+		t.Fatalf("second pass = %+v", report)
+	}
+	if _, _, err := app.browserMgr.ApplyDefaults(stored); err == nil || stored.ProxyId != "" || stored.ProxyBindError == "" {
+		t.Fatalf("start defaults resurrected an invalidated binding: %+v err=%v", stored, err)
+	}
+	stored, err = app.browserMgr.ProfileDAO.GetById(profile.ProfileId)
+	if err != nil || stored.ProxyBindError == "" || stored.ProxyId != "" {
+		t.Fatalf("persisted binding after restart = %+v, err=%v", stored, err)
+	}
+	clone, err := app.browserMgr.Copy(profile.ProfileId, "copy")
+	if err != nil || clone.ProxyBindError != stored.ProxyBindError || clone.ProxyId != "" {
+		t.Fatalf("copy of invalidated binding = %+v, err=%v", clone, err)
+	}
+}
+
+type unavailableVirtualGroups struct{ browser.ProxyVirtualGroupDAO }
+
+func (unavailableVirtualGroups) List() ([]browser.ProxyVirtualGroup, error) {
+	return nil, errors.New("synthetic virtual group catalog read failure")
+}
+
+func TestReconcileVirtualGroupDoesNotRebindToPhysicalNode(t *testing.T) {
+	app, prox, profiles := newReconcileBindingTestApp(t)
+	group := browser.ProxyVirtualGroup{GroupId: "virtual", GroupName: "group"}
+	app.browserMgr.ProxyVirtualGroupDAO = browser.NewSQLiteProxyVirtualGroupDAO(app.db.GetConn())
+	if err := app.browserMgr.ProxyVirtualGroupDAO.Upsert(group); err != nil {
+		t.Fatal(err)
+	}
+	if err := prox.Upsert(browser.Proxy{ProxyId: "physical", ProxyName: "same", ProxyConfig: "http://physical:8080"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := profiles.ProfileDAO.Upsert(&browser.Profile{
+		ProfileId: "uses-group", ProxyId: "virtual", ProxyBindName: "same",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	app.browserMgr.InitData()
+	p := app.browserMgr.Profiles["uses-group"]
+	if report := app.ReconcileProxyReferences(); report.ProfileBindingsCleared != 0 || p.ProxyId != "virtual" || p.ProxyConfig != "" {
+		t.Fatalf("virtual group was rewritten by matching physical name: %+v %+v", report, p)
+	}
+	if _, _, err := app.browserMgr.ApplyDefaults(p); err != nil || p.ProxyId != "virtual" || p.ProxyConfig != "" {
+		t.Fatalf("launch defaults changed a fixed virtual group: %+v %v", p, err)
+	}
+	app.browserMgr.ProxyVirtualGroupDAO = unavailableVirtualGroups{}
+	if report := app.ReconcileProxyReferences(); report.ProfileBindingsCleared != 0 || p.ProxyId != "virtual" || profiles.saves != 0 {
+		t.Fatalf("unknown virtual group catalog changed binding: %+v %+v", report, p)
+	}
 }

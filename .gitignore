@@ -64,6 +64,9 @@ docs/*
 !docs/instance-groups.md
 !docs/chatgpt-account.md
 !docs/browser-password-autosave.md
+# Release notes: one file per version, used by publish-all workflow
+!docs/changelogs/
+!docs/changelogs/*.md
 DEPLOYMENT_GUIDE.md
 plan.md
 pic/

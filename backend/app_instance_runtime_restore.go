@@ -3,22 +3,7 @@ package backend
 import (
 	"context"
 	"sort"
-
-	"ant-chrome/backend/internal/logger"
 )
-
-// Restore existing windows once after startup, without launching a browser or
-// changing its proxy. This also resumes window names after an app-only restart.
-func (a *App) startupRestoreBrowserWindows() {
-	if a == nil || a.browserMgr == nil {
-		return
-	}
-	if err := a.startBackgroundTask(func(ctx context.Context) {
-		a.restoreRunningBrowserProfiles(ctx, detectBrowserRuntimeByUserDataDir)
-	}); err != nil {
-		logger.New("Browser").Warn("恢复已打开实例的窗口标识失败", logger.F("error", err))
-	}
-}
 
 func (a *App) restoreRunningBrowserProfiles(ctx context.Context, detect func(string) (browserRuntimeDetection, bool)) {
 	if a == nil || a.browserMgr == nil || ctx == nil || detect == nil || ctx.Err() != nil {

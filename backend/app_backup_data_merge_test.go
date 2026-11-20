@@ -98,13 +98,13 @@ sort_order, created_at
 	}
 	if _, err := sourceDB.GetConn().Exec(`INSERT INTO browser_profiles (
 profile_id, profile_name, user_data_dir, core_id, fingerprint_args, proxy_id, proxy_config,
-proxy_mode, proxy_group_name, proxy_bind_source_id, proxy_bind_source_url, proxy_bind_name, proxy_bind_updated_at,
+proxy_mode, proxy_group_name, proxy_bind_source_id, proxy_bind_source_url, proxy_bind_name, proxy_bind_updated_at, proxy_bind_error,
 memory_limit_mb, launch_args, tags, keywords, group_id, created_at, updated_at,
 restore_last_session, deleted_at
 ) VALUES (
 'profile-source', 'Source Profile', 'C:\\old\\profiles\\profile-source', 'core-source', '["--flag"]',
 'proxy-source', 'socks5://127.0.0.1:1080', 'fixed', '', 'source-1', 'https://example.com/proxies', 'Source Proxy',
-'2026-08-24T00:03:00Z', 512, '["--headless"]', '["tag"]', '["keyword"]', 'group-source',
+'2026-08-24T00:03:00Z', 'fixture binding error', 512, '["--headless"]', '["tag"]', '["keyword"]', 'group-source',
 '2026-08-24T00:00:00Z', '2026-08-24T00:04:00Z', 'never', '2026-08-24T00:05:00Z'
 )`); err != nil {
 		sourceDB.Close()
@@ -153,17 +153,20 @@ FROM browser_proxies WHERE proxy_id = 'proxy-source'`).Scan(&preferredKernel, &s
 		t.Fatalf("proxy extended fields were not preserved: kernel=%q sourceID=%q sourceURL=%q latency=%d testOK=%d", preferredKernel, sourceID, sourceURL, latency, testOK)
 	}
 
-	var proxyMode, proxyGroupName, bindSourceID, bindSourceURL, bindName, bindUpdatedAt, groupID, restoreLastSession, deletedAt string
+	var proxyMode, proxyGroupName, bindSourceID, bindSourceURL, bindName, bindUpdatedAt, bindError, groupID, restoreLastSession, deletedAt string
 	var memoryLimit int
-	if err := targetDB.GetConn().QueryRow(`SELECT proxy_mode, proxy_group_name, proxy_bind_source_id, proxy_bind_source_url, proxy_bind_name, proxy_bind_updated_at,
+	if err := targetDB.GetConn().QueryRow(`SELECT proxy_mode, proxy_group_name, proxy_bind_source_id, proxy_bind_source_url, proxy_bind_name, proxy_bind_updated_at, proxy_bind_error,
 memory_limit_mb, group_id, restore_last_session, deleted_at
 FROM browser_profiles WHERE profile_id = 'profile-source'`).Scan(
-		&proxyMode, &proxyGroupName, &bindSourceID, &bindSourceURL, &bindName, &bindUpdatedAt, &memoryLimit, &groupID, &restoreLastSession, &deletedAt,
+		&proxyMode, &proxyGroupName, &bindSourceID, &bindSourceURL, &bindName, &bindUpdatedAt, &bindError, &memoryLimit, &groupID, &restoreLastSession, &deletedAt,
 	); err != nil {
 		t.Fatal(err)
 	}
 	if proxyMode != "fixed" || proxyGroupName != "" || bindSourceID != "source-1" || bindSourceURL != "https://example.com/proxies" || bindName != "Source Proxy" || bindUpdatedAt != "2026-08-24T00:03:00Z" || memoryLimit != 512 || groupID != "group-source" || restoreLastSession != "never" || deletedAt != "2026-08-24T00:05:00Z" {
 		t.Fatalf("profile extended fields were not preserved: proxyMode=%q proxyGroup=%q sourceID=%q sourceURL=%q name=%q updated=%q memory=%d group=%q restore=%q deleted=%q", proxyMode, proxyGroupName, bindSourceID, bindSourceURL, bindName, bindUpdatedAt, memoryLimit, groupID, restoreLastSession, deletedAt)
+	}
+	if bindError != "fixture binding error" {
+		t.Fatalf("restored proxy binding error = %q", bindError)
 	}
 	var dynamicMode, dynamicGroup string
 	if err := targetDB.GetConn().QueryRow(`SELECT proxy_mode, proxy_group_name FROM browser_profiles WHERE profile_id = 'profile-dynamic-source'`).Scan(&dynamicMode, &dynamicGroup); err != nil {

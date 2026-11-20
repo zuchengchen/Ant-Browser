@@ -77,6 +77,7 @@ interface BrowserProfilesPanelProps {
   groups: BrowserGroup[]
   onEditGroups: (profile: BrowserProfile) => void
   proxies: BrowserProxy[]
+  connectorType: string
   virtualGroups: BrowserProxyVirtualGroup[]
   selectedIds: Set<string>
   resolveProfileCore: (profile: BrowserProfile) => BrowserCore | null
@@ -120,6 +121,7 @@ function selectDynamicProxyCandidate(
   virtualGroups: BrowserProxyVirtualGroup[],
   now: number,
   speedResultMaxAgeMs: number,
+  connectorType: string,
 ): BrowserProxy | undefined {
   const groupName = (profile.proxyGroupName || '').trim()
   const virtualGroup = virtualGroups.find(group => normalizeProxyKey(group.groupName) === normalizeProxyKey(groupName))
@@ -142,6 +144,7 @@ function selectDynamicProxyCandidate(
       return false
     }
     return proxy.lastTestOk === true
+      && normalizeProxyKey(proxy.lastTestConnectorType) === connectorType
       && typeof proxy.lastLatencyMs === 'number'
       && proxy.lastLatencyMs >= 0
       && isProxySpeedResultFresh(proxy.lastTestedAt, now, speedResultMaxAgeMs)
@@ -157,6 +160,9 @@ function selectDynamicProxyCandidate(
 }
 
 function formatProxyLabel(profile: BrowserProfile, proxy?: BrowserProxy, virtualGroups?: BrowserProxyVirtualGroup[]): string {
+  if (profile.proxyBindError?.trim()) {
+    return profile.proxyBindError.trim()
+  }
   if (isDynamicProfile(profile)) {
     return profile.proxyGroupName?.trim() ? `动态代理 · ${profile.proxyGroupName.trim()}` : '动态代理'
   }
@@ -192,6 +198,7 @@ function ProxyInlineActions({
   profile,
   proxy,
   proxies,
+  connectorType,
   virtualGroups,
   isBusy,
   onOpenProxyPicker,
@@ -202,6 +209,7 @@ function ProxyInlineActions({
   profile: BrowserProfile
   proxy?: BrowserProxy
   proxies: BrowserProxy[]
+  connectorType: string
   virtualGroups: BrowserProxyVirtualGroup[]
   isBusy: boolean
   onOpenProxyPicker: (profile: BrowserProfile) => void
@@ -212,8 +220,8 @@ function ProxyInlineActions({
   const [testing, setTesting] = useState(false)
   const isDynamic = isDynamicProfile(profile)
   const dynamicProxy = useMemo(
-    () => isDynamic ? selectDynamicProxyCandidate(profile, proxies, virtualGroups, now, speedResultMaxAgeMs) : undefined,
-    [isDynamic, now, profile, proxies, speedResultMaxAgeMs, virtualGroups],
+    () => isDynamic ? selectDynamicProxyCandidate(profile, proxies, virtualGroups, now, speedResultMaxAgeMs, connectorType) : undefined,
+    [connectorType, isDynamic, now, profile, proxies, speedResultMaxAgeMs, virtualGroups],
   )
   const speedTargetProxy = isDynamic ? dynamicProxy : proxy
   const speedTargetProxyId = speedTargetProxy?.proxyId?.trim() || profile.proxyId.trim()
@@ -239,9 +247,10 @@ function ProxyInlineActions({
     return ids
   }, [boundVirtualGroup, proxies])
   const displayResult = useProfileProxySpeedResult(speedTargetProxyId, virtualGroupMemberIds, now, speedResultMaxAgeMs)
-  const canTest = isDynamic
+  const bindError = (profile.proxyBindError || '').trim()
+  const canTest = !bindError && (isDynamic
     ? !!dynamicProxy
-    : !!profile.proxyId || !!profile.proxyConfig.trim()
+    : !!profile.proxyId || !!profile.proxyConfig.trim())
 
   const handleTest = async () => {
     if (testing || !canTest) return
@@ -262,7 +271,9 @@ function ProxyInlineActions({
 
   return (
     <div className={`inline-flex ${maxWidthClass} items-center gap-1.5 text-xs`} title={formatProxyLabel(profile, proxy, virtualGroups)}>
-      <span className="min-w-0 truncate text-[var(--color-text-primary)]">{formatProxyLabel(profile, proxy, virtualGroups)}</span>
+      <span className={`min-w-0 truncate ${bindError ? 'text-red-500' : 'text-[var(--color-text-primary)]'}`}>
+        {bindError ? '代理已失效' : formatProxyLabel(profile, proxy, virtualGroups)}
+      </span>
       <button
         type="button"
         className="shrink-0 rounded p-0.5 text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-bg-muted)] hover:text-[var(--color-accent)] disabled:cursor-not-allowed disabled:opacity-40"
@@ -281,7 +292,9 @@ function ProxyInlineActions({
       >
         {testing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Wifi className="h-3.5 w-3.5" />}
       </button>
-      <ProxyLatency result={displayResult} />
+      {bindError
+        ? <span className="text-xs text-red-500">需重选</span>
+        : <ProxyLatency result={displayResult} />}
     </div>
   )
 }
@@ -441,6 +454,7 @@ function BrowserProfileCard({
   profile,
   proxy,
   proxies,
+  connectorType,
   groups,
   onEditGroups,
   virtualGroups,
@@ -469,6 +483,7 @@ function BrowserProfileCard({
   groups: BrowserGroup[]
   onEditGroups: (profile: BrowserProfile) => void
   proxies: BrowserProxy[]
+  connectorType: string
   virtualGroups: BrowserProxyVirtualGroup[]
   isSelected: boolean
   status: ProfileStatus
@@ -541,7 +556,7 @@ function BrowserProfileCard({
           <Button size="sm" variant="ghost" onClick={() => onOpenExtensions(profile)} title="插件配置" className="px-3" disabled={isBusy}><Puzzle className="w-4 h-4 mr-1.5" />插件</Button>
           <Link to={`/browser/edit/${profile.profileId}`}><Button size="sm" variant="ghost" title="配置" className="px-3" disabled={isBusy}><Settings className="w-4 h-4 mr-1.5" />配置</Button></Link>
           <Button size="sm" variant="ghost" onClick={() => onOpenCopy(profile)} title="克隆" className="px-3" disabled={isBusy}><Copy className="w-4 h-4 mr-1.5" />克隆</Button>
-          <Button size="sm" variant="ghost" onClick={() => onDelete(profile.profileId)} title="删除" className="px-3 text-red-500 hover:text-red-600 hover:bg-red-50" disabled={isBusy}><Trash2 className="w-4 h-4 mr-1.5" />删除</Button>
+          <Button size="sm" variant="ghost" onClick={() => onDelete(profile.profileId)} title={profile.running ? '请先停止实例再删除' : '删除'} className="px-3 text-red-500 hover:text-red-600 hover:bg-red-50" disabled={isBusy || profile.running}><Trash2 className="w-4 h-4 mr-1.5" />删除</Button>
         </div>
       </div>
 
@@ -556,6 +571,7 @@ function BrowserProfileCard({
             profile={profile}
             proxy={proxy}
             proxies={proxies}
+            connectorType={connectorType}
             virtualGroups={virtualGroups}
             isBusy={isBusy}
             onOpenProxyPicker={onOpenProxyPicker}
@@ -589,6 +605,7 @@ export function BrowserProfilesPanel({
   viewMode,
   profiles,
   proxies,
+  connectorType,
   groups,
   onEditGroups,
   virtualGroups,
@@ -725,7 +742,7 @@ export function BrowserProfilesPanel({
       render: (value, record) => {
         const proxy = proxiesById.get(value)
         const isBusy = isProfileBusy(record.profileId)
-        return <ProxyInlineActions profile={record} proxy={proxy} proxies={proxies} virtualGroups={virtualGroups} isBusy={isBusy} onOpenProxyPicker={onOpenProxyPicker} now={now} speedResultMaxAgeMs={speedResultMaxAgeMs} />
+        return <ProxyInlineActions profile={record} proxy={proxy} proxies={proxies} connectorType={connectorType} virtualGroups={virtualGroups} isBusy={isBusy} onOpenProxyPicker={onOpenProxyPicker} now={now} speedResultMaxAgeMs={speedResultMaxAgeMs} />
       },
     },
     {
@@ -781,7 +798,7 @@ export function BrowserProfilesPanel({
               onOpenDataDir={() => onOpenDataDir(record)}
               onExport={() => onExport(record)}
             />
-            <Button size="sm" variant="ghost" onClick={() => onDelete(record.profileId)} title="删除" disabled={isBusy}><Trash2 className="w-3.5 h-3.5 text-red-500" /></Button>
+            <Button size="sm" variant="ghost" onClick={() => onDelete(record.profileId)} title={record.running ? '请先停止实例再删除' : '删除'} disabled={isBusy || record.running}><Trash2 className="w-3.5 h-3.5 text-red-500" /></Button>
           </div>
         )
       },
@@ -811,6 +828,7 @@ export function BrowserProfilesPanel({
                 onEditGroups={onEditGroups}
                 proxy={proxiesById.get(profile.proxyId)}
                 proxies={proxies}
+                connectorType={connectorType}
                 virtualGroups={virtualGroups}
                 isSelected={selectedIds.has(profile.profileId)}
                 status={getProfileStatus(profile)}

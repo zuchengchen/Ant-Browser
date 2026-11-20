@@ -1,10 +1,15 @@
 ﻿; Ant Browser NSIS Installer Script
-; Usage: makensis /DVERSION=1.9.0 /DSTAGINGDIR=C:\path\to\staging installer.nsi
+; Usage: makensis /DVERSION=1.9.1 /DSTAGINGDIR=C:\path\to\staging installer.nsi
 
 Unicode True
+!ifdef BESTCOMPRESSION
+  SetCompressor /SOLID lzma
+!else
+  SetCompressor lzma
+!endif
 
 !ifndef VERSION
-  !define VERSION "1.9.0"
+  !define VERSION "1.9.1"
 !endif
 !ifndef STAGINGDIR
   !define STAGINGDIR "..\publish\staging"
@@ -14,11 +19,30 @@ Unicode True
 !define PRODUCT_EXE     "ant-chrome.exe"
 !define PRODUCT_ICON    "AntBrowser.ico"
 !define UNINSTALL_KEY   "Software\Microsoft\Windows\CurrentVersion\Uninstall\AntBrowser"
-!define INSTALL_DIR     "$PROGRAMFILES64\Ant Browser"
+; 新用户默认装到当前用户目录：免管理员、目录可写，data 不会再落到 Program Files。
+!define INSTALL_DIR_USER    "$LOCALAPPDATA\Programs\Ant Browser"
+; 历史版本默认位置，仅用于识别老用户并沿用其安装路径。
+!define INSTALL_DIR_LEGACY  "$PROGRAMFILES64\Ant Browser"
+!define PROTOCOL_KEY "Software\Classes\ant-browser"
 !define POWERSHELL_EXE  "$SYSDIR\WindowsPowerShell\v1.0\powershell.exe"
 
 !include "MUI2.nsh"
 !include "LogicLib.nsh"
+!include "FileFunc.nsh"
+
+!macro RequireAdmin EXE
+  System::Call 'shell32::IsUserAnAdmin() i .r0'
+  ${If} $0 == 0
+    ${GetParameters} $R0
+    ClearErrors
+    ExecShell "runas" "${EXE}" "$R0"
+    ${If} ${Errors}
+      MessageBox MB_ICONSTOP|MB_OK "此操作需要管理员权限，请在 UAC 提示中允许操作后重试。" /SD IDOK
+      SetErrorLevel 1
+    ${EndIf}
+    Quit
+  ${EndIf}
+!macroend
 
 !macro WriteCloseProcessScript HANDLE
   FileWrite ${HANDLE} "param([string]$$InstallDir, [string]$$ExcludePath)$\r$\n"
@@ -186,16 +210,38 @@ preserve_failed:
 done:
 FunctionEnd
 
+Var InstallScope
+
+; .onInit：老用户沿用原安装路径（机器级，需要管理员）；新用户装到当前用户目录（免 UAC）。
+Function .onInit
+  StrCpy $InstallScope "user"
+  ; 1) 机器级旧安装：HKLM 注册记录，或注册表丢失但 Program Files 下确有真实数据
+  ReadRegStr $0 HKLM "${UNINSTALL_KEY}" "InstallLocation"
+  ${If} $0 == ""
+    ${If} ${FileExists} "${INSTALL_DIR_LEGACY}\data\app.db"
+      StrCpy $0 "${INSTALL_DIR_LEGACY}"
+    ${EndIf}
+  ${EndIf}
+
+  ${If} $0 != ""
+    StrCpy $InstallScope "machine"
+    StrCpy $INSTDIR "$0"
+    !insertmacro RequireAdmin "$EXEPATH"
+    Return
+  ${EndIf}
+
+  ; 2) 用户级旧安装（本方案升级过）：沿用其路径
+  ReadRegStr $1 HKCU "${UNINSTALL_KEY}" "InstallLocation"
+  ${If} $1 != ""
+    StrCpy $INSTDIR "$1"
+  ${Else}
+    StrCpy $INSTDIR "${INSTALL_DIR_USER}"
+  ${EndIf}
+FunctionEnd
+
+; 仅在受保护或不可写目录时警告：默认的用户目录不触发，避免打扰新用户。
 Function WarnInstallDir
   StrCpy $0 "$INSTDIR"
-
-  StrCpy $1 "$0" 2
-  ${If} "$1" == "C:"
-    Goto warn_dir
-  ${EndIf}
-  ${If} "$1" == "c:"
-    Goto warn_dir
-  ${EndIf}
 
   StrLen $1 "$PROGRAMFILES64"
   ${If} $1 > 0
@@ -221,10 +267,22 @@ Function WarnInstallDir
     ${EndIf}
   ${EndIf}
 
+  ; 目标父目录不可写（普通权限建不了目录）同样警告。
+  ; 先创建父目录：$LOCALAPPDATA\Programs 在个别系统上不存在，直接探测会误报。
+  ${GetParent} "$0" $3
+  CreateDirectory "$3"
+  ClearErrors
+  FileOpen $4 "$3\.ant-browser-write-probe" w
+  ${If} ${Errors}
+    Goto warn_dir
+  ${EndIf}
+  FileClose $4
+  Delete "$3\.ant-browser-write-probe"
+
   Return
 
 warn_dir:
-  MessageBox MB_ICONEXCLAMATION|MB_OKCANCEL|MB_DEFBUTTON2 "不建议安装到 C 盘、Program Files 或其他受权限保护的目录。$\r$\n$\r$\nAnt Browser 会在安装目录写入 data、浏览器实例和运行时文件；普通权限运行时可能写入失败，导致再次启动闪退或浏览器实例启动失败。$\r$\n$\r$\n建议改为非 C 盘可写目录，例如 D:\software\Ant Browser 或 E:\software\Ant Browser。$\r$\n$\r$\n点击“确定”继续安装到当前目录，点击“取消”返回修改安装路径。" IDOK continue_install IDCANCEL cancel_install
+  MessageBox MB_ICONEXCLAMATION|MB_OKCANCEL|MB_DEFBUTTON2 "当前安装目录位于受权限保护的位置，或当前用户对它没有写权限。$\r$\n$\r$\nAnt Browser 会在安装目录写入 data、浏览器实例和运行时文件；普通权限运行时可能写入失败，导致再次启动闪退或浏览器实例启动失败。$\r$\n$\r$\n建议使用默认目录（当前用户目录，无需管理员），或改为 D:\software\Ant Browser 这类可写目录。$\r$\n$\r$\n点击“确定”继续安装到当前目录，点击“取消”返回修改安装路径。" IDOK continue_install IDCANCEL cancel_install
 
 continue_install:
   Return
@@ -235,21 +293,15 @@ FunctionEnd
 
 Name "${PRODUCT_NAME} ${VERSION}"
 OutFile "..\publish\output\AntBrowser-Setup-${VERSION}.exe"
-InstallDir "${INSTALL_DIR}"
-InstallDirRegKey HKLM "${UNINSTALL_KEY}" "InstallLocation"
-RequestExecutionLevel admin
-!ifdef BESTCOMPRESSION
-  SetCompressor /SOLID lzma
-!else
-  SetCompressor lzma
-!endif
+InstallDir "${INSTALL_DIR_USER}"
+RequestExecutionLevel user
 
 !define MUI_ICON "..\build\windows\icon.ico"
 !define MUI_UNICON "..\build\windows\icon.ico"
 
 !insertmacro MUI_PAGE_WELCOME
-!define MUI_DIRECTORYPAGE_TEXT_TOP "请选择 Ant Browser 的安装目录。建议安装到非 C 盘的可写目录，例如 D:\software\Ant Browser 或 E:\software\Ant Browser；不要安装到 C 盘、Program Files 或其他受权限保护的目录。"
-!define MUI_DIRECTORYPAGE_TEXT_DESTINATION "安装目录（建议非 C 盘）"
+!define MUI_DIRECTORYPAGE_TEXT_TOP "默认安装到当前用户目录（推荐，无需管理员权限，数据也会写在这里）。如需自定义，可直接修改为 D:\software\Ant Browser 这类可写目录；不建议选 Program Files，否则普通权限运行时可能无法写入数据。$\r$\n$\r$\n如果之前已安装过（含便携版解压目录），请手动选择原安装目录，这样原有实例与配置会继续沿用。"
+!define MUI_DIRECTORYPAGE_TEXT_DESTINATION "安装目录（默认当前用户目录）"
 !define MUI_PAGE_CUSTOMFUNCTION_LEAVE WarnInstallDir
 !insertmacro MUI_PAGE_DIRECTORY
 !define MUI_COMPONENTSPAGE_SMALLDESC
@@ -267,7 +319,11 @@ RequestExecutionLevel admin
 Section "Ant Browser (required)" SecMain
   SectionIn RO
   Call CloseInstalledProcesses
+  SetShellVarContext current
   Call PreserveLegacyBackupLocalConfig
+  ${If} $InstallScope == "machine"
+    SetShellVarContext all
+  ${EndIf}
   SetOutPath "$INSTDIR"
   File "${STAGINGDIR}\${PRODUCT_EXE}"
   File /oname=${PRODUCT_ICON} "..\build\windows\icon.ico"
@@ -286,20 +342,25 @@ Section "Ant Browser (required)" SecMain
   SetOutPath "$INSTDIR\data\diagnostics"
   File /r "${STAGINGDIR}\data\diagnostics\*"
   SetOutPath "$INSTDIR"
-  WriteRegStr HKLM "Software\Classes\ant-browser" "" "URL:Ant Browser"
-  WriteRegStr HKLM "Software\Classes\ant-browser" "URL Protocol" ""
-  WriteRegStr HKLM "Software\Classes\ant-browser\shell\open\command" "" '"$INSTDIR\${PRODUCT_EXE}" "%1"'
+  WriteRegStr SHCTX "${PROTOCOL_KEY}" "" "URL:Ant Browser"
+  WriteRegStr SHCTX "${PROTOCOL_KEY}" "URL Protocol" ""
+  WriteRegStr SHCTX "${PROTOCOL_KEY}\shell\open\command" "" '"$INSTDIR\${PRODUCT_EXE}" "%1"'
 
-  WriteRegStr HKLM "${UNINSTALL_KEY}" "DisplayName"     "${PRODUCT_NAME}"
-  WriteRegStr HKLM "${UNINSTALL_KEY}" "DisplayVersion"  "${VERSION}"
-  WriteRegStr HKLM "${UNINSTALL_KEY}" "Publisher"       "Ant Chrome Team"
-  WriteRegStr HKLM "${UNINSTALL_KEY}" "InstallLocation" "$INSTDIR"
-  WriteRegStr HKLM "${UNINSTALL_KEY}" "UninstallString" "$INSTDIR\Uninstall.exe"
-  WriteRegStr HKLM "${UNINSTALL_KEY}" "DisplayIcon"     "$INSTDIR\${PRODUCT_ICON}"
-  WriteRegStr HKLM "${UNINSTALL_KEY}" "NoModify"        "1"
-  WriteRegStr HKLM "${UNINSTALL_KEY}" "NoRepair"        "1"
+  WriteRegStr SHCTX "${UNINSTALL_KEY}" "DisplayName"     "${PRODUCT_NAME}"
+  WriteRegStr SHCTX "${UNINSTALL_KEY}" "DisplayVersion"  "${VERSION}"
+  WriteRegStr SHCTX "${UNINSTALL_KEY}" "Publisher"       "Ant Chrome Team"
+  WriteRegStr SHCTX "${UNINSTALL_KEY}" "InstallLocation" "$INSTDIR"
+  WriteRegStr SHCTX "${UNINSTALL_KEY}" "UninstallString" '"$INSTDIR\Uninstall.exe"'
+  WriteRegStr SHCTX "${UNINSTALL_KEY}" "DisplayIcon"     "$INSTDIR\${PRODUCT_ICON}"
+  WriteRegStr SHCTX "${UNINSTALL_KEY}" "NoModify"        "1"
+  WriteRegStr SHCTX "${UNINSTALL_KEY}" "NoRepair"        "1"
   WriteUninstaller "$INSTDIR\Uninstall.exe"
-  Call RegisterDiagnosticsWatcher
+  ; 诊断看护注册的是系统级计划任务，需要管理员；用户级安装跳过，不影响主功能。
+  ${If} $InstallScope == "machine"
+    Call RegisterDiagnosticsWatcher
+  ${Else}
+    DetailPrint "用户级安装：跳过系统级诊断看护注册（需要管理员权限）"
+  ${EndIf}
   CreateDirectory "$SMPROGRAMS\${PRODUCT_NAME}"
   CreateShortcut "$SMPROGRAMS\${PRODUCT_NAME}\${PRODUCT_NAME}.lnk" "$INSTDIR\${PRODUCT_EXE}" "" "$INSTDIR\${PRODUCT_ICON}"
   CreateShortcut "$SMPROGRAMS\${PRODUCT_NAME}\Uninstall.lnk" "$INSTDIR\Uninstall.exe" "" "$INSTDIR\${PRODUCT_ICON}"
@@ -322,10 +383,42 @@ SectionEnd
   !insertmacro MUI_DESCRIPTION_TEXT ${SecDesktop} "Create a shortcut on the desktop"
 !insertmacro MUI_FUNCTION_DESCRIPTION_END
 
+Function un.onInit
+  StrCpy $InstallScope "user"
+  ReadRegStr $0 HKLM "${UNINSTALL_KEY}" "InstallLocation"
+  ReadRegStr $1 HKCU "${UNINSTALL_KEY}" "InstallLocation"
+  ${If} $0 == $INSTDIR
+    StrCpy $InstallScope "machine"
+  ${ElseIf} $0 == ""
+  ${AndIf} $1 != $INSTDIR
+  ${AndIf} $INSTDIR == "${INSTALL_DIR_LEGACY}"
+    StrCpy $InstallScope "machine"
+  ${EndIf}
+
+  ${If} $InstallScope == "machine"
+    !insertmacro RequireAdmin "$INSTDIR\Uninstall.exe"
+  ${Else}
+    ClearErrors
+    GetTempFileName $0 "$INSTDIR"
+    ${If} ${Errors}
+      !insertmacro RequireAdmin "$INSTDIR\Uninstall.exe"
+      MessageBox MB_ICONSTOP|MB_OK "无法写入安装目录，卸载已取消。请检查该目录权限后重试。" /SD IDOK
+      SetErrorLevel 1
+      Quit
+    ${Else}
+      Delete "$0"
+    ${EndIf}
+  ${EndIf}
+FunctionEnd
+
 Section "Uninstall"
   Call un.CloseInstalledProcesses
-  Call un.UnregisterDiagnosticsWatcher
+  SetShellVarContext current
   Call un.PreserveLegacyBackupLocalConfig
+  ${If} $InstallScope == "machine"
+    SetShellVarContext all
+    Call un.UnregisterDiagnosticsWatcher
+  ${EndIf}
 
   Delete /REBOOTOK "$INSTDIR\${PRODUCT_EXE}"
   Delete /REBOOTOK "$INSTDIR\${PRODUCT_ICON}"
@@ -333,16 +426,19 @@ Section "Uninstall"
   Delete /REBOOTOK "$INSTDIR\Uninstall.exe"
   RMDir /r /REBOOTOK "$INSTDIR\bin"
   RMDir /r /REBOOTOK "$INSTDIR\chrome"
-  Delete /REBOOTOK "$SMPROGRAMS\${PRODUCT_NAME}\${PRODUCT_NAME}.lnk"
-  Delete /REBOOTOK "$SMPROGRAMS\${PRODUCT_NAME}\Uninstall.lnk"
-  RMDir /REBOOTOK "$SMPROGRAMS\${PRODUCT_NAME}"
-  Delete /REBOOTOK "$DESKTOP\${PRODUCT_NAME}.lnk"
-  ReadRegStr $0 HKLM "Software\Classes\ant-browser\shell\open\command" ""
+  ReadRegStr $0 SHCTX "${PROTOCOL_KEY}\shell\open\command" ""
   ${If} $0 == '"$INSTDIR\${PRODUCT_EXE}" "%1"'
-    DeleteRegKey HKLM "Software\Classes\ant-browser"
+    DeleteRegKey SHCTX "${PROTOCOL_KEY}"
   ${EndIf}
-  DeleteRegKey HKLM "${UNINSTALL_KEY}"
-  MessageBox MB_ICONQUESTION|MB_YESNO|MB_DEFBUTTON2 "是否彻底清理所有用户数据？$\r$\n$\r$\n选择“是”将删除 data 目录（含数据库/实例数据）以及安装目录残留文件。$\r$\n此操作不可恢复。" IDYES un_remove_all_data IDNO un_keep_user_data
+  ReadRegStr $0 SHCTX "${UNINSTALL_KEY}" "InstallLocation"
+  ${If} $0 == $INSTDIR
+    Delete /REBOOTOK "$SMPROGRAMS\${PRODUCT_NAME}\${PRODUCT_NAME}.lnk"
+    Delete /REBOOTOK "$SMPROGRAMS\${PRODUCT_NAME}\Uninstall.lnk"
+    RMDir /REBOOTOK "$SMPROGRAMS\${PRODUCT_NAME}"
+    Delete /REBOOTOK "$DESKTOP\${PRODUCT_NAME}.lnk"
+    DeleteRegKey SHCTX "${UNINSTALL_KEY}"
+  ${EndIf}
+  MessageBox MB_ICONQUESTION|MB_YESNO|MB_DEFBUTTON2 "是否彻底清理所有用户数据？$\r$\n$\r$\n选择“是”将删除 data 目录（含数据库/实例数据）以及安装目录残留文件。$\r$\n此操作不可恢复。" /SD IDNO IDYES un_remove_all_data IDNO un_keep_user_data
 
 un_remove_all_data:
   RMDir /r /REBOOTOK "$INSTDIR\data"
@@ -356,5 +452,5 @@ un_keep_user_data:
 
 un_done:
   IfFileExists "$INSTDIR\." 0 +2
-    MessageBox MB_ICONEXCLAMATION|MB_OK "检测到部分文件仍被占用，已标记为重启后自动删除。"
+    MessageBox MB_ICONEXCLAMATION|MB_OK "检测到部分文件仍被占用，已标记为重启后自动删除。" /SD IDOK
 SectionEnd

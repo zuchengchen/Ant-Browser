@@ -206,3 +206,14 @@ func TestInstanceLaunchGateConcurrentRepeatedRelease(t *testing.T) {
 	second()
 	assertLaunchGateTestState(t, app, 0, 0)
 }
+
+func TestInstanceLaunchGateFailedRequestKeepsRecoveredSlot(t *testing.T) {
+	app := &App{config: &config.Config{}}
+	app.setInstanceLaunchLimit(1)
+	failed, _ := app.acquireInstanceLaunchSlot("recovered")
+	app.retainInstanceLaunchSlot("recovered")
+	failed()
+	assertLaunchGateTestState(t, app, 1, 0)
+	app.releaseInstanceLaunchSlot("recovered")
+	assertLaunchGateTestState(t, app, 0, 0)
+}

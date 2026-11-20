@@ -109,6 +109,10 @@ func (m *Manager) copyProfile(profileId string, newName string, dest *copyDestin
 	proxyBindSourceURL := src.ProxyBindSourceURL
 	proxyBindName := src.ProxyBindName
 	proxyBindUpdatedAt := src.ProxyBindUpdatedAt
+	proxyBindError := ""
+	if proxyMode == ProxyModeFixed {
+		proxyBindError = src.ProxyBindError
+	}
 	if proxyMode == ProxyModeDynamic {
 		proxyID = ""
 		proxyConfig = ""
@@ -133,6 +137,7 @@ func (m *Manager) copyProfile(profileId string, newName string, dest *copyDestin
 		ProxyBindSourceURL: proxyBindSourceURL,
 		ProxyBindName:      proxyBindName,
 		ProxyBindUpdatedAt: proxyBindUpdatedAt,
+		ProxyBindError:     proxyBindError,
 		MemoryLimitMB:      normalizeMemoryLimitMB(src.MemoryLimitMB),
 		LaunchArgs:         append([]string{}, src.LaunchArgs...),
 		Tags:               append([]string{}, src.Tags...),

@@ -1,0 +1,91 @@
+name: Publish All Platforms
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 可选的预期版本，须与仓库中的包版本一致
+        required: false
+        type: string
+  push:
+    tags:
+      - "czc-v*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-all-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  version:
+    name: Resolve version
+    runs-on: ubuntu-24.04
+    outputs:
+      value: ${{ steps.resolve.outputs.value }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Resolve package version
+        id: resolve
+        shell: bash
+        env:
+          EXPECTED_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          version="$(python scripts/resolve-release-version.py --ref-type "$GITHUB_REF_TYPE" --ref-name "$GITHUB_REF_NAME" --version "$EXPECTED_VERSION")"
+          echo "value=$version" >> "$GITHUB_OUTPUT"
+          echo "package version: $version"
+
+  windows:
+    name: Build Windows
+    needs: version
+    uses: ./.github/workflows/publish-windows.yml
+    with:
+      version: ${{ needs.version.outputs.value }}
+
+  linux:
+    name: Build Linux
+    needs: version
+    uses: ./.github/workflows/publish-linux.yml
+    with:
+      version: ${{ needs.version.outputs.value }}
+
+  macos:
+    name: Build macOS
+    needs: version
+    uses: ./.github/workflows/publish-macos.yml
+    with:
+      version: ${{ needs.version.outputs.value }}
+
+  release:
+    name: Publish fork release
+    if: github.event_name == 'push' && github.ref_type == 'tag' && startsWith(github.ref_name, 'czc-v')
+    needs: [version, windows, linux, macos]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-artifacts
+          merge-multiple: true
+
+      - name: Publish built assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: bash scripts/publish-fork-release.sh

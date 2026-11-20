@@ -65,18 +65,14 @@ func (m *Manager) ApplyDefaults(profile *Profile) (bool, string, error) {
 		return defaultsChanged || proxyChanged, "", nil
 	}
 
+	if profile.ProxyBindError != "" && strings.TrimSpace(profile.ProxyId) == "" {
+		return defaultsChanged, "", fmt.Errorf("%s", profile.ProxyBindError)
+	}
 	proxyNotice := ""
 	proxyChanged := false
 	bindChanged, boundInPool, bindMode := m.ResolveProfileProxyBinding(profile)
 	if bindChanged {
 		proxyChanged = true
-	}
-	// 虚拟分组绑定是合法形态：ProxyId 为分组 ID、ProxyConfig 特意保持为空，
-	// 启动时按分组策略解析成员，绝不能在此时回退直连。
-	if !boundInPool && strings.TrimSpace(profile.ProxyId) != "" {
-		if _, isVirtualGroup := m.getProxyVirtualGroupByIDOrName(profile.ProxyId); isVirtualGroup {
-			boundInPool = true
-		}
 	}
 	if bindMode != "" && bindMode != "proxy_id" {
 		proxyNotice = fmt.Sprintf("代理绑定已自动重新关联到节点「%s」（原节点 ID 已失效，按绑定快照找回，出口流量未变）", strings.TrimSpace(profile.ProxyBindName))

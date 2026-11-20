@@ -399,29 +399,10 @@ var migrations = []migration{
 			)`,
 		},
 	},
-	{
-		version: 34,
-		desc:    "统一实例标签与多个分组归属",
-		stmts: []string{
-			`CREATE TABLE IF NOT EXISTS browser_profile_groups (
-				profile_id TEXT NOT NULL REFERENCES browser_profiles(profile_id) ON DELETE CASCADE,
-				group_id TEXT NOT NULL REFERENCES browser_groups(group_id) ON DELETE CASCADE,
-				PRIMARY KEY (profile_id, group_id)
-			)`,
-			`CREATE INDEX IF NOT EXISTS idx_browser_profile_groups_group ON browser_profile_groups(group_id, profile_id)`,
-		},
-		run: migrateInstanceGroups,
-	},
-	{
-		version: 35,
-		desc:    "保存实例最近一次 ChatGPT 账户信息",
-		stmts: []string{
-			`CREATE TABLE IF NOT EXISTS browser_chatgpt_accounts (
-				profile_id TEXT PRIMARY KEY REFERENCES browser_profiles(profile_id) ON DELETE CASCADE,
-				snapshot_json TEXT NOT NULL
-			)`,
-		},
-	},
+	forkGroups34,
+	forkSnapshots35,
+	// 36–40 已用于开发版，已存在的记录和业务表原样保留。
+	mergedSchema41,
 	// ── 新版本在此追加，格式：
 	// {
 	//     version: 4,
@@ -430,6 +411,39 @@ var migrations = []migration{
 	//         `ALTER TABLE xxx ADD COLUMN yyy TEXT NOT NULL DEFAULT ''`,
 	//     },
 	// },
+}
+
+var forkGroups34 = migration{
+	version: 34,
+	desc:    "统一实例标签与多个分组归属",
+	stmts: []string{
+		`CREATE TABLE IF NOT EXISTS browser_profile_groups (
+				profile_id TEXT NOT NULL REFERENCES browser_profiles(profile_id) ON DELETE CASCADE,
+				group_id TEXT NOT NULL REFERENCES browser_groups(group_id) ON DELETE CASCADE,
+				PRIMARY KEY (profile_id, group_id)
+			)`,
+		`CREATE INDEX IF NOT EXISTS idx_browser_profile_groups_group ON browser_profile_groups(group_id, profile_id)`,
+	},
+	run: migrateInstanceGroups,
+}
+
+var forkSnapshots35 = migration{
+	version: 35,
+	desc:    "保存实例最近一次 ChatGPT 账户信息",
+	stmts: []string{
+		`CREATE TABLE IF NOT EXISTS browser_chatgpt_accounts (
+				profile_id TEXT PRIMARY KEY REFERENCES browser_profiles(profile_id) ON DELETE CASCADE,
+				snapshot_json TEXT NOT NULL
+			)`,
+	},
+}
+
+var mergedSchema41 = migration{
+	version: 41,
+	desc:    "兼容实例分组、账户快照与代理绑定失效原因",
+	stmts: []string{
+		`ALTER TABLE browser_profiles ADD COLUMN proxy_bind_error TEXT NOT NULL DEFAULT ''`,
+	},
 }
 
 // NewDB 创建新的数据库连接
@@ -443,15 +457,19 @@ func NewDB(dbPath string) (*DB, error) {
 	conn.SetMaxIdleConns(1)
 
 	if err := conn.Ping(); err != nil {
+		_ = conn.Close()
 		return nil, fmt.Errorf("连接数据库失败: %w", err)
 	}
 
 	// WAL 模式：写不阻塞读
 	if _, err := conn.Exec(`PRAGMA journal_mode=WAL`); err != nil {
+		// 失败时必须关闭连接：否则 Windows 上库文件被占用，自愈重建无法移走原文件。
+		_ = conn.Close()
 		return nil, fmt.Errorf("设置 WAL 模式失败: %w", err)
 	}
 	// 开启外键约束
 	if _, err := conn.Exec(`PRAGMA foreign_keys=ON`); err != nil {
+		_ = conn.Close()
 		return nil, fmt.Errorf("开启外键约束失败: %w", err)
 	}
 
@@ -474,32 +492,33 @@ func (db *DB) Close() error {
 // Migrate 执行版本化迁移
 // 原理：维护 schema_migrations 表记录已执行版本，每次启动只执行未执行的版本
 func (db *DB) Migrate() error {
-	// 确保版本记录表存在
-	if _, err := db.conn.Exec(`
-		CREATE TABLE IF NOT EXISTS schema_migrations (
-			version    INTEGER PRIMARY KEY,
-			desc       TEXT NOT NULL DEFAULT '',
+	return db.migrate(false)
+}
+
+func (db *DB) migrate(hasSnapshot bool) error {
+	currentVersion, upstream, err := db.migrationState()
+	if err != nil {
+		return err
+	}
+	if currentVersion == 0 {
+		if _, err := db.conn.Exec(`CREATE TABLE IF NOT EXISTS schema_migrations (
+			version INTEGER PRIMARY KEY,
+			desc TEXT NOT NULL DEFAULT '',
 			applied_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 		)`); err != nil {
-		return fmt.Errorf("创建 schema_migrations 表失败: %w", err)
-	}
-
-	// 查询已执行的最大版本号
-	var currentVersion int
-	row := db.conn.QueryRow(`SELECT COALESCE(MAX(version), 0) FROM schema_migrations`)
-	if err := row.Scan(&currentVersion); err != nil {
-		return fmt.Errorf("查询当前 schema 版本失败: %w", err)
-	}
-	if currentVersion >= 34 {
-		var structures int
-		if err := db.conn.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE
-			(type='table' AND name='browser_profile_groups') OR
-			(type='index' AND name='idx_browser_groups_sibling_name')`).Scan(&structures); err != nil {
-			return err
+			return fmt.Errorf("创建 schema_migrations 表失败: %w", err)
 		}
-		if structures != 2 {
-			return fmt.Errorf("实例分组结构与迁移版本不一致，已停止启动；请保留数据库并检查迁移前备份")
+	}
+	if upstream {
+		if !hasSnapshot {
+			if err := db.backupInstanceGroupDatabase(); err != nil {
+				return err
+			}
 		}
+		if err := db.bridgeUpstream34(); err != nil {
+			return fmt.Errorf("上游版本 34 分组和快照迁移失败: %w", err)
+		}
+		currentVersion = mergedSchema41.version
 	}
 
 	// 按版本顺序执行未执行的迁移
@@ -507,7 +526,7 @@ func (db *DB) Migrate() error {
 		if m.version <= currentVersion {
 			continue // 已执行，跳过
 		}
-		if m.version == 34 {
+		if m.version == forkGroups34.version {
 			if err := db.backupBeforeInstanceGroups(); err != nil {
 				return err
 			}
@@ -530,10 +549,28 @@ func (db *DB) applyMigration(m migration) error {
 	}
 	defer tx.Rollback()
 
+	// Two openers may have read the same old version before either transaction started.
+	var applied bool
+	if err := tx.QueryRow(`SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version=?)`, m.version).Scan(&applied); err != nil {
+		return err
+	}
+	if applied {
+		return nil
+	}
+	if err := runMigration(tx, m); err != nil {
+		return err
+	}
+	if err := recordMigration(tx, m); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+func runMigration(tx *sql.Tx, m migration) error {
 	for _, stmt := range m.stmts {
 		if _, err := tx.Exec(stmt); err != nil {
 			// ALTER TABLE 添加已存在列时忽略（兼容从旧版本直接升级的情况）
-			if isColumnExistsError(err) {
+			if isColumnExistsError(err) && alterAddColumnPattern.MatchString(strings.TrimSpace(stmt)) {
 				continue
 			}
 			return fmt.Errorf("执行语句失败 [%s]: %w", truncate(stmt, 60), err)
@@ -545,6 +582,10 @@ func (db *DB) applyMigration(m migration) error {
 		}
 	}
 
+	return nil
+}
+
+func recordMigration(tx *sql.Tx, m migration) error {
 	// 记录版本号
 	if _, err := tx.Exec(
 		`INSERT INTO schema_migrations (version, desc) VALUES (?, ?)`,
@@ -553,7 +594,7 @@ func (db *DB) applyMigration(m migration) error {
 		return fmt.Errorf("记录迁移版本失败: %w", err)
 	}
 
-	return tx.Commit()
+	return nil
 }
 
 // isColumnExistsError 检查是否是列已存在的错误（SQLite 错误信息）

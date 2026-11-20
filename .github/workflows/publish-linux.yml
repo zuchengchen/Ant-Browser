@@ -1,18 +1,21 @@
 name: Publish Linux Packages
 
 on:
+  workflow_call:
+    inputs:
+      version:
+        description: 可选的预期版本，须与仓库中的包版本一致
+        required: false
+        type: string
   workflow_dispatch:
     inputs:
       version:
-        description: Optional expected version; must match committed metadata, for example 1.9.0
+        description: 可选的预期版本，须与仓库中的包版本一致
         required: false
         type: string
-  push:
-    tags:
-      - "czc-v*"
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: publish-linux-${{ github.ref }}
@@ -36,15 +39,26 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Go
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+
+      - name: Resolve package version
+        id: version
+        shell: bash
+        env:
+          EXPECTED_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          version="$(python scripts/resolve-release-version.py --ref-type "$GITHUB_REF_TYPE" --ref-name "$GITHUB_REF_NAME" --version "$EXPECTED_VERSION")"
+          echo "value=$version" >> "$GITHUB_OUTPUT"
+          echo "package version: $version"
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -81,17 +95,6 @@ jobs:
       - name: Verify runtime files
         run: bash tools/runtime/verify-runtime.sh linux-${{ matrix.arch }}
 
-      - name: Resolve package version
-        id: version
-        shell: bash
-        env:
-          EXPECTED_VERSION: ${{ inputs.version }}
-        run: |
-          set -euo pipefail
-          version="$(python scripts/resolve-release-version.py --ref-type "$GITHUB_REF_TYPE" --ref-name "$GITHUB_REF_NAME" --version "$EXPECTED_VERSION")"
-          echo "value=$version" >> "$GITHUB_OUTPUT"
-          echo "package version: $version"
-
       - name: Build Linux packages
         env:
           VERSION: ${{ steps.version.outputs.value }}
@@ -111,6 +114,11 @@ jobs:
           echo "Validating: $deb_file"
           dpkg-deb -I "$deb_file"
           dpkg-deb -c "$deb_file" >/dev/null
+          deb_root="$(mktemp -d)"
+          dpkg-deb -x "$deb_file" "$deb_root"
+          desktop="$deb_root/usr/share/applications/ant-browser.desktop"
+          grep -Fx 'Exec=/opt/ant-browser/ant-chrome %u' "$desktop"
+          grep -Fx 'MimeType=x-scheme-handler/ant-browser;' "$desktop"
 
       - name: Validate tar package layout
         run: |
@@ -132,26 +140,3 @@ jobs:
             publish/output/*_${{ matrix.arch }}.deb
             publish/output/*-linux-${{ matrix.arch }}.tar.gz
           if-no-files-found: error
-
-  release:
-    name: Publish GitHub Release
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/czc-v')
-    needs: build
-    runs-on: ubuntu-24.04
-
-    steps:
-      - name: Download Linux artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: release-artifacts
-          merge-multiple: true
-
-      - name: Upload release assets
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-          TAG_NAME: ${{ github.ref_name }}
-        run: |
-          set -euo pipefail
-          gh release view "$TAG_NAME" >/dev/null 2>&1 || { gh release create "$TAG_NAME" --generate-notes || true; }
-          gh release upload "$TAG_NAME" release-artifacts/* --clobber

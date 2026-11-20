@@ -737,6 +737,7 @@ func (a *App) restoreProfilePackageDatabase(snapshot ProfilePackageDatabase, pre
 			profile.ProxyBindSourceURL = ""
 			profile.ProxyBindName = ""
 			profile.ProxyBindUpdatedAt = ""
+			profile.ProxyBindError = ""
 			if groupName := strings.TrimSpace(profile.ProxyGroupName); groupName != "" {
 				if mapped := virtualGroupMappings[backupImportTextKey(groupName)]; mapped != "" {
 					profile.ProxyGroupName = mapped
@@ -748,6 +749,7 @@ func (a *App) restoreProfilePackageDatabase(snapshot ProfilePackageDatabase, pre
 		} else if originalProxyID := strings.TrimSpace(profile.ProxyId); originalProxyID != "" {
 			if mapped := proxyMappings[backupImportIDKey(originalProxyID)]; mapped != "" {
 				profile.ProxyId = mapped
+				profile.ProxyBindError = ""
 				if value, exists := proxyValues[backupImportIDKey(originalProxyID)]; exists {
 					if strings.TrimSpace(profile.ProxyConfig) == "" {
 						profile.ProxyConfig = value.ProxyConfig
@@ -1458,9 +1460,9 @@ func insertProfilePackageProfile(tx *sql.Tx, profile *browser.Profile) error {
 	_, err = tx.Exec(`
 		INSERT INTO browser_profiles (
 			profile_id, profile_name, user_data_dir, core_id, fingerprint_args, proxy_id, proxy_config, proxy_mode, proxy_group_name,
-			proxy_bind_source_id, proxy_bind_source_url, proxy_bind_name, proxy_bind_updated_at, memory_limit_mb,
+			proxy_bind_source_id, proxy_bind_source_url, proxy_bind_name, proxy_bind_updated_at, proxy_bind_error, memory_limit_mb,
 			launch_args, tags, keywords, group_id, created_at, updated_at, restore_last_session, deleted_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(profile_id) DO UPDATE SET
 			profile_name = excluded.profile_name,
 			user_data_dir = excluded.user_data_dir,
@@ -1474,6 +1476,7 @@ func insertProfilePackageProfile(tx *sql.Tx, profile *browser.Profile) error {
 			proxy_bind_source_url = excluded.proxy_bind_source_url,
 			proxy_bind_name = excluded.proxy_bind_name,
 			proxy_bind_updated_at = excluded.proxy_bind_updated_at,
+			proxy_bind_error = excluded.proxy_bind_error,
 			memory_limit_mb = excluded.memory_limit_mb,
 			launch_args = excluded.launch_args,
 			tags = excluded.tags,
@@ -1485,7 +1488,7 @@ func insertProfilePackageProfile(tx *sql.Tx, profile *browser.Profile) error {
 			deleted_at = excluded.deleted_at`,
 		profile.ProfileId, profile.ProfileName, profile.UserDataDir, profile.CoreId, string(fingerprintArgs), profile.ProxyId,
 		profile.ProxyConfig, profile.ProxyMode, profile.ProxyGroupName, profile.ProxyBindSourceID, profile.ProxyBindSourceURL, profile.ProxyBindName,
-		profile.ProxyBindUpdatedAt, profile.MemoryLimitMB, string(launchArgs), string(tags), string(keywords), profile.GroupId,
+		profile.ProxyBindUpdatedAt, profile.ProxyBindError, profile.MemoryLimitMB, string(launchArgs), string(tags), string(keywords), profile.GroupId,
 		createdAt, updatedAt, profile.RestoreLastSession, profile.DeletedAt,
 	)
 	if err != nil {

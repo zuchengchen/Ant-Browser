@@ -1,7 +1,9 @@
 package database
 
 import (
+	"database/sql"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -35,9 +37,9 @@ type expectedTable struct {
 }
 
 var (
-	createTablePattern    = regexp.MustCompile(`(?is)^CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(\w+)\s*\((.*)\)$`)
-	alterAddColumnPattern = regexp.MustCompile(`(?is)^ALTER\s+TABLE\s+(\w+)\s+ADD\s+COLUMN\s+(\w+)\s+(.+)$`)
-	ifNotExistsPattern    = regexp.MustCompile(`(?i)^CREATE\s+TABLE\s+IF\s+NOT\s+EXISTS\b`)
+	createTablePattern     = regexp.MustCompile(`(?is)^CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(\w+)\s*\((.*)\)$`)
+	alterAddColumnPattern  = regexp.MustCompile(`(?is)^ALTER\s+TABLE\s+(\w+)\s+ADD\s+COLUMN\s+(\w+)\s+(.+)$`)
+	ifNotExistsPattern     = regexp.MustCompile(`(?i)^CREATE\s+TABLE\s+IF\s+NOT\s+EXISTS\b`)
 	createTableOnlyPattern = regexp.MustCompile(`(?i)^CREATE\s+TABLE\s+`)
 )
 
@@ -56,12 +58,44 @@ func (db *DB) BackupTo(backupDir, prefix string) (string, error) {
 	if err := os.MkdirAll(backupDir, 0o755); err != nil {
 		return "", fmt.Errorf("准备备份目录失败: %w", err)
 	}
-	path := filepath.Join(backupDir, fmt.Sprintf("%s-%s.db", prefix, time.Now().Format("20060102-150405")))
+	// Reserve a private, unique name so concurrent openers and retries in the
+	// same second cannot overwrite a good snapshot. VACUUM accepts an empty file.
+	file, err := os.CreateTemp(backupDir, prefix+"-"+time.Now().Format("20060102-150405.000000000")+"-*.db")
+	if err != nil {
+		return "", fmt.Errorf("准备数据库备份文件失败: %w", err)
+	}
+	path := file.Name()
+	if err := file.Close(); err != nil {
+		_ = os.Remove(path)
+		return "", err
+	}
 	if _, err := db.conn.Exec(`VACUUM INTO ?`, path); err != nil {
+		_ = os.Remove(path)
 		return "", fmt.Errorf("数据库备份失败: %w", err)
 	}
-	pruneBackups(backupDir)
+	if err := verifyBackup(path); err != nil {
+		_ = os.Remove(path)
+		return "", fmt.Errorf("数据库备份完整性验证失败: %w", err)
+	}
+	pruneBackups(backupDir, filepath.Base(path))
 	return path, nil
+}
+
+func verifyBackup(path string) error {
+	escapedPath := (&url.URL{Path: filepath.ToSlash(path)}).EscapedPath()
+	snapshot, err := sql.Open("sqlite", "file:"+escapedPath+"?mode=ro")
+	if err != nil {
+		return err
+	}
+	defer snapshot.Close()
+	var integrity string
+	if err := snapshot.QueryRow(`PRAGMA integrity_check`).Scan(&integrity); err != nil {
+		return err
+	}
+	if integrity != "ok" {
+		return fmt.Errorf("integrity_check: %s", integrity)
+	}
+	return nil
 }
 
 // HasPendingMigrations 是否存在尚未执行的迁移版本（版本表不可读时保守返回 true）。
@@ -343,24 +377,38 @@ func (db *DB) applyReconcileStmts(stmts []string) error {
 const reconcileBackupKeep = 5
 
 // pruneBackups 轮换删除旧备份（文件名含时间戳，字典序即时间序），保留最近 reconcileBackupKeep 份。
-func pruneBackups(backupDir string) {
+func pruneBackups(backupDir string, keep ...string) {
 	entries, err := os.ReadDir(backupDir)
 	if err != nil {
 		return
 	}
-	var files []string
+	var files []os.FileInfo
 	for _, entry := range entries {
-		if entry.IsDir() {
+		name := entry.Name()
+		rotating := strings.HasPrefix(name, "app-pre-migrate-") || strings.HasPrefix(name, "app-pre-reconcile-")
+		if entry.IsDir() || !rotating || !strings.HasSuffix(name, ".db") {
 			continue
 		}
-		name := entry.Name()
-		if strings.HasPrefix(name, "app-") && strings.HasSuffix(name, ".db") {
-			files = append(files, name)
+		if info, err := entry.Info(); err == nil {
+			files = append(files, info)
 		}
 	}
-	sort.Strings(files)
-	for len(files) > reconcileBackupKeep {
-		_ = os.Remove(filepath.Join(backupDir, files[0]))
-		files = files[1:]
+	sort.Slice(files, func(i, j int) bool {
+		if files[i].ModTime().Equal(files[j].ModTime()) {
+			return files[i].Name() < files[j].Name()
+		}
+		return files[i].ModTime().Before(files[j].ModTime())
+	})
+	remove := len(files) - reconcileBackupKeep
+	for _, file := range files {
+		if remove <= 0 {
+			break
+		}
+		if len(keep) > 0 && file.Name() == keep[0] {
+			continue
+		}
+		if os.Remove(filepath.Join(backupDir, file.Name())) == nil {
+			remove--
+		}
 	}
 }

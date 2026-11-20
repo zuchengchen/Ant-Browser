@@ -12,7 +12,7 @@ import (
 )
 
 // A versioned migration is the only place legacy columns are authoritative.
-// All validation and memberships are committed together with version 34.
+// Memberships and their migration marker are committed in the same transaction.
 func migrateInstanceGroups(tx *sql.Tx) error {
 	rows, err := tx.Query(`SELECT group_id, group_name, COALESCE(parent_id, '') FROM browser_groups`)
 	if err != nil {
@@ -129,6 +129,10 @@ func (db *DB) backupBeforeInstanceGroups() error {
 	if count == 0 {
 		return nil
 	}
+	return db.backupInstanceGroupDatabase()
+}
+
+func (db *DB) backupInstanceGroupDatabase() error {
 	rows, err := db.conn.Query(`PRAGMA database_list`)
 	if err != nil {
 		return err
@@ -161,24 +165,8 @@ func (db *DB) backupBeforeInstanceGroups() error {
 	if err := os.Chmod(dir, 0o700); err != nil {
 		return err
 	}
-	path, err := db.BackupTo(dir, "before-instance-groups-"+uuid.NewString())
-	if err != nil {
+	if _, err := db.BackupTo(dir, "before-instance-groups"); err != nil {
 		return fmt.Errorf("实例分组迁移前备份失败，已停止迁移: %w", err)
-	}
-	if err := os.Chmod(path, 0o600); err != nil {
-		return err
-	}
-	copyDB, err := sql.Open("sqlite", "file:"+filepath.ToSlash(path)+"?mode=ro")
-	if err != nil {
-		return err
-	}
-	defer copyDB.Close()
-	var integrity string
-	if err := copyDB.QueryRow(`PRAGMA integrity_check`).Scan(&integrity); err != nil {
-		return err
-	}
-	if integrity != "ok" {
-		return fmt.Errorf("实例分组迁移前备份完整性验证失败，已停止迁移")
 	}
 	return nil
 }
