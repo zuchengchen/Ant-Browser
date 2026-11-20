@@ -227,6 +227,14 @@ Ant Browser 适合以下场景：
 4. Linux 包下载后可直接安装 `ant-browser_<version>_<arch>.deb`，或解压 `tar.gz` 后运行 `ant-chrome`
 5. macOS unsigned 包解压后运行 `AntBrowser-<version>-macos-<arch>.app`；如被 Gatekeeper 拦截，请对本机测试包执行 `xattr -dr com.apple.quarantine <app路径>` 后再打开
 
+### 从 KeyPouch 打开本机实例
+
+在安装 Ant 的电脑上访问 KeyPouch，从记录详情点「创建并打开 Ant 实例」。首次连接时选择「配对这台电脑」，核对 Ant 弹窗和网页上的短码。旧版本在同一分组里已有同名实例时，Ant 会请你确认一次，之后沿用原实例及其数据。配对后直接关闭或重新打开浏览器窗口，网页会更新该设备上的实例状态。Ant 退出或电脑离线超过 30 秒时，网页显示「状态未知」。
+
+Windows 安装包和 Linux 的 `.deb` 会注册网页使用的 `ant-browser://` 链接。Linux 便携版解压到固定目录后，运行一次 `./ant-chrome --register-protocol` 即可注册到当前桌面用户。每台电脑单独配对。
+
+专用安装包可以内置站点地址。从源码构建通用版本时，可在运行 Ant 的桌面会话中设置 `ANT_KEYPOUCH_URL`，填写自己的 KeyPouch HTTPS 地址。为同一站点分发多个安装包时，可在 Wails 构建参数中指定 `-ldflags "-X ant-chrome/backend.bundledKeyPouchURL=https://keypouch.example.com"`。
+
 ### 从源码运行
 
 1. 开发默认使用 `master` 分支；该分支不带测试用户数据，适合作为日常开发基线。

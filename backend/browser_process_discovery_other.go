@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
@@ -112,27 +111,4 @@ func parseProcessListLine(line string) (int, string, bool) {
 		return 0, "", false
 	}
 	return pid, commandLine, true
-}
-
-func processCommandLineFlagValue(args []string, name string) string {
-	for index, arg := range args {
-		if strings.HasPrefix(arg, name+"=") {
-			return strings.TrimSpace(strings.TrimPrefix(arg, name+"="))
-		}
-		if arg == name && index+1 < len(args) {
-			return strings.TrimSpace(args[index+1])
-		}
-	}
-	return ""
-}
-
-func normalizeProcessUserDataDir(value string) string {
-	value = strings.TrimSpace(value)
-	if value == "" {
-		return ""
-	}
-	if absolute, err := filepath.Abs(value); err == nil {
-		value = absolute
-	}
-	return filepath.Clean(value)
 }

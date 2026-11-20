@@ -32,7 +32,7 @@ var profileCopyNameSuffixPattern = regexp.MustCompile(`[[:space:]]*(?:\([[:space
 
 // Copy 复制实例配置（除指纹参数外全部复制，指纹使用默认值生成新种子）
 func (m *Manager) Copy(profileId string, newName string) (*Profile, error) {
-	return m.copyProfile(profileId, newName, func(*Profile) []string {
+	return m.copyProfile(profileId, newName, nil, func(*Profile) []string {
 		return append([]string{}, m.Config.Browser.DefaultFingerprintArgs...)
 	})
 }
@@ -51,7 +51,7 @@ func (m *Manager) CopyWithOptions(profileId string, newName string, options Prof
 	if err != nil {
 		return nil, err
 	}
-	return m.copyProfile(profileId, newName, func(src *Profile) []string {
+	return m.copyProfile(profileId, newName, nil, func(src *Profile) []string {
 		switch normalizedMode {
 		case copyModeRegular:
 			return append([]string{}, src.FingerprintArgs...)
@@ -61,7 +61,19 @@ func (m *Manager) CopyWithOptions(profileId string, newName string, options Prof
 	})
 }
 
-func (m *Manager) copyProfile(profileId string, newName string, fingerprintResolver func(*Profile) []string) (*Profile, error) {
+type copyDestination struct {
+	id, group string
+}
+
+// CopyBoundProfile saves a copy directly in its destination group. A stable
+// ID lets a retried KeyPouch ticket find the same local profile after restart.
+func (m *Manager) CopyBoundProfile(sourceID, newName, id, group string) (*Profile, error) {
+	return m.copyProfile(sourceID, newName, &copyDestination{id, group}, func(*Profile) []string {
+		return append([]string{}, m.Config.Browser.DefaultFingerprintArgs...)
+	})
+}
+
+func (m *Manager) copyProfile(profileId string, newName string, dest *copyDestination, fingerprintResolver func(*Profile) []string) (*Profile, error) {
 	log := logger.New("Browser")
 	m.InitData()
 	m.Mutex.Lock()
@@ -76,6 +88,13 @@ func (m *Manager) copyProfile(profileId string, newName string, fingerprintResol
 	now := time.Now()
 	nowText := now.Format(time.RFC3339)
 	newId := uuid.NewString()
+	groupID := src.GroupId
+	if dest != nil {
+		if m.Profiles[dest.id] != nil {
+			return nil, fmt.Errorf("目标实例已存在")
+		}
+		newId, groupID = dest.id, dest.group
+	}
 
 	profileName := strings.TrimSpace(newName)
 	if profileName == "" {
@@ -116,7 +135,7 @@ func (m *Manager) copyProfile(profileId string, newName string, fingerprintResol
 		LaunchArgs:         append([]string{}, src.LaunchArgs...),
 		Tags:               append([]string{}, src.Tags...),
 		Keywords:           append([]string{}, src.Keywords...),
-		GroupId:            src.GroupId,
+		GroupId:            groupID,
 		Running:            false,
 		DebugPort:          0,
 		Pid:                0,

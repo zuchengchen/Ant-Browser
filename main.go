@@ -8,6 +8,7 @@ import (
 	"context"
 	"embed"
 	"encoding/json"
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
@@ -20,6 +21,7 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 	"github.com/wailsapp/wails/v2/pkg/options/linux"
+	"github.com/wailsapp/wails/v2/pkg/options/mac"
 	"github.com/wailsapp/wails/v2/pkg/options/windows"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
@@ -141,6 +143,13 @@ func (a *App) BackupListLocalBackups(directory string) ([]backend.BackupLocalHis
 }
 
 func main() {
+	if goruntime.GOOS == "linux" && len(os.Args) == 2 && os.Args[1] == "--register-protocol" {
+		if err := registerLinuxProtocol(); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		return
+	}
 	defer func() {
 		if recovered := recover(); recovered != nil {
 			lifecycle.LogPanic(appRoot, "process.panic", recovered)
@@ -198,7 +207,14 @@ func main() {
 		lifecycle.Log(appRoot, "runtime_layout.error", map[string]interface{}{"error": err.Error()})
 	}
 	lifecycle.Log(appRoot, "process.start", map[string]interface{}{"dev": isDevMode})
-	singleInstance, primaryInstance, err := singleinstance.Acquire(appRoot)
+	var launchURI string
+	for _, arg := range os.Args[1:] {
+		if backend.IsKeyPouchLink(arg) {
+			launchURI = arg
+			break
+		}
+	}
+	singleInstance, primaryInstance, err := singleinstance.Acquire(appRoot, launchURI)
 	if err != nil {
 		log.Printf("单实例检查失败: %v", err)
 		lifecycle.Log(appRoot, "single_instance.error", map[string]interface{}{"error": err.Error()})
@@ -247,24 +263,26 @@ func main() {
 
 	var wailsCtx context.Context
 	startupReached := make(chan struct{})
+	backendReady := make(chan struct{})
+	dispatchURI := func(uri string) {
+		if !backend.IsKeyPouchLink(uri) {
+			return
+		}
+		go func() {
+			<-backendReady
+			backend.HandleKeyPouchLink(app.App, uri, singleinstance.FocusExistingWindow)
+		}()
+	}
 	go func() {
 		for activation := range singleInstance.Activations() {
-			if wailsCtx == nil {
-				select {
-				case <-startupReached:
-				case <-time.After(12 * time.Second):
-				}
-				if wailsCtx == nil {
-					activation.Complete()
-					continue
-				}
-			}
+			<-startupReached
 			runtime.WindowShow(wailsCtx)
 			runtime.WindowUnminimise(wailsCtx)
 			runtime.WindowSetAlwaysOnTop(wailsCtx, true)
 			runtime.WindowSetAlwaysOnTop(wailsCtx, false)
 			singleinstance.ActivateExistingWindow(os.Getpid())
 			activation.Complete()
+			dispatchURI(activation.URI)
 		}
 	}()
 
@@ -311,11 +329,11 @@ func main() {
 		BackgroundColour: &options.RGBA{R: 245, G: 247, B: 250, A: 255},
 		OnStartup: func(ctx context.Context) {
 			lifecycle.Log(appRoot, "wails.on_startup.begin", nil)
+			wailsCtx = ctx
 			close(startupReached)
 			if startupDebugEnabled {
 				log.Printf("Wails OnStartup 已触发，GUI 宿主已创建")
 			}
-			wailsCtx = ctx
 			runtime.WindowCenter(wailsCtx)
 			backend.ApplyMainApplicationWindowIcon(appRoot, cfg.App.Name)
 			// 启动系统托盘（非阻塞）
@@ -340,6 +358,8 @@ func main() {
 			})
 			lifecycle.Log(appRoot, "tray.start.requested", nil)
 			app.startup(ctx)
+			close(backendReady)
+			dispatchURI(launchURI)
 			lifecycle.Log(appRoot, "wails.on_startup.complete", nil)
 			if startupDebugEnabled {
 				log.Printf("后端 startup 已完成")
@@ -364,6 +384,7 @@ func main() {
 		Bind: []interface{}{
 			app,
 		},
+		Mac: &mac.Options{OnUrlOpen: dispatchURI},
 		Linux: &linux.Options{
 			// Expose a real window icon to Linux desktop environments.
 			Icon:             linuxAppIcon,

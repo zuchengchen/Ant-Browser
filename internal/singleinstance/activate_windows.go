@@ -85,9 +85,11 @@ func grantExistingSingleInstanceForeground(pid int) {
 	}
 }
 
-func ActivateExistingWindow(pid int) {
+func ActivateExistingWindow(pid int) { FocusExistingWindow(pid) }
+
+func FocusExistingWindow(pid int) bool {
 	if pid <= 0 {
-		return
+		return false
 	}
 	grantExistingSingleInstanceForeground(pid)
 	if hwnd := findTopLevelWindowByPID(uint32(pid)); hwnd != 0 {
@@ -103,7 +105,10 @@ func ActivateExistingWindow(pid int) {
 			procSetWindowPos.Call(hwnd, hwndNotopmost, 0, 0, 0, 0, swpNoMove|swpNoSize|swpShowWindow)
 			procSetForegroundWindow.Call(hwnd)
 		}
+		foreground, _, _ := procGetForegroundWindow.Call()
+		return foreground == hwnd
 	}
+	return false
 }
 
 func attachForegroundThreadInput(hwnd uintptr, fn func()) {

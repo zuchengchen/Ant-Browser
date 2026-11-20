@@ -71,7 +71,7 @@ bash publish/linux/publish-linux-all.sh
 - `.deb` installs app files under `/opt/ant-browser`.
 - `.deb` bundles `xray` and `sing-box` under `/opt/ant-browser/bin`.
 - Linux packages keep an empty `chrome/` placeholder with `README.md`, but do **not** bundle browser core binaries.
-- `.deb` registers an application launcher at `/usr/share/applications/ant-browser.desktop`.
+- The Debian desktop entry registers `ant-browser://` for KeyPouch. For a portable installation, run `./ant-chrome --register-protocol` once after extracting it to its permanent directory.
 - `.deb` installs standard Linux desktop icons under `/usr/share/icons/hicolor/*/apps/ant-browser.png` and `/usr/share/pixmaps/ant-browser.png`, so menus and launchers are more likely to pick up the app icon correctly.
 - `.deb` bundles AppStream metadata under `/usr/share/metainfo/ant-browser.metainfo.xml`, which improves recognition in software centers and GUI `.deb` installers.
 - On Debian/Ubuntu desktop environments that already support local `.deb` GUI installers, the package can usually be installed by double-clicking it; if the host has no GUI installer association, use `sudo apt install ./ant-browser_<version>_<arch>.deb`.

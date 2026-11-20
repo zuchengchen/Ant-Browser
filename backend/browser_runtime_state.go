@@ -88,6 +88,7 @@ func (a *App) markProfileRunningLocked(profileId string, profile *BrowserProfile
 	}
 	delete(a.browserProcessMonitors, profileId)
 	profile.Running = true
+	a.notifyKeyPouchRuntime()
 	profile.DebugPort = debugPort
 	profile.DebugReady = debugReady
 	profile.Pid = pid

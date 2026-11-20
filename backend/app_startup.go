@@ -100,6 +100,7 @@ func (a *App) startup(ctx context.Context) {
 	a.startupInitBackupScheduler()
 	a.startupInitProxySourceRefreshScheduler()
 	a.startupInitRuntimeCleanup()
+	a.restoreKeyPouchRuntime()
 	a.emitRuntimeEvent("app:ready")
 
 	log.Info("应用启动成功")

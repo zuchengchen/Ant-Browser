@@ -286,6 +286,10 @@ Section "Ant Browser (required)" SecMain
   SetOutPath "$INSTDIR\data\diagnostics"
   File /r "${STAGINGDIR}\data\diagnostics\*"
   SetOutPath "$INSTDIR"
+  WriteRegStr HKLM "Software\Classes\ant-browser" "" "URL:Ant Browser"
+  WriteRegStr HKLM "Software\Classes\ant-browser" "URL Protocol" ""
+  WriteRegStr HKLM "Software\Classes\ant-browser\shell\open\command" "" '"$INSTDIR\${PRODUCT_EXE}" "%1"'
+
   WriteRegStr HKLM "${UNINSTALL_KEY}" "DisplayName"     "${PRODUCT_NAME}"
   WriteRegStr HKLM "${UNINSTALL_KEY}" "DisplayVersion"  "${VERSION}"
   WriteRegStr HKLM "${UNINSTALL_KEY}" "Publisher"       "Ant Chrome Team"
@@ -333,6 +337,10 @@ Section "Uninstall"
   Delete /REBOOTOK "$SMPROGRAMS\${PRODUCT_NAME}\Uninstall.lnk"
   RMDir /REBOOTOK "$SMPROGRAMS\${PRODUCT_NAME}"
   Delete /REBOOTOK "$DESKTOP\${PRODUCT_NAME}.lnk"
+  ReadRegStr $0 HKLM "Software\Classes\ant-browser\shell\open\command" ""
+  ${If} $0 == '"$INSTDIR\${PRODUCT_EXE}" "%1"'
+    DeleteRegKey HKLM "Software\Classes\ant-browser"
+  ${EndIf}
   DeleteRegKey HKLM "${UNINSTALL_KEY}"
   MessageBox MB_ICONQUESTION|MB_YESNO|MB_DEFBUTTON2 "是否彻底清理所有用户数据？$\r$\n$\r$\n选择“是”将删除 data 目录（含数据库/实例数据）以及安装目录残留文件。$\r$\n此操作不可恢复。" IDYES un_remove_all_data IDNO un_keep_user_data
 

@@ -75,6 +75,11 @@ type App struct {
 	profileWindowMarkersMu        sync.Mutex
 	profileWindowMarkers          map[string]*profileWindowMarker
 	browserProcessMonitors        map[string]*browserProcessMonitor
+	keyPouchRuntimeChanged        chan struct{}
+	keyPouchActionMu              sync.Mutex
+	keyPouchRuntimeMu             sync.Mutex
+	keyPouchRuntimePost           func(context.Context, string, any, any) error
+	keyPouchRuntimeActive         bool
 	backupLocalConfigPathOverride string
 	stopServicesOnce              sync.Once
 	finalizeOnce                  sync.Once
@@ -98,6 +103,7 @@ func NewApp(appRoot string, appVersion ...string) *App {
 		automationTargetCursor:  make(map[string]string),
 		profileWindowMarkers:    make(map[string]*profileWindowMarker),
 		browserProcessMonitors:  make(map[string]*browserProcessMonitor),
+		keyPouchRuntimeChanged:  make(chan struct{}, 1),
 	}
 }
 

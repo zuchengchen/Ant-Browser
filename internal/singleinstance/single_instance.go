@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"os"
@@ -27,6 +28,7 @@ type Guard struct {
 }
 
 type ActivationRequest struct {
+	URI  string
 	done chan struct{}
 }
 
@@ -43,7 +45,7 @@ func (g *Guard) Activations() <-chan ActivationRequest {
 	return g.activation
 }
 
-func Acquire(appRoot string) (*Guard, bool, error) {
+func Acquire(appRoot, uri string) (*Guard, bool, error) {
 	stateRoot := singleInstanceStateRoot(appRoot)
 	if err := os.MkdirAll(stateRoot, 0o755); err != nil {
 		return nil, false, fmt.Errorf("准备单实例状态目录失败: %w", err)
@@ -79,7 +81,7 @@ func Acquire(appRoot string) (*Guard, bool, error) {
 		}
 
 		_ = listener.Close()
-		if signalExistingSingleInstance(lockPath) {
+		if signalExistingSingleInstance(lockPath, uri) {
 			return nil, false, nil
 		}
 		return nil, false, fmt.Errorf("单实例锁被占用且无法唤醒已有应用")
@@ -104,19 +106,29 @@ func writeSingleInstanceLockInfo(file *os.File, info singleInstanceLockInfo) err
 	return file.Sync()
 }
 
-func signalExistingSingleInstance(lockPath string) bool {
+func signalExistingSingleInstance(lockPath, uri string) bool {
 	for attempt := 0; attempt < 5; attempt++ {
 		info, err := readSingleInstanceLock(lockPath)
-		if err == nil && strings.TrimSpace(info.Addr) != "" {
+		host, _, addrErr := net.SplitHostPort(info.Addr)
+		if err == nil && addrErr == nil && net.ParseIP(host).IsLoopback() {
 			grantExistingSingleInstanceForeground(info.PID)
 			conn, dialErr := net.DialTimeout("tcp", info.Addr, 350*time.Millisecond)
 			if dialErr == nil {
 				_ = conn.SetDeadline(time.Now().Add(1200 * time.Millisecond))
-				_, _ = conn.Write([]byte("activate\n"))
-				_, _ = bufio.NewReader(conn).ReadString('\n')
+				command := "activate"
+				if uri != "" {
+					command += " " + uri
+				}
+				_, sendErr := fmt.Fprintln(conn, command)
+				reply, readErr := bufio.NewReader(io.LimitReader(conn, 32)).ReadString('\n')
 				_ = conn.Close()
-				ActivateExistingWindow(info.PID)
-				return true
+				if uri == "" {
+					ActivateExistingWindow(info.PID)
+					return true
+				}
+				if sendErr == nil && readErr == nil && reply == "ok\n" {
+					return true
+				}
 			}
 			ActivateExistingWindow(info.PID)
 		}
@@ -150,18 +162,24 @@ func (g *Guard) serve() {
 func (g *Guard) handleConn(conn net.Conn) {
 	defer conn.Close()
 	_ = conn.SetReadDeadline(time.Now().Add(2 * time.Second))
-	message, _ := bufio.NewReader(conn).ReadString('\n')
-	if strings.TrimSpace(message) != "activate" {
+	message, err := bufio.NewReader(io.LimitReader(conn, 256)).ReadString('\n')
+	command, uri, _ := strings.Cut(strings.TrimSuffix(message, "\n"), " ")
+	if err != nil || command != "activate" || strings.ContainsAny(uri, " \t\r\n") {
 		return
 	}
 	done := make(chan struct{})
 	select {
-	case g.activation <- ActivationRequest{done: done}:
-		select {
-		case <-done:
-		case <-time.After(3 * time.Second):
+	case g.activation <- ActivationRequest{URI: uri, done: done}:
+		// A ticket is queued once even if Ant is still starting. Waiting for
+		// its window here would make the second process resend the same link.
+		if uri == "" {
+			select {
+			case <-done:
+			case <-time.After(3 * time.Second):
+			}
 		}
 	default:
+		return
 	}
 	_, _ = conn.Write([]byte("ok\n"))
 }

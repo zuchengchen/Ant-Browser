@@ -134,6 +134,7 @@ func (a *App) markProfileStoppedLocked(profileId string, profile *BrowserProfile
 	a.stopProfileWindowMarker(profileId)
 	profile.WindowMarkerCode = ""
 	profile.Running = false
+	a.notifyKeyPouchRuntime()
 	profile.DebugReady = false
 	profile.Pid = 0
 	profile.DebugPort = 0

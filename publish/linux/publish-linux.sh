@@ -265,7 +265,8 @@ cat > "$DESKTOP_ROOT/$APP_DESKTOP_ID" <<EOF
 Version=1.0
 Name=${APP_NAME}
 Comment=${APP_SUMMARY}
-Exec=/opt/ant-browser/${APP_BINARY_NAME}
+Exec=/opt/ant-browser/${APP_BINARY_NAME} %u
+MimeType=x-scheme-handler/ant-browser;
 TryExec=/opt/ant-browser/${APP_BINARY_NAME}
 Icon=${APP_ICON_NAME}
 StartupWMClass=Ant-chrome

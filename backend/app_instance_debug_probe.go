@@ -1,6 +1,7 @@
 package backend
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -51,8 +52,16 @@ func probeBrowserJSONList(client *http.Client, debugPort int) error {
 }
 
 func fetchBrowserDebugJSON(client *http.Client, debugPort int, path string, dest interface{}) error {
+	return fetchBrowserDebugJSONContext(context.Background(), client, debugPort, path, dest)
+}
+
+func fetchBrowserDebugJSONContext(ctx context.Context, client *http.Client, debugPort int, path string, dest interface{}) error {
 	url := fmt.Sprintf("http://127.0.0.1:%d%s", debugPort, path)
-	resp, err := client.Get(url)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return err
+	}
+	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("%s request failed: %w", path, err)
 	}

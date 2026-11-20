@@ -95,6 +95,7 @@ func (a *App) resumeBackgroundTasks() {
 		a.backgroundTasksBlocked = false
 	}
 	a.runtimeMu.Unlock()
+	a.ensureKeyPouchRuntime()
 }
 
 // backgroundTaskWaitTimeout 是关闭/维护流程等待后台任务的上限。

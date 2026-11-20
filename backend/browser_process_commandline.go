@@ -1,6 +1,9 @@
 package backend
 
-import "strings"
+import (
+	"path/filepath"
+	"strings"
+)
 
 func parseBrowserProcessCommandLineArgs(commandLine string) []string {
 	parts := splitProcessCommandLine(commandLine)
@@ -36,4 +39,27 @@ func splitProcessCommandLine(commandLine string) []string {
 		parts = append(parts, builder.String())
 	}
 	return parts
+}
+
+func processCommandLineFlagValue(args []string, name string) string {
+	for index, arg := range args {
+		if strings.HasPrefix(arg, name+"=") {
+			return strings.TrimSpace(strings.TrimPrefix(arg, name+"="))
+		}
+		if arg == name && index+1 < len(args) {
+			return strings.TrimSpace(args[index+1])
+		}
+	}
+	return ""
+}
+
+func normalizeProcessUserDataDir(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return ""
+	}
+	if absolute, err := filepath.Abs(value); err == nil {
+		value = absolute
+	}
+	return filepath.Clean(value)
 }
