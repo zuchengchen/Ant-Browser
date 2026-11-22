@@ -41,11 +41,12 @@ These shared skill instructions supplement project-specific rules in this `AGENT
 本节适用于整个仓库，放在共享规则自动生成区域之外。后续同步上游时保留本节，并按需要整合上游规则。
 
 - `origin` 是本项目 `zuchengchen/Ant-Browser`，`upstream` 是 `https://github.com/black-ant/Ant-Browser.git`。`master` 是包含上游代码和本项目定制功能的产品主线；默认推送到 `origin`，不向 `upstream` 推送。
-- 日常独立开发和上游同步都不要求创建 PR，不增加同步 PR 或强制 PR 审批流程。提交、推送与发布仍按用户当前任务的授权范围执行。
+- 每次完成仓库修改并通过相关检查后，只暂存本次任务的改动，自动执行 `git commit`，再用 `git push origin HEAD` 推送到 `origin` 的同名分支，无需另行确认。
+- 日常独立开发和上游同步都不要求创建 PR，不增加同步 PR 或强制 PR 审批流程。打标签和发布仍按用户当前任务的授权范围执行。
 - 上游同步入口为 `bash scripts/sync-upstream.sh`，只查看更新用 `--check`；按正式版本同步用 `--ref refs/tags/<上游标签>` 或完整提交 SHA。默认目标为上游 `master`，优先按上游正式版本安排同步。
 - 合并前必须处于干净的 `master`，没有未完成的 merge/rebase/cherry-pick，且已包含 `origin/master`。脚本使用 `merge --no-ff --no-commit`，不自动提交、推送、发布或创建 PR。
 - 保留完整的上游合并历史和本项目定制；不通过 reset、强推、squash、重写已共享主线历史或整批选择 ours/theirs 来完成同步。冲突逐项处理，无法确认语义时保留现场并说明问题。
-- 合并提交保留脚本生成的 `Upstream-Repository`、`Upstream-Ref`、`Upstream-Commit` 信息。检查变更、解决冲突并通过适用的 Go 测试和前端构建后，用 `git commit --no-edit` 完成合并，再按任务授权 `git push origin master`。无新提交时不制造空同步提交。
+- 合并提交保留脚本生成的 `Upstream-Repository`、`Upstream-Ref`、`Upstream-Commit` 信息。检查变更、解决冲突并通过适用的 Go 测试和前端构建后，用 `git commit --no-edit` 完成合并，随后执行 `git push origin master`。无新提交时不制造空同步提交。
 - 每次同步检查本项目维护的差异：本节规则、同步脚本、更新源、发布标签及解析、发布仓库参数，以及既有两套代理连接栈约束。涉及代理路径的变更不得引入跨栈自动回退。
 - 上游 fetch 默认使用 `--no-tags`。需要某个上游标签时仅显式获取该 ref；不把上游标签批量复制到本项目，不使用 `git push --tags` 或 `git push --mirror` 做同步。
 - 本项目完整版本号为 `X.Y.Z-N`。主版本号 `X.Y.Z` 跟随实际合入 `master` 的上游三段版本号。首次合入某个上游版本时，本地子版本号（修订号）`N` 取 `1`。在同一上游版本上，每完成一次本地更新，`N` 加 1。一次更新可包含多个提交，重复构建、打包或安装同一更新均沿用原号。
