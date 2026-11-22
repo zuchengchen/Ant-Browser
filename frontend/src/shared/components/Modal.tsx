@@ -1,4 +1,4 @@
-import { ReactNode, useEffect, useRef, useState } from 'react'
+import { KeyboardEventHandler, ReactNode, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 import { Button } from './Button'
@@ -14,6 +14,9 @@ interface ModalProps {
   footer?: ReactNode
   width?: string
   closable?: boolean
+  ariaLabel?: string
+  closeButtonLabel?: string
+  onKeyDown?: KeyboardEventHandler<HTMLDivElement>
 }
 
 export function Modal({
@@ -24,6 +27,9 @@ export function Modal({
   footer,
   width = '500px',
   closable = true,
+  ariaLabel,
+  closeButtonLabel,
+  onKeyDown,
 }: ModalProps) {
   const [mounted, setMounted] = useState(open)
   const [closing, setClosing] = useState(false)
@@ -60,6 +66,10 @@ export function Modal({
       />
 
       <div
+        role={ariaLabel ? 'dialog' : undefined}
+        aria-modal={ariaLabel ? true : undefined}
+        aria-label={ariaLabel}
+        onKeyDown={onKeyDown}
         className={`modal-surface relative flex max-h-[90vh] w-full flex-col rounded-xl bg-[var(--color-bg-elevated)] shadow-2xl ${closing ? 'animate-modal-out' : 'animate-modal-in'}`}
         style={{ width, maxWidth: '90vw' }}
         onClick={(e) => e.stopPropagation()}
@@ -73,6 +83,8 @@ export function Modal({
             )}
             {closable && (
               <button
+                aria-label={closeButtonLabel}
+                title={closeButtonLabel}
                 onClick={onClose}
                 className="p-1.5 rounded-lg text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-bg-muted)] transition-colors ml-auto"
               >

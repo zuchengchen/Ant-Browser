@@ -1,9 +1,10 @@
-import { Suspense, useEffect, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
+import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 import { BrowserRouter as Router } from "react-router-dom";
 import { ThemeProvider } from "./shared/theme";
 import { Layout } from "./shared/layout";
 import { MODAL_EXIT_DURATION_MS, ToastContainer, Modal, Button, Loading, toast } from "./shared/components";
-import { AlertCircle } from "lucide-react";
+import { AlertCircle, X } from "lucide-react";
 import { AppRoutes } from "./routes/AppRoutes";
 import { lazyNamed } from "./routes/lazyNamed";
 import { useNotificationStore } from "./store/notificationStore";
@@ -17,7 +18,6 @@ import {
   Environment,
   Quit,
   WindowHide,
-  WindowMinimise,
 } from "./wailsjs/runtime/runtime";
 
 const QuickLaunchModal = lazyNamed(
@@ -152,18 +152,35 @@ function useGlobalErrorNotifications() {
   }, [addNotification]);
 }
 
-function CloseConfirmModal() {
-  const [open, setOpen] = useState(false);
-  const [platform, setPlatform] = useState("windows");
-  const [quittingAction, setQuittingAction] = useState<
-    "app-only" | "app-and-browser" | null
-  >(null);
+type CloseAction = "tray" | "app-only" | "app-and-browser";
+type ClosePhase = "idle" | "confirm" | CloseAction;
+
+function WindowCloseControl() {
+  const [phase, setPhase] = useState<ClosePhase>("idle");
+  const phaseRef = useRef<ClosePhase>("idle");
+  const [platform, setPlatform] = useState("");
   const closeActionTimerRef = useRef<number | null>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const choicesRef = useRef<HTMLDivElement>(null);
+  const returnFocusRef = useRef<HTMLElement | null>(null);
   const importInProgress = useBackupStore((s) => s.importInProgress);
   const importProgress = useBackupStore((s) => s.importProgress);
   const importMessage = useBackupStore((s) => s.importMessage);
   const supportsTray = platform === "windows";
-  const quitting = quittingAction !== null;
+  const quitting = phase === "app-only" || phase === "app-and-browser";
+
+  // Native and DOM events can arrive before React renders a pending choice.
+  const changePhase = useCallback((next: ClosePhase) => {
+    phaseRef.current = next;
+    setPhase(next);
+  }, []);
+
+  const requestClose = useCallback(() => {
+    if (phaseRef.current !== "idle") return;
+    const focused = document.activeElement;
+    returnFocusRef.current = focused instanceof HTMLElement && focused !== document.body ? focused : closeButtonRef.current;
+    changePhase("confirm");
+  }, [changePhase]);
 
   useEffect(() => () => {
     if (closeActionTimerRef.current !== null) {
@@ -175,18 +192,16 @@ function CloseConfirmModal() {
     const runtime = (window as any).runtime;
     if (!runtime?.EventsOn) return;
 
-    const off = runtime.EventsOn("app:request-close", () => {
-      setQuittingAction(null);
-      setOpen(true);
-    });
+    const off = runtime.EventsOn("app:request-close", requestClose);
     return () => {
       if (typeof off === "function") off();
     };
-  }, []);
+  }, [requestClose]);
 
   useEffect(() => {
     let cancelled = false;
 
+    if (!(window as any).runtime?.Environment) return;
     Environment()
       .then((info) => {
         if (!cancelled && info?.platform) {
@@ -201,62 +216,84 @@ function CloseConfirmModal() {
   }, []);
 
   const closeModal = () => {
-    if (quitting) return;
-    setOpen(false);
+    if (phaseRef.current !== "confirm") return;
+    changePhase("idle");
+    requestAnimationFrame(() => {
+      if (phaseRef.current !== "idle") return;
+      const previous = returnFocusRef.current;
+      (previous?.isConnected ? previous : closeButtonRef.current)?.focus();
+    });
   };
 
-  const closeAfterAnimation = (action: () => void | Promise<void>) => {
-    if (closeActionTimerRef.current !== null) return;
+  useEffect(() => {
+    // A new request can arrive while the shared modal is still animating out.
+    if (phase === "confirm") choicesRef.current?.querySelector("button")?.focus();
+  }, [phase]);
 
-    setOpen(false);
-    closeActionTimerRef.current = window.setTimeout(() => {
+  const handleDialogKey = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (phaseRef.current !== "confirm") return;
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
+    if (event.key === "Escape") {
+      event.preventDefault();
+      event.stopPropagation();
+      closeModal();
+      return;
+    }
+    if (event.key !== "Tab") return;
+    const buttons = event.currentTarget.querySelectorAll<HTMLButtonElement>("button:not(:disabled)");
+    const first = buttons[0];
+    const last = buttons[buttons.length - 1];
+    if (document.activeElement === (event.shiftKey ? first : last)) {
+      event.preventDefault();
+      (event.shiftKey ? last : first)?.focus();
+    }
+  };
+
+  const confirmAction = (action: CloseAction) => {
+    if (phaseRef.current !== "confirm") return;
+    changePhase(action);
+    closeActionTimerRef.current = window.setTimeout(async () => {
       closeActionTimerRef.current = null;
-      void action();
+      try {
+        if (action === "tray") {
+          WindowHide();
+          changePhase("idle");
+        } else if (action === "app-only") {
+          await QuitAppOnlyApp();
+        } else {
+          let fallbackTimer: number | undefined;
+          try {
+            await Promise.race([
+              ForceQuitApp(),
+              new Promise<void>((resolve) => {
+                fallbackTimer = window.setTimeout(resolve, 1200);
+              }),
+            ]);
+          } catch (error) {
+            console.error("ForceQuit failed, falling back to runtime.Quit()", error);
+          } finally {
+            window.clearTimeout(fallbackTimer);
+          }
+          Quit();
+        }
+      } catch (error) {
+        console.error("Window close action failed", error);
+        changePhase("idle");
+      }
     }, MODAL_EXIT_DURATION_MS);
   };
 
-  const handleMinimize = () => {
-    if (quitting) return;
-    closeAfterAnimation(() => {
-      if (supportsTray) {
-        WindowHide();
-        return;
-      }
-      WindowMinimise();
-    });
-  };
-
-  const handleQuitAppOnly = () => {
-    setQuittingAction("app-only");
-    closeAfterAnimation(async () => {
-      try {
-        await QuitAppOnlyApp();
-      } catch (error) {
-        console.error("QuitAppOnly failed", error);
-        setQuittingAction(null);
-      }
-    });
-  };
-
-  const handleQuitAppAndBrowsers = () => {
-    setQuittingAction("app-and-browser");
-    closeAfterAnimation(async () => {
-      try {
-        await Promise.race([
-          ForceQuitApp(),
-          new Promise((resolve) => setTimeout(resolve, 1200)),
-        ]);
-      } catch (error) {
-        console.error("ForceQuit failed, falling back to runtime.Quit()", error);
-      }
-      Quit();
-    });
-  };
-
-  return (
+  const confirmation = (
     <Modal
-      open={open}
+      open={phase === "confirm"}
       onClose={closeModal}
+      ariaLabel="关闭窗口确认"
+      closeButtonLabel="取消关闭"
+      onKeyDown={handleDialogKey}
       title={importInProgress ? "关闭应用确认" : undefined}
       width={importInProgress ? "360px" : "420px"}
       closable={!quitting}
@@ -290,6 +327,7 @@ function CloseConfirmModal() {
         )}
 
         <div
+          ref={choicesRef}
           className={`w-full ${importInProgress ? "flex gap-3" : "flex flex-col gap-2"}`}
         >
           {importInProgress ? (
@@ -298,6 +336,7 @@ function CloseConfirmModal() {
                 variant="secondary"
                 className="flex-1"
                 onClick={closeModal}
+                autoFocus
                 disabled={quitting}
               >
                 继续加载
@@ -305,8 +344,8 @@ function CloseConfirmModal() {
               <Button
                 variant="danger"
                 className="flex-1"
-                onClick={handleQuitAppAndBrowsers}
-                loading={quittingAction === "app-and-browser"}
+                onClick={() => confirmAction("app-and-browser")}
+                loading={phase === "app-and-browser"}
               >
                 仍要关闭
               </Button>
@@ -315,16 +354,17 @@ function CloseConfirmModal() {
             <>
               <Button
                 variant="secondary"
-                className="w-full !bg-[#f3f4f6] !border-[#e5e7eb] !text-[var(--color-text-primary)] hover:!bg-[#e5e7eb]"
-                onClick={supportsTray ? handleMinimize : closeModal}
+                className="w-full"
+                onClick={supportsTray ? () => confirmAction("tray") : closeModal}
+                autoFocus
                 disabled={quitting}
               >
                 {supportsTray ? "最小化到托盘" : "取消"}
               </Button>
               <Button
                 className="w-full"
-                onClick={handleQuitAppOnly}
-                loading={quittingAction === "app-only"}
+                onClick={() => confirmAction("app-only")}
+                loading={phase === "app-only"}
                 disabled={quitting}
               >
                 仅退出应用
@@ -332,8 +372,8 @@ function CloseConfirmModal() {
               <Button
                 variant="danger"
                 className="w-full"
-                onClick={handleQuitAppAndBrowsers}
-                loading={quittingAction === "app-and-browser"}
+                onClick={() => confirmAction("app-and-browser")}
+                loading={phase === "app-and-browser"}
                 disabled={quitting}
               >
                 退出应用与浏览器
@@ -343,6 +383,23 @@ function CloseConfirmModal() {
         </div>
       </div>
     </Modal>
+  );
+
+  return (
+    <>
+      <button
+        ref={closeButtonRef}
+        type="button"
+        title="关闭窗口"
+        aria-label="关闭窗口"
+        disabled={phase !== "idle"}
+        onClick={requestClose}
+        className="inline-flex h-7 w-9 shrink-0 items-center justify-center rounded text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-error)] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
+      >
+        <X className="h-4 w-4" aria-hidden="true" />
+      </button>
+      {confirmation}
+    </>
   );
 }
 
@@ -377,13 +434,12 @@ function App() {
   return (
     <ThemeProvider>
       <Router>
-        <Layout>
+        <Layout closeControl={<WindowCloseControl />}>
           <Suspense fallback={routeFallback}>
             <AppRoutes />
           </Suspense>
         </Layout>
         <ToastContainer />
-        <CloseConfirmModal />
         <Suspense fallback={null}>
           {quickLaunchOpen ? (
             <QuickLaunchModal
