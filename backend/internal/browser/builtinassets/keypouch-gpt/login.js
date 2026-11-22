@@ -11,6 +11,9 @@ const messages = {
   redirectStalled: ['manual', '登录跳转未完成，请在登录标签页查看当前页面后继续。'],
   stalled: ['manual', '登录页面未继续，请在实例中查看网页提示。'],
   interrupted: ['manual', '已停止自动填写，可在登录标签页中继续。'],
+  interaction: ['manual', '登录页面收到了输入或点击，已停止自动填写。请在该标签页继续。'],
+  focusLost: ['manual', '填写期间登录标签页离开了前台，已停止自动填写。请在该标签页核对后继续。'],
+  focusTimeout: ['manual', '等待登录标签页回到前台已超时，请在该标签页继续。'],
   rejected: ['failed', '网站未接受登录信息，请检查所选账号及网页提示。'],
   unavailable: ['failed', '无法访问此次登录的标签页，请重新打开登录。'],
 }
@@ -61,21 +64,31 @@ function loginPage(request) {
     if (guard?.id === request.id) { guard.events.abort(); delete globalThis[key] }
     return 'ended'
   }
+  if (request.focusCheck && guard?.id !== request.id) return 'changed'
   if (request.stage && guard?.id !== request.id) return 'interrupted'
   if (guard?.id !== request.id) {
     guard?.events.abort()
     guard = { id: request.id, events: new AbortController(), interrupted: false, submitted: new Set() }
     globalThis[key] = guard
-    const observe = event => {
-      if (!event.isTrusted || guard.interrupted) return
-      guard.interrupted = true
+    const stop = reason => {
+      if (guard.interrupted) return
+      guard.interrupted = reason
       guard.events.abort()
       // The user may navigate before the next poll can see this document.
-      chrome.runtime.sendMessage({ type: 'keypouch-login-interaction', id: guard.id }).catch(() => {})
+      chrome.runtime.sendMessage({ type: 'keypouch-login-interaction', id: guard.id, reason }).catch(() => {})
     }
     for (const event of ['pointerdown', 'keydown', 'input']) {
-      window.addEventListener(event, observe, { capture: true, signal: guard.events.signal })
+      window.addEventListener(event, e => { if (e.isTrusted) stop('interaction') }, { capture: true, signal: guard.events.signal })
     }
+    const stopIfEditing = () => {
+      if (guard.fill?.edited && !guard.submitted.has(guard.fill.stage) && !guard.leaving) stop('focusLost')
+    }
+    window.addEventListener('pagehide', () => { guard.leaving = true }, { signal: guard.events.signal })
+    window.addEventListener('pageshow', () => { guard.leaving = false }, { signal: guard.events.signal })
+    window.addEventListener('blur', stopIfEditing, { signal: guard.events.signal })
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState !== 'visible') stopIfEditing()
+    }, { signal: guard.events.signal })
     window.addEventListener('submit', event => {
       const fill = guard.fill
       if (fill?.complete && fill.form === event.target) {
@@ -108,7 +121,19 @@ function loginPage(request) {
       }
     }, { capture: true, signal: guard.events.signal })
   }
-  if (guard.interrupted) return 'interrupted'
+  if (guard.interrupted) return guard.interrupted
+  const focusState = () => {
+    if (guard.interrupted) return guard.interrupted
+    if (!request.inactiveTab && document.visibilityState === 'visible' && document.hasFocus()) return 'ready'
+    if (guard.fill?.edited && !guard.submitted.has(guard.fill.stage)) return 'focusLost'
+    // No character has been written in this stage. Drop any plan made
+    // before the window switch and inspect the form again upon return.
+    guard.plan = undefined
+    if (guard.fill && !guard.fill.edited) guard.fill = undefined
+    delete guard.passwordIdentityDeadline
+    return 'awaitingFocus'
+  }
+  if (request.focusCheck) return focusState()
   const redirect = request.redirectPages.includes(here.origin + here.pathname)
   if (!redirect && (!document.body || document.readyState === 'loading')) return 'waiting'
 
@@ -320,7 +345,10 @@ function loginPage(request) {
   const filling = guard.fill
   if (filling?.stage === 'totp' && filling.complete && stage !== 'totp') guard.submitted.add('totp')
   if (filling && !guard.submitted.has(filling.stage)
-    && (filling.stage !== stage || filling.form !== form || filling.field !== field || filling.companion !== companion || !sameSlots(filling.slots, slots))) return 'interrupted'
+    && (filling.stage !== stage || filling.form !== form || filling.field !== field || filling.companion !== companion || !sameSlots(filling.slots, slots))) {
+    if (filling.edited) return 'interrupted'
+    guard.fill = undefined
+  }
   if (button?.href) {
     const link = new URL(button.href, here)
     if (!official(link) || unsafePath(link.pathname) || (button.target && button.target !== '_self')) return 'external'
@@ -334,6 +362,10 @@ function loginPage(request) {
     if (!official(action) || (action.origin !== here.origin && !emailHandoff) || unsafePath(action.pathname) || (target && target !== '_self')) return 'unknown'
     // Native GET submission would include credentials in history and request logs.
     if ((stage === 'password' || stage === 'totp') && method.toLowerCase() !== 'post') return 'unknown'
+  }
+  if (!guard.submitted.has(stage)) {
+    const focus = focusState()
+    if (focus !== 'ready') return focus
   }
   if (stage === 'password') {
     if (guard.passwordIdentityDeadline !== undefined && Date.now() >= guard.passwordIdentityDeadline) return 'passwordIdentity'
@@ -350,7 +382,6 @@ function loginPage(request) {
     guard.plan = { stage, form, field, companion, button, slots }
     return stage
   }
-  if (document.visibilityState !== 'visible' || !document.hasFocus()) return 'interrupted'
   if (stage !== request.stage) return 'changed'
   const plan = guard.plan
   if (!plan || plan.stage !== stage || plan.form !== form || plan.field !== field || plan.companion !== companion || plan.button !== button || !sameSlots(plan.slots, slots)) return 'changed'
@@ -384,17 +415,21 @@ function loginPage(request) {
       if (!fill.node) {
         fill.node = node
         node.focus()
-        if (guard.interrupted || !node.isConnected || node.value !== fill.written) return 'interrupted'
+        if (!node.isConnected || node.value !== fill.written) return guard.interrupted || 'interrupted'
       }
+      // Focusing a field can run synchronous site handlers before the first edit.
+      const focus = focusState()
+      if (focus !== 'ready') return focus
       const char = String.fromCodePoint(value.codePointAt(fill.written.length))
       const next = fill.written + char
+      fill.edited = true
       Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(node, next)
       fill.written = next
       fill.complete = next === value && fill.index === entries.length - 1
       node.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: char }))
       if (guard.submitted.has(stage)) return 'submitted'
       if (stage === 'totp' && fill.complete && !node.isConnected) return 'submitted'
-      if (guard.interrupted || !node.isConnected || node.value !== next) return 'interrupted'
+      if (guard.interrupted || !node.isConnected || node.value !== next) return guard.interrupted || 'interrupted'
       if (next !== value) return 'typing'
       fill.index++
       fill.node = null
@@ -408,6 +443,8 @@ function loginPage(request) {
   }
   if (!enabled(button)) return 'waiting'
   if (form && !form.checkValidity()) return 'unknown'
+  const focus = focusState()
+  if (focus !== 'ready') return focus
   guard.submitted.add(stage)
   button.click()
   return 'submitted'
@@ -441,9 +478,12 @@ function waitForVisibleInput({ id, delay }) {
   const here = new URL(location.href)
   if (window !== window.top || here.username || here.password ||
     !['https://chatgpt.com', 'https://auth.openai.com'].includes(here.origin) || guard?.id !== id) return 'changed'
-  const active = () => !guard.interrupted && !guard.events.signal.aborted &&
-    document.visibilityState === 'visible' && document.hasFocus()
-  if (!active()) return 'interrupted'
+  const state = () => {
+    if (guard.interrupted || guard.events.signal.aborted) return guard.interrupted || 'interrupted'
+    return document.visibilityState === 'visible' && document.hasFocus() ? 'ready' : 'focusLost'
+  }
+  const initial = state()
+  if (initial !== 'ready') return initial
   return new Promise(resolve => {
     const cleanup = new AbortController()
     const finish = outcome => {
@@ -451,16 +491,16 @@ function waitForVisibleInput({ id, delay }) {
       cleanup.abort()
       resolve(outcome)
     }
-    const timer = setTimeout(() => finish(active() ? 'ready' : 'interrupted'), delay)
+    const timer = setTimeout(() => finish(state()), delay)
     const options = { signal: cleanup.signal }
-    guard.events.signal.addEventListener('abort', () => finish('interrupted'), options)
+    guard.events.signal.addEventListener('abort', () => finish(state()), options)
     window.addEventListener('pagehide', () => finish('changed'), options)
-    window.addEventListener('blur', () => finish('interrupted'), options)
-    document.addEventListener('visibilitychange', () => { if (!active()) finish('interrupted') }, options)
+    window.addEventListener('blur', () => finish('focusLost'), options)
+    document.addEventListener('visibilitychange', () => { if (state() !== 'ready') finish(state()) }, options)
   })
 }
 
-export async function loginToChatGPT(tabId, account, signal, getCurrentCode) {
+export async function loginToChatGPT(tabId, account, signal, getCurrentCode, onProgress) {
   const email = account?.email?.trim()
   if (!Number.isInteger(tabId) || !email) return result('unavailable')
   const id = crypto.randomUUID()
@@ -477,9 +517,15 @@ export async function loginToChatGPT(tabId, account, signal, getCurrentCode) {
   let interrupted = false, documentId, confirmedEmail = false, currentCode
   let typing, delay = 0
   let redirectDeadline = 0
+  let waitingForFocus = false
+  const focusProgress = waiting => {
+    if (waitingForFocus === waiting) return
+    waitingForFocus = waiting
+    onProgress?.(waiting ? '请切回此实例的 ChatGPT 登录标签页，回到前台后将自动继续。' : '正在 ChatGPT 标签页登录…')
+  }
   const observe = (message, sender) => {
     if (message?.id !== id || sender.tab?.id !== tabId || sender.frameId !== 0) return
-    if (message.type === 'keypouch-login-interaction') interrupted = true
+    if (message.type === 'keypouch-login-interaction') interrupted = message.reason === 'focusLost' ? 'focusLost' : 'interaction'
     // A form can navigate within the same document. An earlier stage's receipt
     // must never end a later field that is still waiting to submit.
     if (message.type === 'keypouch-login-submitted' && sender.documentId === documentId && submitted.has(message.stage)) {
@@ -496,6 +542,7 @@ export async function loginToChatGPT(tabId, account, signal, getCurrentCode) {
     return answer
   }
   const stopped = () => signal?.aborted || interrupted
+  const stoppedResult = () => result(interrupted || 'interrupted')
   chrome.runtime.onMessage.addListener(observe)
   try {
     const deadline = Date.now() + 90000
@@ -513,13 +560,15 @@ export async function loginToChatGPT(tabId, account, signal, getCurrentCode) {
             if (stopped()) onAbort()
           })
           const outcome = await Promise.race([wait, aborted])
-          if (outcome === 'interrupted' || (outcome === 'changed' && typing && !typing.codeEntered)) return result('interrupted')
+          if (stopped()) return stoppedResult()
+          if (Object.hasOwn(messages, outcome)) return result(outcome)
+          if (outcome === 'changed' && typing && !typing.codeEntered) return result('interrupted')
         } finally {
           signal?.removeEventListener('abort', onAbort)
         }
       } else if (delay) await pause(signal, delay)
       delay = 400
-      if (stopped()) return result('interrupted')
+      if (stopped()) return stoppedResult()
       if (Date.now() >= deadline || redirectDeadline && Date.now() >= redirectDeadline) break
       const tab = await chrome.tabs.get(tabId)
       const url = tab.pendingUrl || tab.url
@@ -528,7 +577,7 @@ export async function loginToChatGPT(tabId, account, signal, getCurrentCode) {
         return result('external')
       }
       const redirectTab = [tab.url, tab.pendingUrl].some(raw => raw && signInRedirectPages.includes(raw.split(/[?#]/, 1)[0]))
-      const info = { id, redirectPages: signInRedirectPages }
+      const info = { id, redirectPages: signInRedirectPages, inactiveTab: tab.active === false }
       if (redirectTab) redirectDeadline ||= Date.now() + 15000
       else Object.assign(info, { email, confirmedEmail, openedLogin: submitted.has('login'), offerPassword: !!account.password && !submitted.has('password') })
       let inspection
@@ -538,6 +587,11 @@ export async function loginToChatGPT(tabId, account, signal, getCurrentCode) {
       documentId = inspection.documentId
       const stage = inspection.result
       if (typing && typing.documentId !== documentId && !typing.codeEntered) return result('interrupted')
+      if (stopped()) return stoppedResult()
+      if (stage === 'awaitingFocus') {
+        focusProgress(true)
+        continue
+      }
       if (typing?.codeEntered && (documentId !== typing.documentId || stage !== 'totp' && stage !== 'waiting')) {
         // Some OTP widgets navigate as soon as the last digit arrives, without
         // a submit event. Wait for that actual transition and never retype it.
@@ -545,7 +599,6 @@ export async function loginToChatGPT(tabId, account, signal, getCurrentCode) {
         submitted.set('totp', Date.now())
         typing = undefined
       }
-      if (stopped()) return result('interrupted')
       if (stage === 'signInRedirect' || (redirectTab && (!stage || stage === 'waiting'))) {
         if (typing) return result('interrupted')
         // Both documents belong to the same redirect chain. No form action
@@ -558,7 +611,7 @@ export async function loginToChatGPT(tabId, account, signal, getCurrentCode) {
         // Navigation is optional, and only the still-focused verified settings
         // document may take the user to the chat. A replaced tab is left alone.
         const finish = await inject({ documentIds: [documentId] }, { ...info, stage: 'openChat' }).catch(() => null)
-        if (stopped()) return result('interrupted')
+        if (stopped()) return stoppedResult()
         if (finish && finish.result !== 'success') return result(Object.hasOwn(messages, finish.result) ? finish.result : 'unknown')
         return finishResult('success')
       }
@@ -582,7 +635,7 @@ export async function loginToChatGPT(tabId, account, signal, getCurrentCode) {
             try {
               currentCode = getCurrentCode ? await getCurrentCode(signal) : await authenticatorCode(account.totpSecret, Date.now())
             } catch {
-              return finishResult(stopped() ? 'interrupted' : 'authenticator')
+              return stopped() ? stoppedResult() : finishResult('authenticator')
             }
           }
           if (!currentCode) return finishResult('authenticator')
@@ -590,14 +643,28 @@ export async function loginToChatGPT(tabId, account, signal, getCurrentCode) {
           Object.assign(action, currentCode)
         }
       }
-      if (stopped()) return result('interrupted')
+      if (stopped()) return stoppedResult()
+      // Getting a code and inspecting the DOM are asynchronous. Check this
+      // exact document again, without a credential, before dispatching an action.
+      let focus
+      try { focus = (await inject({ documentIds: [documentId] }, { id, focusCheck: true })).result }
+      catch { continue }
+      if (stopped()) return stoppedResult()
+      if (focus === 'awaitingFocus') {
+        focusProgress(true)
+        continue
+      }
+      if (Object.hasOwn(messages, focus)) return result(focus)
+      if (focus !== 'ready') continue
+      if (Date.now() >= deadline) break
+      focusProgress(false)
       // A navigation can consume a submit and destroy the document before Chrome
       // replies. Treat that action as attempted without resending it.
       submitted.set(stage, Date.now())
       let outcome
       try { outcome = (await inject({ documentIds: [documentId] }, action)).result }
       catch { continue }
-      if (stopped()) return result('interrupted')
+      if (stopped()) return stoppedResult()
       if (Object.hasOwn(messages, outcome)) return finishResult(outcome)
       if (outcome === 'credentialRejected') return finishResult(outcome)
       if (outcome === 'submitted') {
@@ -606,6 +673,10 @@ export async function loginToChatGPT(tabId, account, signal, getCurrentCode) {
         if (stage === 'email' || stage === 'password') confirmedEmail = true
       } else {
         submitted.delete(stage)
+        if (outcome === 'awaitingFocus') {
+          focusProgress(true)
+          continue
+        }
         if (outcome === 'typing' || outcome === 'filled') {
           typing = { stage, documentId, codeEntered: stage === 'totp' && outcome === 'filled' }
           // Give each edit a visible interval, and leave time for the page's
@@ -614,9 +685,9 @@ export async function loginToChatGPT(tabId, account, signal, getCurrentCode) {
         }
       }
     }
-    return result(redirectDeadline ? 'redirectStalled' : 'stalled')
+    return result(redirectDeadline ? 'redirectStalled' : waitingForFocus ? 'focusTimeout' : 'stalled')
   } catch {
-    return result(stopped() ? 'interrupted' : 'unavailable')
+    return stopped() ? stoppedResult() : result('unavailable')
   } finally {
     chrome.runtime.onMessage.removeListener(observe)
     if (documentId) void inject({ documentIds: [documentId] }, { id, end: true }).catch(() => {})

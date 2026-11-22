@@ -224,11 +224,23 @@ async function intercept({ requestId, request }) {
     }
     if (url.origin === auth && url.pathname === '/log-in/password' && request.method === 'GET') {
       assert(checkedHandoffs.has(auth), '须先经过已渲染的 OAuth 授权中转页')
-      return await html(page(form('Enter your password', mfaPath, `
+      // Switch tabs before the new password document can receive its first edit.
+      const loginTabs = context.pages().filter(tab => !initialPages.has(tab)
+        && [auth, chat].includes(new URL(tab.url()).origin))
+      assert.equal(loginTabs.length, 1, '应有本次登录发起的唯一官方标签页')
+      const [loginTab] = loginTabs
+      await stub.bringToFront()
+      await html(page(form('Enter your password', mfaPath, `
         <label id="email-label" for="display-email">Email address</label>
         <input id="display-email" type="text" readonly aria-labelledby="email-label" value="${fixture.email}">
         <input type="hidden" name="username" form="login-form" value="">
         <input type="password" name="password" autocomplete="current-password webauthn" required>`)))
+      const picker = context.pages().find(tab => pickerURL.test(tab.url()))
+      await picker.locator('#status').filter({ hasText: /前台/ }).waitFor({ state: 'attached', timeout: 12000 })
+      assert(await loginTab.locator('input[type=password]').evaluate(field =>
+        document.hidden && !document.hasFocus() && field.validity.valueMissing), '等待前台期间密码框应当保持为空')
+      await loginTab.bringToFront()
+      return
     }
     if (url.origin === auth && url.pathname === mfaPath && request.method === 'POST' && values.has('password')) {
       checkTyping(values, 'password', fixture.password)
