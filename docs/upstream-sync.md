@@ -45,6 +45,14 @@ bash scripts/sync-upstream.sh
 
 检查 `git status`、`git diff --cached`，解决冲突并逐项 `git add <文件>`。不得以全量覆盖的方式丢弃本项目定制。需要取消未完成的合并时使用 `git merge --abort`。
 
+## 确定本地版本
+
+本项目使用 `X.Y.Z-N`。按上游正式标签 `vX.Y.Z` 合并时，主版本号取标签中的三个数字。按分支或提交合并时，从实际合入的上游提交的 `wails.json` 读取 `info.productVersion`。在合并提交前，将本项目的 `wails.json`、`frontend/package.json` 及 `frontend/package-lock.json` 中的应用版本统一到这个 `X.Y.Z`，锁文件的顶层 `version` 和 `packages[""].version` 都要更新。
+
+每个上游版本单独计算本地修订号 `N`。首次取 `1`，此后每完成一次本地更新，在该主版本上次记录的修订号上加 1。一次更新的多个提交共用一个修订号，同一更新的跨平台构建、重复打包或重装也沿用该号。每次定版将完整版本 `X.Y.Z-N` 单独一行写入仓库根目录的 `VERSION`，同步 `README.md` 的当前版本行。Arch/Manjaro 打包时将 `X.Y.Z` 写入 `pkgver`，将 `N` 写入 `pkgrel`。
+
+例如，首次合入上游 `v1.9.4` 得到 `1.9.4-1`，下一次本地更新得到 `1.9.4-2`。首次合入上游 `v1.9.5` 时，新版本从 `1.9.5-1` 开始。
+
 ## 验证与完成合并
 
 根据变更执行验证；涉及后端或依赖时运行 Go 测试，涉及前端时运行生产构建。完整同步默认执行两者：
@@ -75,9 +83,8 @@ git push origin master
 ## 独立发布
 
 - 应用内更新检查、项目链接与下载入口指向 `zuchengchen/Ant-Browser`；保留上游来源和许可证说明。
-- 发布标签固定为 `czc-vX.Y.Z`，例如 `czc-v1.9.0`。上游 `v*` 等标签不会触发这套发布工作流。
-- 包内版本保持数字 `X.Y.Z`。发布前更新 `wails.json`、`frontend/package.json` 与 `frontend/package-lock.json`（包括 `packages[""].version`），提交这些变更。`scripts/resolve-release-version.py` 在三个平台检查版本与标签是否一致。
-- 本项目版本独立递增。自定义发行说明写入 `docs/changelogs/czc-vX.Y.Z.md`，工作流从最近一次上游合并追加来源 ref 与提交。缺省说明由 GitHub 生成。不要复用或移动已有发布标签。
+- 现有 GitHub 发布标签使用三段主版本 `czc-vX.Y.Z`，例如 `czc-v1.9.0`。`scripts/resolve-release-version.py` 在三个平台校验标签、`VERSION` 主版本和四处应用版本是否一致，打包时输出三段主版本。已发布的标签保留在原提交上。
+- 发行说明记录完整本地版本 `X.Y.Z-N`。自定义说明写入 `docs/changelogs/czc-vX.Y.Z.md`，缺省说明由 GitHub 生成。工作流从最近一次上游合并追加来源 ref 与提交。
 - 推送单个自有标签触发 `Publish All Platforms`。它调用三端子工作流，等待全部构建成功后在该标签上发布。手动运行聚合工作流或任一子工作流只构建产物，可选 version 用来核对源码内嵌版本。
 - 工作流通过 `GH_REPO` 明确将 Release 上传到当前仓库。常规发布使用主线的真实提交，不运行 `tools/public-release/` 的聚合快照发布流程。
 
@@ -85,7 +92,7 @@ git push origin master
 
 ```bash
 python3 scripts/resolve-release-version.py --ref-type tag --ref-name czc-v1.9.0
-git tag -a czc-v1.9.0 -m "Fork release 1.9.0; upstream: <版本及完整SHA>"
+git tag -a czc-v1.9.0 -m "Fork release 1.9.0-1 (upstream v1.9.0, <完整SHA>)"
 git push origin refs/tags/czc-v1.9.0
 ```
 

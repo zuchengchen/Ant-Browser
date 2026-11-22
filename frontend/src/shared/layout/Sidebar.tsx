@@ -121,7 +121,7 @@ export function Sidebar() {
               </h2>
               {appVersion && (
                 <span className="shrink-0 text-[10px] font-medium text-[var(--color-text-muted)]">
-                  v{appVersion}
+                  {appVersion}
                 </span>
               )}
             </div>

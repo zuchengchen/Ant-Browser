@@ -73,7 +73,7 @@ export function ProfilePage() {
           <div className="flex flex-col gap-3 border-b border-[var(--color-border-muted)] pb-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="min-w-0">
               <p className="font-semibold text-[var(--color-text-primary)]">
-                当前版本 {appVersion ? `v${appVersion}` : '未知'}
+                当前版本 {appVersion || '未知'}
               </p>
               {updateCheck?.ok ? (
                 <p className="text-sm text-[var(--color-text-muted)]">

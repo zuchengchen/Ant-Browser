@@ -185,8 +185,27 @@ class ReleaseVersionTests(unittest.TestCase):
         self.assertEqual(RELEASE.resolve_version(self.root, "branch", "master", ""), "1.9.0")
         self.assertEqual(RELEASE.resolve_version(self.root, "branch", "master", "1.9.0"), "1.9.0")
 
+    def test_full_version_keeps_tag_and_manual_build_on_three_part_version(self):
+        for content in (b"1.9.0-1", b"1.9.0-2\n", b"1.9.0-12\r\n"):
+            with self.subTest(content=content):
+                (self.root / "VERSION").write_bytes(content)
+                self.assertEqual(RELEASE.resolve_version(self.root, "tag", "czc-v1.9.0", ""), "1.9.0")
+                self.assertEqual(RELEASE.resolve_version(self.root, "branch", "master", "1.9.0"), "1.9.0")
+
+    def test_full_version_base_must_match_application_metadata(self):
+        (self.root / "VERSION").write_text("1.9.1-1\n", encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "VERSION base version"):
+            RELEASE.resolve_version(self.root, "tag", "czc-v1.9.0", "")
+
+    def test_full_version_requires_one_numeric_base_and_positive_revision(self):
+        for value in ("", "1.9.0", "1.9.0-0", "1.9.0-01", "1.9.0--1", "1.9.0-1.2",
+                      "v1.9.0-1", "01.9.0-1", "1.9.0-1 ", "1.9.0-1\n\n", "1.9.0-1\n1.9.0-2"):
+            with self.subTest(value=value), self.assertRaisesRegex(ValueError, "VERSION"):
+                (self.root / "VERSION").write_text(value, encoding="utf-8")
+                RELEASE.resolve_version(self.root, "branch", "master", "")
+
     def test_upstream_and_malformed_tags_cannot_be_released(self):
-        for tag in ("v1.9.0", "1.9.0", "czc-v1.9.0-extra", "czc-v01.9.0", "czc-v1.9.0.1"):
+        for tag in ("v1.9.0", "1.9.0", "czc-v1.9.0-extra", "czc-v1.9.0-1", "czc-v01.9.0", "czc-v1.9.0.1"):
             with self.subTest(tag=tag), self.assertRaises(ValueError):
                 RELEASE.resolve_version(self.root, "tag", tag, "")
 

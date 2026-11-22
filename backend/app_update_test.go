@@ -26,19 +26,31 @@ func TestCheckForUpdatesDetectsNewRelease(t *testing.T) {
 	}
 }
 
-func TestCheckForUpdatesReportsNoUpdate(t *testing.T) {
+func TestCheckForUpdatesAgainstStableTag(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.Header().Set("Content-Type", "application/json")
-		_, _ = writer.Write([]byte(`{"tag_name":"v1.8.0","name":"1.8.0"}`))
+		_, _ = writer.Write([]byte(`{"tag_name":"czc-v1.9.4"}`))
 	}))
 	defer server.Close()
 
-	result := checkForUpdates(context.Background(), "1.8.0", server.URL, server.Client())
-	if !result.OK {
-		t.Fatalf("checkForUpdates failed: %+v", result)
+	cases := []struct {
+		current       string
+		wantAvailable bool
+	}{
+		{"1.9.4", false},
+		{"1.9.4-1", false},
+		{"1.9.4-10", false},
+		{"1.9.3-9", true},
+		{"1.9.5-1", false},
+		{"1.9.4-beta.1", true},
 	}
-	if result.UpdateAvailable {
-		t.Fatalf("expected no update: %+v", result)
+	for _, tc := range cases {
+		t.Run(tc.current, func(t *testing.T) {
+			result := checkForUpdates(context.Background(), tc.current, server.URL, server.Client())
+			if !result.OK || result.UpdateAvailable != tc.wantAvailable || result.CurrentVersion != tc.current {
+				t.Fatalf("checkForUpdates(%q) = %+v, want updateAvailable=%t and original current version", tc.current, result, tc.wantAvailable)
+			}
+		})
 	}
 }
 

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -15,6 +16,8 @@ const (
 	latestReleaseAPIURL = "https://api.github.com/repos/zuchengchen/Ant-Browser/releases/latest"
 	updateCheckTimeout  = 5 * time.Second
 )
+
+var localPackageVersion = regexp.MustCompile(`^([0-9]+\.[0-9]+\.[0-9]+)-[1-9][0-9]*$`)
 
 type updateCheckResult struct {
 	OK              bool
@@ -87,7 +90,9 @@ func checkForUpdates(ctx context.Context, currentVersion string, endpoint string
 		return result
 	}
 
-	comparison, err := compareUpdateVersions(result.CurrentVersion, result.LatestVersion)
+	// GitHub 发布标签使用三段版本号，本地修订号只用于标识当前构建。
+	currentRelease := localPackageVersion.ReplaceAllString(result.CurrentVersion, "$1")
+	comparison, err := compareUpdateVersions(currentRelease, result.LatestVersion)
 	if err != nil {
 		result.Error = err.Error()
 		return result

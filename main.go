@@ -7,7 +7,6 @@ import (
 	"ant-chrome/internal/windowsizing"
 	"context"
 	"embed"
-	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -29,8 +28,8 @@ import (
 //go:embed all:frontend/dist
 var assets embed.FS
 
-//go:embed wails.json
-var wailsConfigJSON []byte
+//go:embed VERSION
+var embeddedVersion string
 
 //go:embed build/appicon.png
 var linuxAppIcon []byte
@@ -46,12 +45,6 @@ type App struct {
 	*backend.App
 }
 
-type wailsBuildConfig struct {
-	Info struct {
-		ProductVersion string `json:"productVersion"`
-	} `json:"info"`
-}
-
 func envFlagEnabled(name string) bool {
 	value := strings.TrimSpace(strings.ToLower(os.Getenv(name)))
 	switch value {
@@ -60,22 +53,6 @@ func envFlagEnabled(name string) bool {
 	default:
 		return false
 	}
-}
-
-func resolveBuildVersion() string {
-	var cfg wailsBuildConfig
-	if err := json.Unmarshal(wailsConfigJSON, &cfg); err != nil {
-		log.Printf("解析 wails.json 版本信息失败: %v", err)
-		return "unknown"
-	}
-
-	version := strings.TrimSpace(cfg.Info.ProductVersion)
-	if version == "" {
-		log.Printf("wails.json 未配置 info.productVersion，回退为 unknown")
-		return "unknown"
-	}
-
-	return version
 }
 
 func NewApp(appRoot, version string) *App {
@@ -232,7 +209,7 @@ func main() {
 	if startupDebugEnabled && backend.RuntimeUsesDetachedState(appRoot) {
 		log.Printf("检测到安装目录需要只读运行，状态目录切换到: %s", backend.RuntimeStateRoot(appRoot))
 	}
-	buildVersion := resolveBuildVersion()
+	buildVersion := strings.TrimSpace(embeddedVersion)
 	if startupDebugEnabled {
 		log.Printf("应用版本: %s", buildVersion)
 		log.Printf(

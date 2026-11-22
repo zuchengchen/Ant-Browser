@@ -18,6 +18,17 @@ def resolve_version(root: Path, ref_type: str, ref_name: str, requested: str) ->
         "frontend/package-lock.json packages[''].version": lock["packages"][""]["version"],
     }
     numeric_version = r"(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)"
+    # Source trees predating VERSION only carry the three-part application version.
+    try:
+        full_version = (root / "VERSION").read_text(encoding="utf-8")
+    except FileNotFoundError:
+        pass
+    else:
+        match = re.fullmatch(rf"({numeric_version})-[1-9][0-9]*\n?", full_version)
+        if not match:
+            raise ValueError("VERSION must contain one line of X.Y.Z-N with a positive revision (for example 1.9.4-1).")
+        versions["VERSION base version"] = match.group(1)
+
     requested = requested.strip()
     if ref_type == "tag":
         match = re.fullmatch(r"czc-v(" + numeric_version + r")", ref_name)

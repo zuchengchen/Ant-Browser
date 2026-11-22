@@ -48,7 +48,8 @@ These shared skill instructions supplement project-specific rules in this `AGENT
 - 合并提交保留脚本生成的 `Upstream-Repository`、`Upstream-Ref`、`Upstream-Commit` 信息。检查变更、解决冲突并通过适用的 Go 测试和前端构建后，用 `git commit --no-edit` 完成合并，再按任务授权 `git push origin master`。无新提交时不制造空同步提交。
 - 每次同步检查本项目维护的差异：本节规则、同步脚本、更新源、发布标签及解析、发布仓库参数，以及既有两套代理连接栈约束。涉及代理路径的变更不得引入跨栈自动回退。
 - 上游 fetch 默认使用 `--no-tags`。需要某个上游标签时仅显式获取该 ref；不把上游标签批量复制到本项目，不使用 `git push --tags` 或 `git push --mirror` 做同步。
-- 本项目更新源和产品链接指向 `zuchengchen/Ant-Browser`。自有发布标签使用 `czc-vX.Y.Z`，只发布明确选定的标签；不覆盖已经发布的标签。包内版本为数字 `X.Y.Z`，必须与 `wails.json`、`frontend/package.json`、`frontend/package-lock.json` 的根版本及根 package 版本一致。
-- 上游基线与本项目发行版本分别记录；同一上游基线需要再次发布时递增本项目版本，并在发行说明注明上游版本/提交。合并上游不自动打标签或发布。
+- 本项目完整版本号为 `X.Y.Z-N`。主版本号 `X.Y.Z` 跟随实际合入 `master` 的上游三段版本号。首次合入某个上游版本时，本地子版本号（修订号）`N` 取 `1`。在同一上游版本上，每完成一次本地更新，`N` 加 1。一次更新可包含多个提交，重复构建、打包或安装同一更新均沿用原号。
+- 合并上游时，将 `wails.json` 的 `info.productVersion`、`frontend/package.json` 的 `version` 和 `frontend/package-lock.json` 的 `version`、`packages[""].version` 对齐到 `X.Y.Z`。每次定版时，在仓库根目录的 `VERSION` 单独一行写入完整版本 `X.Y.Z-N`，并同步 `README.md` 的当前版本行。Arch/Manjaro 包分别使用 `pkgver=X.Y.Z` 和 `pkgrel=N`。
+- 本项目更新源和产品链接指向 `zuchengchen/Ant-Browser`。现有 GitHub 发布流程使用主版本标签 `czc-vX.Y.Z`，发行说明记录完整本地版本、上游版本和提交。只发布明确选定的标签，不覆盖已发布的标签。合并上游不自动打标签或发布。
 - 本项目直接从已验证的主线提交构建发行包。`tools/public-release/` 是上游遗留快照工具，不作为本 fork 的常规同步或发布入口，避免聚合快照取代真实的合并历史。
 - 详细操作及验证命令见 `docs/upstream-sync.md`。新增开发保持提交边界清晰，优先用独立模块和少量接入点承载定制，减少后续上游合并冲突。
