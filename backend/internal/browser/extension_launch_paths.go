@@ -44,7 +44,7 @@ func (m *Manager) ProfileExtensionLoadPaths(profile *Profile) []string {
 
 	paths := make([]string, 0, len(extensions))
 	for _, extension := range extensions {
-		if !extension.Enabled {
+		if !extension.Enabled || (extension.ExtensionID == KeyPouchGPTExtensionID && m.KeyPouchSiteUnavailable.Load()) {
 			continue
 		}
 		installDir := strings.TrimSpace(extension.InstallDir)

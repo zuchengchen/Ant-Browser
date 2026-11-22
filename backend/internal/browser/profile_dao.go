@@ -132,12 +132,50 @@ func (d *SQLiteProfileDAO) UpdateProxyBinding(p *Profile) error {
 
 // Upsert 新增或更新实例配置
 func (d *SQLiteProfileDAO) Upsert(profile *Profile) error {
+	return d.saveProfile(profile, nil)
+}
+
+var ErrBoundProfileConflict = errors.New("目标实例已存在或同名实例发生变更")
+
+// The user may have changed the local catalog since the initial KeyPouch
+// lookup. Match with the same Unicode case folding used for existing profiles.
+func checkNewBoundProfile(tx *sql.Tx, profile *Profile) error {
+	rows, err := tx.Query(`SELECT profile_id,profile_name FROM browser_profiles WHERE profile_id=? OR COALESCE(deleted_at,'')=''`, profile.ProfileId)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id, name string
+		if err := rows.Scan(&id, &name); err != nil {
+			return err
+		}
+		if id == profile.ProfileId || strings.EqualFold(name, profile.ProfileName) {
+			return ErrBoundProfileConflict
+		}
+	}
+	return rows.Err()
+}
+
+// A named root is supplied only for a new bound copy. Resolve it inside the
+// insert transaction so a concurrent rename or failed copy cannot misclassify it.
+func (d *SQLiteProfileDAO) saveProfile(profile *Profile, newRootGroup *string) error {
 	tx, err := d.db.Begin()
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
 	next := *profile
+	if newRootGroup != nil {
+		if err := checkNewBoundProfile(tx, &next); err != nil {
+			return err
+		}
+		id, err := ensureRootGroup(tx, *newRootGroup)
+		if err != nil {
+			return err
+		}
+		next.GroupId, next.GroupIds = id, []string{id}
+	}
 	ids, err := resolveProfileGroupInput(tx, &next)
 	if err != nil {
 		return err
@@ -156,13 +194,14 @@ func (d *SQLiteProfileDAO) Upsert(profile *Profile) error {
 		next.UpdatedAt = now
 	}
 
-	_, err = tx.Exec(`
+	statement := `
 		INSERT INTO browser_profiles
 		  (profile_id, profile_name, user_data_dir, core_id, fingerprint_args,
 		   proxy_id, proxy_config, proxy_mode, proxy_group_name, proxy_bind_source_id, proxy_bind_source_url, proxy_bind_name, proxy_bind_updated_at, proxy_bind_error,
 		   memory_limit_mb, launch_args, tags, keywords, group_id, created_at, updated_at, restore_last_session, deleted_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-		ON CONFLICT(profile_id) DO UPDATE SET
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+	if newRootGroup == nil {
+		statement += ` ON CONFLICT(profile_id) DO UPDATE SET
 		  profile_name     = excluded.profile_name,
 		  user_data_dir    = excluded.user_data_dir,
 		  core_id          = excluded.core_id,
@@ -183,7 +222,9 @@ func (d *SQLiteProfileDAO) Upsert(profile *Profile) error {
 		  group_id         = excluded.group_id,
 		  restore_last_session = excluded.restore_last_session,
 		  deleted_at       = excluded.deleted_at,
-		  updated_at       = excluded.updated_at`,
+		  updated_at       = excluded.updated_at`
+	}
+	_, err = tx.Exec(statement,
 		next.ProfileId, next.ProfileName, next.UserDataDir, next.CoreId,
 		string(fingerprintArgs), next.ProxyId, next.ProxyConfig,
 		NormalizeProxyMode(next.ProxyMode), NormalizeProxyGroupName(next.ProxyGroupName),

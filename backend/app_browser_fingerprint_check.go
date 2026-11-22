@@ -2,6 +2,7 @@ package backend
 
 import (
 	"ant-chrome/backend/internal/logger"
+	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -122,7 +123,10 @@ func (a *App) fingerprintCheckRuntimeProfileSnapshot(profileId string, detector 
 	if !profile.Running {
 		userDataDir := a.browserMgr.ResolveUserDataDir(profile)
 		if detection, ok := detector(userDataDir); ok && detection.DebugReady {
-			a.markProfileRunningLocked(profileId, profile, nil, detection.PID, detection.DebugPort, true, "")
+			if err := a.adoptDetectedBrowserLocked(context.Background(), profile, detection); err != nil {
+				a.browserMgr.Mutex.Unlock()
+				return nil, err
+			}
 			logger.New("Browser").Warn("指纹自测前发现同一用户数据目录浏览器已运行，已同步实例状态",
 				logger.F("profile_id", profileId),
 				logger.F("user_data_dir", userDataDir),

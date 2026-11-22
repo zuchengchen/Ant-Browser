@@ -159,6 +159,7 @@ export function BrowserListDialogs({
         }
       >
         <BrowserProfileCopyForm
+          sourceId={copyModal.profile?.profileId}
           sourceName={copyModal.profile?.profileName}
           copyName={copyName}
           copyOptions={copyOptions}

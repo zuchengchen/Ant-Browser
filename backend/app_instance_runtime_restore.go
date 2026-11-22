@@ -61,7 +61,10 @@ func (a *App) restoreRunningBrowserProfiles(ctx context.Context, detect func(str
 			manager.Mutex.Unlock()
 			continue
 		}
-		a.markProfileRunningLocked(item.id, profile, nil, detection.PID, detection.DebugPort, true, "")
+		if err := a.adoptDetectedBrowserLocked(ctx, profile, detection); err != nil {
+			manager.Mutex.Unlock()
+			continue
+		}
 		snapshot := copyBrowserProfileSnapshot(profile)
 		manager.Mutex.Unlock()
 		a.emitBrowserInstanceStarted(snapshot, true)

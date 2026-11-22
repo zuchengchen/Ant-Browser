@@ -17,6 +17,39 @@ import (
 	"time"
 )
 
+func TestNormalizeOriginAndDeviceAcceptTheSameSiteRoots(t *testing.T) {
+	for input, want := range map[string]string{
+		"  https://KeyPouch.example:8443/// ": "https://KeyPouch.example:8443",
+		"HTTP://LOCALHOST:8080/":              "http://LOCALHOST:8080",
+		"http://127.0.0.2/":                   "http://127.0.0.2",
+		"http://[::1]:8080/":                  "http://[::1]:8080",
+	} {
+		got, err := NormalizeOrigin(input)
+		if err != nil || got != want {
+			t.Fatalf("NormalizeOrigin(%q) = %q, %v; want %q", input, got, err, want)
+		}
+		device, err := NewDevice(input, make([]byte, ed25519.SeedSize))
+		if err != nil || device.origin != want {
+			t.Fatalf("NewDevice(%q) did not use the normalized site: %v", input, err)
+		}
+	}
+	for _, input := range []string{
+		"", "example.test", "//example.test", "http://example.test", "http://localhost.example.test",
+		"http://192.0.2.10", "ftp://localhost", "https://:443", "https://example.test:65536",
+		"https://example.test:0", "https://example.test:", "https://user@example.test",
+		"https://user:secret@example.test", "https://example.test/path", "https://example.test/%2f",
+		"https://example.test?", "https://example.test?token=test", "https://example.test#",
+		"https://example.test#fragment",
+	} {
+		if _, err := NormalizeOrigin(input); err == nil {
+			t.Errorf("NormalizeOrigin accepted %q", input)
+		}
+		if _, err := NewDevice(input, make([]byte, ed25519.SeedSize)); err == nil {
+			t.Errorf("NewDevice accepted %q", input)
+		}
+	}
+}
+
 func TestDevicePairsAndSignsNativeRuntimeTransitions(t *testing.T) {
 	pub, private, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {

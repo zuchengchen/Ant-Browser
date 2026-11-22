@@ -8,7 +8,15 @@ interface SettingsCardsProps {
   onChange: SettingsChangeHandler
 }
 
-export function SettingsBasicFeatureCards({ settings, onChange }: SettingsCardsProps) {
+interface BasicSettingsCardsProps extends SettingsCardsProps {
+  siteUrl: string
+  fallbackUrl: string
+  siteDisabled: boolean
+  siteError: string
+  onSiteUrlChange: (value: string) => void
+}
+
+export function SettingsBasicFeatureCards({ settings, onChange, siteUrl, fallbackUrl, siteDisabled, siteError, onSiteUrlChange }: BasicSettingsCardsProps) {
   return (
     <>
       <Card title="基础设置">
@@ -27,6 +35,23 @@ export function SettingsBasicFeatureCards({ settings, onChange }: SettingsCardsP
           </div>
           <FormItem label="应用描述">
             <Input value={settings.appDescription} onChange={e => onChange('appDescription', e.target.value)} placeholder="请输入应用描述" />
+          </FormItem>
+          <FormItem
+            label={<label htmlFor="keypouch-site-url">KeyPouch 站点地址</label>}
+            hint={fallbackUrl ? `留空时使用默认地址 ${fallbackUrl}` : '请输入 HTTPS 地址。留空时使用环境变量或安装包提供的地址。'}
+            error={siteError}
+          >
+            <Input
+              id="keypouch-site-url"
+              type="url"
+              value={siteUrl}
+              placeholder={fallbackUrl || 'https://keypouch.example.com'}
+              disabled={siteDisabled}
+              error={!!siteError}
+              aria-invalid={!!siteError}
+              spellCheck={false}
+              onChange={e => onSiteUrlChange(e.target.value)}
+            />
           </FormItem>
         </div>
       </Card>

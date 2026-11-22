@@ -228,6 +228,7 @@ export type BrowserProfileAutomationTarget =
 export interface BrowserProfileCopyOptions {
   mode: BrowserProfileCopyMode
   automationTargets: BrowserProfileAutomationTarget[]
+  copyGptCredential?: boolean
 }
 
 export interface BrowserTab {

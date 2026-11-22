@@ -9,40 +9,50 @@ import (
 	"ant-chrome/backend/internal/keypouch"
 )
 
-// Pairing and startup use the same authenticated client. Backup maintenance
-// pauses the worker through Ant's ordinary background task lifecycle.
-func (a *App) connectKeyPouchRuntime(post func(context.Context, string, any, any) error) {
+// A changed site takes effect as soon as the old reporter returns from its
+// cancelled request. A new reporter never runs alongside the old one.
+func (a *App) connectKeyPouchRuntime(device *keypouch.Device) {
 	a.keyPouchRuntimeMu.Lock()
-	a.keyPouchRuntimePost = post
-	active := a.keyPouchRuntimeActive
-	a.keyPouchRuntimeMu.Unlock()
-	if active {
-		a.notifyKeyPouchRuntime()
-	} else {
-		a.ensureKeyPouchRuntime()
+	a.keyPouchRuntimeDevice = device
+	if a.keyPouchRuntimeCancel != nil {
+		a.keyPouchRuntimeCancel()
 	}
+	a.keyPouchRuntimeMu.Unlock()
+	a.ensureKeyPouchRuntime()
 }
 
 func (a *App) ensureKeyPouchRuntime() {
 	a.keyPouchRuntimeMu.Lock()
 	defer a.keyPouchRuntimeMu.Unlock()
-	post := a.keyPouchRuntimePost
-	if post == nil || a.keyPouchRuntimeActive {
+	device := a.keyPouchRuntimeDevice
+	if device == nil || a.keyPouchRuntimeActive {
 		return
 	}
 	a.keyPouchRuntimeActive = true
-	err := a.startBackgroundTask(func(ctx context.Context) {
-		a.runKeyPouchRuntime(ctx, post)
+	err := a.startBackgroundTask(func(taskCtx context.Context) {
+		ctx, cancel := context.WithCancel(taskCtx)
 		a.keyPouchRuntimeMu.Lock()
+		a.keyPouchRuntimeCancel = cancel
+		if a.keyPouchRuntimeDevice != device {
+			// A settings change may precede this goroutine's first instruction.
+			cancel()
+		}
+		a.keyPouchRuntimeMu.Unlock()
+
+		a.runKeyPouchRuntime(ctx, device.Post)
+		cancel()
+		a.keyPouchRuntimeMu.Lock()
+		changed := a.keyPouchRuntimeDevice != device
+		a.keyPouchRuntimeCancel = nil
 		a.keyPouchRuntimeActive = false
 		a.keyPouchRuntimeMu.Unlock()
-		// A backup restore can resume before this worker finishes. Restart only
-		// for a new task context, never for a cancelled application context.
+
+		// Maintenance can resume before the old task finishes its final HTTP request.
 		a.runtimeMu.RLock()
 		resumed := a.ctx != nil && a.ctx.Err() == nil && !a.runtimeStopped &&
-			!a.backgroundTasksBlocked && a.backgroundTaskCtx != ctx
+			!a.backgroundTasksBlocked && a.backgroundTaskCtx != taskCtx
 		a.runtimeMu.RUnlock()
-		if resumed {
+		if changed || resumed {
 			a.ensureKeyPouchRuntime()
 		}
 	})
@@ -120,6 +130,17 @@ func (a *App) keyPouchRuntimeSnapshot(ctx context.Context, ids []string, running
 		}
 		proc, exists := live[dir]
 		if !exists {
+			states[id] = false
+			continue
+		}
+		// An OS match is not proof that the configured profile owns this
+		// process. A shared login directory must not report its alias as live.
+		a.browserMgr.Mutex.Lock()
+		p := a.browserMgr.Profiles[id]
+		owned := p != nil && p.DeletedAt == "" && keyPouchDirKey(a.browserMgr.ResolveUserDataDir(p)) == dir &&
+			a.checkGPTBrowserOwnerLocked(p, proc) == nil
+		a.browserMgr.Mutex.Unlock()
+		if !owned {
 			states[id] = false
 			continue
 		}

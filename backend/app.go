@@ -5,6 +5,7 @@ import (
 	"ant-chrome/backend/internal/browser"
 	"ant-chrome/backend/internal/config"
 	"ant-chrome/backend/internal/database"
+	"ant-chrome/backend/internal/keypouch"
 	"ant-chrome/backend/internal/launchcode"
 	"ant-chrome/backend/internal/logger"
 	"ant-chrome/backend/internal/proxy"
@@ -84,7 +85,8 @@ type App struct {
 	keyPouchRuntimeChanged        chan struct{}
 	keyPouchActionMu              sync.Mutex
 	keyPouchRuntimeMu             sync.Mutex
-	keyPouchRuntimePost           func(context.Context, string, any, any) error
+	keyPouchRuntimeDevice         *keypouch.Device
+	keyPouchRuntimeCancel         context.CancelFunc
 	keyPouchRuntimeActive         bool
 	backupLocalConfigPathOverride string
 	stopServicesOnce              sync.Once

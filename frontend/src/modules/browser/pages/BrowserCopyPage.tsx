@@ -74,13 +74,17 @@ export function BrowserCopyPage() {
           <FormItem label="源配置">
             <Select
               value={sourceId}
-              onChange={e => setSourceId(e.target.value)}
+              onChange={e => {
+                setSourceId(e.target.value)
+                setCopyOptions(options => ({ ...options, copyGptCredential: false }))
+              }}
               options={profiles.map(item => ({ value: item.profileId, label: item.profileName }))}
             />
           </FormItem>
         </div>
         <div className="mt-4">
           <BrowserProfileCopyForm
+            sourceId={sourceId}
             copyName={targetName}
             copyOptions={copyOptions}
             onCopyNameChange={setTargetName}

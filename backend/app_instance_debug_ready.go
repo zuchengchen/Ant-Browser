@@ -188,27 +188,36 @@ func resolveBrowserDebugPort(initialDebugPort int, userDataDir string, monitor *
 }
 
 func readBrowserDebugPortFile(userDataDir string) (int, error) {
+	port, _, err := readBrowserDebugEndpointFile(userDataDir)
+	return port, err
+}
+
+func readBrowserDebugEndpointFile(userDataDir string) (int, string, error) {
 	userDataDir = strings.TrimSpace(userDataDir)
 	if userDataDir == "" {
-		return 0, errBrowserDebugPortPending
+		return 0, "", errBrowserDebugPortPending
 	}
 
 	data, err := os.ReadFile(filepath.Join(userDataDir, "DevToolsActivePort"))
 	if err != nil {
 		if os.IsNotExist(err) {
-			return 0, errBrowserDebugPortPending
+			return 0, "", errBrowserDebugPortPending
 		}
-		return 0, fmt.Errorf("读取 DevToolsActivePort 失败: %w", err)
+		return 0, "", fmt.Errorf("读取 DevToolsActivePort 失败: %w", err)
 	}
 
 	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
 	if len(lines) == 0 || strings.TrimSpace(lines[0]) == "" {
-		return 0, errBrowserDebugPortPending
+		return 0, "", errBrowserDebugPortPending
 	}
 
 	port, err := strconv.Atoi(strings.TrimSpace(lines[0]))
 	if err != nil || port <= 0 {
-		return 0, fmt.Errorf("DevToolsActivePort 内容无效: %q", lines[0])
+		return 0, "", fmt.Errorf("DevToolsActivePort 内容无效: %q", lines[0])
 	}
-	return port, nil
+	browserPath := ""
+	if len(lines) > 1 {
+		browserPath = strings.TrimSpace(lines[1])
+	}
+	return port, browserPath, nil
 }

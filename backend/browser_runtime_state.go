@@ -121,6 +121,9 @@ func (a *App) setBrowserProcessMonitorLocked(profileId string, monitor *browserP
 		delete(a.browserProcessMonitors, profileId)
 		return
 	}
+	if p := a.browserMgr.Profiles[profileId]; p != nil {
+		monitor.userDataDir = a.browserMgr.ResolveUserDataDir(p)
+	}
 	a.browserProcessMonitors[profileId] = monitor
 }
 
@@ -156,6 +159,9 @@ func (a *App) markProfileDebugReadyLocked(profile *BrowserProfile, debugPort int
 	profile.DebugReady = true
 	profile.RuntimeWarning = ""
 	profile.LastError = ""
+	// Slow launches may reach the debugging port after the synchronous startup
+	// window. Newer kernels may need the same unpacked-extension load at this point.
+	a.loadProfileExtensionsLocked(profile, a.browserMgr.ProfileExtensionLoadPaths(profile))
 }
 
 func (a *App) setProfileDebugReady(profileId string, debugPort int) (*BrowserProfile, bool) {
@@ -178,7 +184,7 @@ func (a *App) setProfileDebugReadyForMonitor(profileId string, debugPort int, mo
 		return nil, false
 	}
 
-	changed := !profile.DebugReady || profile.RuntimeWarning != ""
+	changed := !profile.DebugReady
 	if changed {
 		a.markProfileDebugReadyLocked(profile, debugPort)
 	}

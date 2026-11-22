@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>登录 GPT · Ant Browser</title>
+  <link rel="icon" href="icon-32.png">
+  <link rel="stylesheet" href="accounts.css">
+  <script type="module" src="accounts.js"></script>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>登录 GPT</h1>
+      <p id="site-line" hidden>KeyPouch <bdi id="site"></bdi></p>
+    </header>
+
+    <p id="status" role="status" aria-live="polite">正在读取实例账号…</p>
+    <section id="connect" hidden>
+      <div class="actions">
+        <button id="grant" class="primary" hidden>连接 KeyPouch</button>
+        <button id="open-vault" class="primary" hidden>登录 KeyPouch</button>
+        <button id="refresh" hidden>重新检查</button>
+      </div>
+    </section>
+
+    <section id="pairing" aria-label="绑定当前实例" hidden>
+      <p>在平常已登录 KeyPouch 的浏览器里，打开目标账号的记录详情，点「授权 GPT 插件」，粘贴下方授权码。</p>
+      <label for="pair-code">此实例的授权码 <small id="pair-fingerprint"></small></label>
+      <input id="pair-code" readonly spellcheck="false" dir="ltr" autocomplete="off">
+      <div class="actions">
+        <button id="copy-code" class="primary">复制授权码</button>
+        <button id="check-pair">已授权，重新检查</button>
+      </div>
+      <details id="replace-key">
+        <summary>授权码已被占用？</summary>
+        <p>生成新码后，这个实例需要重新授权。原码的授权可在 KeyPouch 的原记录中撤销。</p>
+        <button id="replace-code">生成新授权码</button>
+      </details>
+    </section>
+
+    <section id="bound" aria-label="已授权账号" hidden>
+      <ul id="bound-account"></ul>
+    </section>
+
+    <section id="picker" aria-label="KeyPouch 账号" hidden>
+      <form id="search-form" role="search">
+        <label for="query">选择要在此实例登录的账号</label>
+        <input id="query" name="query" type="search" placeholder="搜索邮箱或分组" autocomplete="off" spellcheck="false">
+      </form>
+      <div id="list-status" role="status"></div>
+      <ul id="accounts" aria-label="搜索结果"></ul>
+      <nav id="pages" aria-label="账号分页" hidden>
+        <button id="previous">上一页</button>
+        <span id="page-number"></span>
+        <button id="next">下一页</button>
+      </nav>
+    </section>
+
+    <section id="login" aria-label="登录进度" hidden>
+      <p id="login-email" dir="auto"></p>
+      <div class="actions">
+        <button id="show-gpt" class="primary" hidden>查看 ChatGPT 标签页</button>
+        <button id="cancel" hidden>停止自动填写</button>
+        <button id="choose-again" hidden>返回账号列表</button>
+      </div>
+    </section>
+    <button id="web-session" hidden>使用此实例的 KeyPouch 网页会话选账号</button>
+    <button id="instance-auth" hidden>返回实例授权</button>
+  </main>
+</body>
+</html>

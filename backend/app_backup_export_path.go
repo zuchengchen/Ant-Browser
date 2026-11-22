@@ -43,7 +43,7 @@ func (a *App) backupExportPackageToPath(savePath string) (map[string]interface{}
 		`includedEntries`:        includedEntries,
 		`skippedEntries`:         skippedEntries,
 		`fileCount`:              fileCount,
-		`portableSessionWarning`: `全量备份不会迁移跨电脑登录态；如需保留登录 Cookie，请选择实例备份并设置登录态迁移密码。`,
+		`portableSessionWarning`: `如需迁移登录 Cookie 和 GPT 登录凭据，请选择实例备份并设置登录态迁移密码。`,
 		`message`:                `backup export complete`,
 	}, nil
 }
@@ -85,7 +85,7 @@ func (a *App) backupExportProfilePackageToPath(savePath string, profileIDs []str
 		`message`:                     `实例备份完成`,
 	}
 	if portableSessionPassword == "" {
-		result[`portableSessionWarning`] = `未迁移跨电脑登录态；如需保留登录 Cookie，请使用登录态迁移密码备份。`
+		result[`portableSessionWarning`] = `如需迁移登录 Cookie 和 GPT 登录凭据，请设置登录态迁移密码。`
 	}
 	return result, nil
 }

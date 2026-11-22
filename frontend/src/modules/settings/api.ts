@@ -71,6 +71,23 @@ export interface LaunchServerSettings {
   ready: boolean
 }
 
+export interface KeyPouchSettings {
+  siteUrl: string
+  fallbackUrl: string
+}
+
+export async function fetchKeyPouchSettings(): Promise<KeyPouchSettings> {
+  const bindings: any = await getBindings()
+  if (!bindings?.GetKeyPouchSettings) throw new Error('当前环境不支持 KeyPouch 站点设置')
+  return bindings.GetKeyPouchSettings()
+}
+
+export async function saveKeyPouchSettings(siteUrl: string): Promise<KeyPouchSettings> {
+  const bindings: any = await getBindings()
+  if (!bindings?.SaveKeyPouchSettings) throw new Error('当前环境不支持 KeyPouch 站点设置')
+  return bindings.SaveKeyPouchSettings(siteUrl)
+}
+
 export const defaultAutomationState: AutomationState = {
   settings: {
     enabled: false,

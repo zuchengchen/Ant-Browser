@@ -73,8 +73,8 @@ export function ProfilePackagePasswordModal({
       <div className="space-y-4">
         <p className="text-sm leading-6 text-[var(--color-text-secondary)]">
           {isExport
-            ? '应用会读取当前实例中已解密的 Cookie，并使用此密码加密后写入实例包。密码不会写入备份。'
-            : '请输入导出时设置的密码，恢复实例 Cookie。密码错误或实例包损坏时不会继续导入。'}
+            ? '迁移密码会加密所选实例的登录 Cookie 及已同步的 GPT 登录凭据，包括账号、密码和 2FA 种子。'
+            : '请输入导出时设置的迁移密码，恢复实例包中的登录 Cookie 和 GPT 登录凭据。'}
         </p>
         <FormItem label="迁移密码" required hint="至少 8 个字符，导入时必须使用同一密码。">
           <Input

@@ -2,23 +2,27 @@ package backend
 
 import (
 	"context"
+	"encoding/json"
 	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"runtime"
 	"strconv"
+	"strings"
 	"sync/atomic"
 	"testing"
 
 	"ant-chrome/backend/internal/browser"
 	"ant-chrome/backend/internal/keypouch"
+	"github.com/gorilla/websocket"
 )
 
 func TestKeyPouchOpenResolvesStableProfileAndKeepsTheTemplateInPlace(t *testing.T) {
 	app, db := startPersistenceTestApp(t)
 	app.browserMgr.GroupDAO = browser.NewSQLiteGroupDAO(db.GetConn())
-	device, err := keypouch.OpenDevice(t.TempDir(), "test", "https://example.invalid", true)
+	const site = "https://example.invalid"
+	device, err := keypouch.OpenDevice(t.TempDir(), "test", site, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -29,8 +33,8 @@ func TestKeyPouchOpenResolvesStableProfileAndKeepsTheTemplateInPlace(t *testing.
 	noPrompt := func() bool { t.Fatal("unnecessary association prompt"); return false }
 	c := keyPouchOpenClaim{Action: "create-open", RecordID: 41, Email: "Test+Native@Example.invalid", GroupID: 3, GroupName: "Native group"}
 	open := func() string {
-		id, reason := app.keyPouchProfile(c, links, noPrompt)
-		if reason != "" || id != keyPouchProfileID(c.RecordID) {
+		id, reason := app.keyPouchProfile(site, c, links, noPrompt)
+		if reason != "" || id != keyPouchProfileID(site, c.RecordID) {
 			t.Fatalf("profile %q, reason %q", id, reason)
 		}
 		return id
@@ -58,7 +62,7 @@ func TestKeyPouchOpenResolvesStableProfileAndKeepsTheTemplateInPlace(t *testing.
 		t.Fatal("invalid or shared template", template)
 	}
 	c.RecordID++
-	if _, reason := app.keyPouchProfile(c, links, noPrompt); reason != "profile_conflict" {
+	if _, reason := app.keyPouchProfile(site, c, links, noPrompt); reason != "profile_conflict" {
 		t.Fatalf("adopted unbound same-name profile: %s", reason)
 	}
 	c.Email = "Another@example.invalid"
@@ -70,28 +74,28 @@ func TestKeyPouchOpenResolvesStableProfileAndKeepsTheTemplateInPlace(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, reason := app.keyPouchProfile(c, links, func() bool { return false }); reason != "cancelled" {
+	if _, reason := app.keyPouchProfile(site, c, links, func() bool { return false }); reason != "cancelled" {
 		t.Fatal("expected cancelled adoption", reason)
 	}
-	if id, reason := app.keyPouchProfile(c, links, func() bool { return true }); reason != "" || id != legacy.ProfileId {
+	if id, reason := app.keyPouchProfile(site, c, links, func() bool { return true }); reason != "" || id != legacy.ProfileId {
 		t.Fatal("existing local profile not reused", reason)
 	}
 	links, err = device.LoadProfileLinks()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if id, reason := app.keyPouchProfile(c, links, noPrompt); reason != "" || id != legacy.ProfileId {
+	if id, reason := app.keyPouchProfile(site, c, links, noPrompt); reason != "" || id != legacy.ProfileId {
 		t.Fatal("lost association after restart", reason)
 	}
 	c.RecordID++
-	if _, reason := app.keyPouchProfile(c, links, noPrompt); reason != "profile_conflict" {
+	if _, reason := app.keyPouchProfile(site, c, links, noPrompt); reason != "profile_conflict" {
 		t.Fatal("same legacy profile bound to another record", reason)
 	}
 	c.Email = "Third@example.invalid"
 	if err := app.BrowserProfileDelete(template.ProfileId); err != nil {
 		t.Fatal(err)
 	}
-	if _, reason := app.keyPouchProfile(c, links, noPrompt); reason != "template_missing" {
+	if _, reason := app.keyPouchProfile(site, c, links, noPrompt); reason != "template_missing" {
 		t.Fatalf("recreated a deleted template: %s", reason)
 	}
 	c.RecordID = 41
@@ -102,7 +106,7 @@ func TestKeyPouchOpenResolvesStableProfileAndKeepsTheTemplateInPlace(t *testing.
 	if err := app.BrowserProfileDelete(id); err != nil {
 		t.Fatal(err)
 	}
-	if _, reason := app.keyPouchProfile(c, links, noPrompt); reason != "profile_unavailable" {
+	if _, reason := app.keyPouchProfile(site, c, links, noPrompt); reason != "profile_unavailable" {
 		t.Fatalf("reused a deleted instance: %s", reason)
 	}
 }
@@ -128,26 +132,77 @@ func TestKeyPouchFocusRequiresARealPageActivation(t *testing.T) {
 	}
 }
 
+func TestKeyPouchOpenCreatesOneWindowForBackgroundChromium(t *testing.T) {
+	app, profile, _, _ := keyPouchRemainingGroupFixture(t)
+	var windows atomic.Int32
+	var server *httptest.Server
+	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/json/list":
+			if windows.Load() == 0 {
+				w.Write([]byte(`[{"type":"service_worker","id":"extension"}]`))
+			} else {
+				w.Write([]byte(`[{"type":"page","id":"opened"}]`))
+			}
+		case "/json/activate/opened":
+			w.WriteHeader(http.StatusOK)
+		case "/json/version":
+			_ = json.NewEncoder(w).Encode(cdpBrowserVersion{WebSocketDebuggerUrl: "ws" + strings.TrimPrefix(server.URL, "http") + "/devtools/browser/test"})
+		case "/devtools/browser/test":
+			upgrader := websocket.Upgrader{}
+			conn, err := upgrader.Upgrade(w, r, nil)
+			if err != nil {
+				return
+			}
+			defer conn.Close()
+			var req cdpMessage
+			if err := conn.ReadJSON(&req); err != nil || req.Method != "Target.createTarget" || req.Params["newWindow"] != true || req.Params["url"] != "about:blank" {
+				t.Error("expected one visible blank window")
+				return
+			}
+			windows.Add(1)
+			_ = conn.WriteJSON(map[string]any{"id": req.Id, "result": map[string]string{"targetId": "opened"}})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(server.Close)
+	profile.Running, profile.DebugReady = true, true
+	profile.DebugPort = server.Listener.Addr().(*net.TCPAddr).Port
+	if runtime.GOOS == "windows" {
+		profile.Pid = 1
+	}
+	for i := 0; i < 2; i++ {
+		if reason := app.openKeyPouchWindow(context.Background(), profile.ProfileId, func(int) bool { return windows.Load() > 0 }); reason != "" {
+			t.Fatal(reason)
+		}
+	}
+	if windows.Load() != 1 {
+		t.Fatalf("opened %d windows", windows.Load())
+	}
+}
+
 func TestKeyPouchSiteHonorsConfiguredOrigin(t *testing.T) {
 	previous := bundledKeyPouchURL
 	t.Cleanup(func() { bundledKeyPouchURL = previous })
 	bundledKeyPouchURL = ""
 	t.Setenv("ANT_KEYPOUCH_URL", "")
-	if site := keyPouchSite(); site != "" {
+	if site := keyPouchFallbackSite(); site != "" {
 		t.Fatalf("unconfigured site = %q", site)
 	}
 	bundledKeyPouchURL = "https://bundle.example.test/"
-	if site := keyPouchSite(); site != "https://bundle.example.test" {
+	if site := keyPouchFallbackSite(); site != "https://bundle.example.test" {
 		t.Fatalf("bundled site = %q", site)
 	}
 	t.Setenv("ANT_KEYPOUCH_URL", " https://device.example.test/ ")
-	if site := keyPouchSite(); site != "https://device.example.test" {
+	if site := keyPouchFallbackSite(); site != "https://device.example.test" {
 		t.Fatalf("device site = %q", site)
 	}
 }
 
 func keyPouchRemainingGroupFixture(t *testing.T) (*App, *BrowserProfile, *keypouch.Device, keyPouchOpenClaim) {
 	t.Helper()
+	isolateKeyPouchUser(t)
 	const site = "https://keypouch.example.invalid"
 	t.Setenv("ANT_KEYPOUCH_URL", site)
 	app, db := startPersistenceTestApp(t)
@@ -169,7 +224,7 @@ func keyPouchRemainingGroupFixture(t *testing.T) (*App, *BrowserProfile, *keypou
 	if err != nil {
 		t.Fatal(err)
 	}
-	if id, reason := app.keyPouchProfile(claim, links, func() bool { return true }); reason != "" || id != profile.ProfileId {
+	if id, reason := app.keyPouchProfile(site, claim, links, func() bool { return true }); reason != "" || id != profile.ProfileId {
 		t.Fatalf("associate via primary group: id=%q reason=%q", id, reason)
 	}
 	if err := app.DeleteGroup(primary); err != nil {
@@ -205,7 +260,11 @@ func TestKeyPouchOpenUsesRemainingGroupAfterDeletingPrimary(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		profile.Pid = 1
 	}
-	id, reason := app.keyPouchOpen(context.Background(), claim, device, func(int) bool {
+	id, reason := app.keyPouchOpenProfile(context.Background(), app.keyPouchSite(), claim, device)
+	if reason != "" {
+		t.Fatal(reason)
+	}
+	reason = app.openKeyPouchWindow(context.Background(), id, func(int) bool {
 		activated.Store(true)
 		return true
 	})

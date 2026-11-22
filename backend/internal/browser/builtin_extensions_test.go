@@ -4,8 +4,28 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 )
+
+func TestGPTCredentialDestinationMatchesBundledExtension(t *testing.T) {
+	dir := t.TempDir()
+	if err := writeBuiltinExtensionFiles("builtinassets/keypouch-gpt", dir); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "site.json"), []byte(`{"site":"https://vault.example.test"}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := VerifyKeyPouchGPTFiles(dir); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "login.js"), []byte("/* incomplete backup */"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if VerifyKeyPouchGPTFiles(dir) == nil {
+		t.Fatal("same-version modified installation was trusted")
+	}
+}
 
 func TestSyncBuiltinExtensionsInstallsWithoutDefaultInstall(t *testing.T) {
 	manager := newIsolationManager(t)
@@ -70,4 +90,46 @@ func TestSyncBuiltinExtensionsKeepsUserSettings(t *testing.T) {
 	if extension.Enabled {
 		t.Fatal("重复同步把用户的启用状态改回去了")
 	}
+}
+
+func TestKeyPouchExtensionFollowsDefaultAndProfileOverrides(t *testing.T) {
+	m := newIsolationManager(t)
+	dao := m.ExtensionDAO
+	// An existing instance that explicitly chose no extensions must stay empty after upgrading.
+	if _, err := dao.SetProfileSettings("empty", nil, true); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.SyncBuiltinExtensions(); err != nil {
+		t.Fatal(err)
+	}
+	gpt, err := dao.Get(KeyPouchGPTExtensionID)
+	if err != nil || !gpt.Enabled || !gpt.DefaultInstall || gpt.Name != "登录 GPT" {
+		t.Fatalf("unexpected built-in GPT extension: %+v, %v", gpt, err)
+	}
+	check := func(profile string, want ...string) {
+		t.Helper()
+		if got := m.ProfileExtensionLoadPaths(&Profile{ProfileId: profile}); !slices.Equal(got, want) {
+			t.Fatalf("%s loads %v, want %v", profile, got, want)
+		}
+	}
+	check("inherit", gpt.InstallDir)
+	check("empty")
+	if _, err := dao.SetProfileSettings("explicit", []string{KeyPouchGPTExtensionID}, true); err != nil {
+		t.Fatal(err)
+	}
+	if err := dao.SetDefaultInstall(KeyPouchGPTExtensionID, false); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.SyncBuiltinExtensions(); err != nil {
+		t.Fatal(err)
+	}
+	check("inherit")
+	check("explicit", gpt.InstallDir)
+	if err := dao.SetEnabled(KeyPouchGPTExtensionID, false); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.SyncBuiltinExtensions(); err != nil {
+		t.Fatal(err)
+	}
+	check("explicit")
 }

@@ -30,14 +30,32 @@ type Device struct {
 	http     *http.Client
 }
 
-func NewDevice(origin string, seed []byte) (*Device, error) {
-	u, err := url.Parse(strings.TrimSpace(origin))
-	if err != nil || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || (u.Path != "" && u.Path != "/") {
-		return nil, errors.New("KeyPouch 站点地址无效")
+// NormalizeOrigin accepts a site root, including HTTP on the loopback interface.
+func NormalizeOrigin(origin string) (string, error) {
+	raw := strings.TrimSpace(origin)
+	u, err := url.Parse(raw)
+	if err != nil || u.Hostname() == "" || u.User != nil || u.ForceQuery || u.RawQuery != "" ||
+		strings.Contains(raw, "#") || strings.Trim(u.EscapedPath(), "/") != "" {
+		return "", errors.New("请输入 KeyPouch 站点根地址，地址中不能包含路径、用户信息、查询参数或片段")
 	}
-	loopback := u.Hostname() == "localhost" || net.ParseIP(u.Hostname()).IsLoopback()
+	if port := u.Port(); port != "" {
+		if n, err := strconv.ParseUint(port, 10, 16); err != nil || n == 0 {
+			return "", errors.New("KeyPouch 站点端口无效")
+		}
+	} else if strings.HasSuffix(u.Host, ":") {
+		return "", errors.New("KeyPouch 站点端口无效")
+	}
+	loopback := strings.EqualFold(u.Hostname(), "localhost") || net.ParseIP(u.Hostname()).IsLoopback()
 	if u.Scheme != "https" && !(u.Scheme == "http" && loopback) {
-		return nil, errors.New("KeyPouch 站点需要 HTTPS")
+		return "", errors.New("KeyPouch 站点需要 HTTPS，本机回环地址可以使用 HTTP")
+	}
+	return u.Scheme + "://" + u.Host, nil
+}
+
+func NewDevice(origin string, seed []byte) (*Device, error) {
+	site, err := NormalizeOrigin(origin)
+	if err != nil {
+		return nil, err
 	}
 	if len(seed) != ed25519.SeedSize {
 		return nil, errors.New("KeyPouch 设备密钥无效")
@@ -45,7 +63,7 @@ func NewDevice(origin string, seed []byte) (*Device, error) {
 	key := ed25519.NewKeyFromSeed(seed)
 	digest := sha256.Sum256(key.Public().(ed25519.PublicKey))
 	return &Device{
-		origin: u.Scheme + "://" + u.Host,
+		origin: site,
 		key:    key,
 		id:     base64.RawURLEncoding.EncodeToString(digest[:]),
 		http: &http.Client{

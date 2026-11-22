@@ -236,6 +236,8 @@ export function BrowserProfileFingerprintMatrix(arg1:string,arg2:string,arg3:Arr
 
 export function BrowserProfileGetCode(arg1:string):Promise<string>;
 
+export function BrowserProfileHasLocalGPTCredential(arg1:string):Promise<boolean>;
+
 export function BrowserProfileList():Promise<Array<browser.Profile>>;
 
 export function BrowserProfileListByTag(arg1:string):Promise<Array<browser.Profile>>;
@@ -366,6 +368,8 @@ export function GetDashboardStats():Promise<Record<string, any>>;
 
 export function GetInterceptor():Promise<logger.MethodInterceptor>;
 
+export function GetKeyPouchSettings():Promise<Record<string, string>>;
+
 export function GetLaunchServerInfo():Promise<Record<string, any>>;
 
 export function GetLogLevel():Promise<string>;
@@ -413,6 +417,8 @@ export function SaveBrowserProxies(arg1:Array<config.BrowserProxy>):Promise<void
 export function SaveBrowserProxyVirtualGroup(arg1:config.BrowserProxyVirtualGroup):Promise<void>;
 
 export function SaveBrowserSettings(arg1:browser.Settings):Promise<void>;
+
+export function SaveKeyPouchSettings(arg1:string):Promise<Record<string, string>>;
 
 export function SaveLaunchServerSettings(arg1:number):Promise<Record<string, any>>;
 

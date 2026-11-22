@@ -19,6 +19,7 @@ const (
 
 type backupExtensionPathRecord struct {
 	extensionID string
+	sourceURL   string
 	installDir  string
 	packagePath string
 	packageHash string
@@ -70,7 +71,7 @@ func (a *App) backupRepairExtensionPathsAfterImport() ([]error, error) {
 
 func backupLoadExtensionPathRecords(tx *sql.Tx) ([]backupExtensionPathRecord, error) {
 	rows, err := tx.Query(`
-		SELECT extension_id, install_dir, package_path, package_hash
+		SELECT extension_id, COALESCE(source_url, ''), install_dir, package_path, package_hash
 		FROM browser_extensions ORDER BY extension_id`)
 	if err != nil {
 		return nil, fmt.Errorf("读取插件路径记录失败: %w", err)
@@ -80,7 +81,7 @@ func backupLoadExtensionPathRecords(tx *sql.Tx) ([]backupExtensionPathRecord, er
 	items := make([]backupExtensionPathRecord, 0)
 	for rows.Next() {
 		var item backupExtensionPathRecord
-		if err := rows.Scan(&item.extensionID, &item.installDir, &item.packagePath, &item.packageHash); err != nil {
+		if err := rows.Scan(&item.extensionID, &item.sourceURL, &item.installDir, &item.packagePath, &item.packageHash); err != nil {
 			return nil, fmt.Errorf("读取插件路径记录失败: %w", err)
 		}
 		items = append(items, item)
@@ -116,7 +117,7 @@ func backupLoadProfileExtensionRuntimePathRecords(tx *sql.Tx) ([]backupProfileEx
 }
 
 func (a *App) backupRepairExtensionPathRecord(tx *sql.Tx, record backupExtensionPathRecord, issues *[]error) error {
-	extensionID := browser.NormalizeExtensionID(record.extensionID)
+	extensionID := browser.NormalizeCatalogExtensionID(record.extensionID, record.sourceURL)
 	if extensionID == "" {
 		if strings.TrimSpace(record.installDir) != "" || strings.TrimSpace(record.packagePath) != "" {
 			*issues = append(*issues, fmt.Errorf("插件 ID 无效，无法重建迁移路径: %q", record.extensionID))

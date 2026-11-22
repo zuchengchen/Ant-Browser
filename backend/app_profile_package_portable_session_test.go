@@ -32,7 +32,7 @@ func TestPortableProfileSessionRoundTrip(t *testing.T) {
 		},
 	}
 
-	encrypted, err := encryptPortableProfileSession("profile-1", cookies, "portable-password")
+	encrypted, err := encryptPortableProfileSession("profile-1", cookies, nil, "portable-password")
 	if err != nil {
 		t.Fatalf("encryptPortableProfileSession returned error: %v", err)
 	}
@@ -44,8 +44,8 @@ func TestPortableProfileSessionRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("decryptPortableProfileSession returned error: %v", err)
 	}
-	if !reflect.DeepEqual(decoded, cookies) {
-		t.Fatalf("decoded cookies = %#v, want %#v", decoded, cookies)
+	if !reflect.DeepEqual(decoded.Cookies, cookies) || decoded.GPTCredential != nil {
+		t.Fatal("cookie-only migration did not round-trip")
 	}
 
 	if _, err := decryptPortableProfileSession("profile-1", encrypted, "wrong-password"); err == nil {
@@ -84,7 +84,7 @@ func TestPortableSessionStartRejectsExistingRuntime(t *testing.T) {
 func TestOpenProfilePackageContentsDetectsPortableSession(t *testing.T) {
 	root := t.TempDir()
 	zipPath := filepath.Join(root, "portable-profile.zip")
-	encrypted, err := encryptPortableProfileSession("profile-1", nil, "portable-password")
+	encrypted, err := encryptPortableProfileSession("profile-1", nil, nil, "portable-password")
 	if err != nil {
 		t.Fatalf("encryptPortableProfileSession returned error: %v", err)
 	}

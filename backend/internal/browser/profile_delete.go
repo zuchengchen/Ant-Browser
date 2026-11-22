@@ -1,6 +1,7 @@
 package browser
 
 import (
+	"ant-chrome/backend/internal/keypouch"
 	"ant-chrome/backend/internal/logger"
 	"errors"
 	"fmt"
@@ -326,6 +327,9 @@ func (m *Manager) deleteProfileRelatedDataLocked(log *logger.Logger, profile *Pr
 		if firstErr == nil {
 			firstErr = err
 		}
+	}
+	if firstErr == nil && m.AppRoot != "" {
+		firstErr = keypouch.RemoveLocalGPTCredential(m.AppRoot, profile.ProfileId)
 	}
 	return firstErr
 }

@@ -154,6 +154,27 @@ func TestBackupRepairExtensionPathsRollsBackAllUpdatesOnFailure(t *testing.T) {
 	}
 }
 
+func TestBackupRepairRecognizesLegacyBundledExtensionSource(t *testing.T) {
+	const id = "ababababcdcdcdefefefefghghghgh"
+	app := newBackupExtensionRepairTestApp(t)
+	oldDir := filepath.Join(t.TempDir(), "data", "extensions", id)
+	insertBackupTestExtension(t, app, id, oldDir, "", "")
+	payload := writeBackupExtensionPayload(t, t.TempDir(), id, nil, false, "")
+	app.backupImportFileTrees(payload, nil, backup.Manifest{}, &backupMergeStats{}, nil)
+	issues, err := app.backupRepairExtensionPathsAfterImport()
+	if err != nil || len(issues) != 1 {
+		t.Fatal("a short extension ID without its bundled source must be rejected", issues, err)
+	}
+	if _, err := app.db.GetConn().Exec("UPDATE browser_extensions SET source_url = ? WHERE extension_id = ?", "builtin://iso-pro", id); err != nil {
+		t.Fatal(err)
+	}
+	issues, err = app.backupRepairExtensionPathsAfterImport()
+	dir, _, _ := readBackupTestExtension(t, app, id)
+	if err != nil || len(issues) != 0 || !backupSamePath(dir, filepath.Join(app.appRoot, "data", "extensions", id)) {
+		t.Fatal("the bundled extension was not restored to the new installation", issues, err)
+	}
+}
+
 func TestBackupRepairExtensionPathsInvalidIDDoesNotBlockOthers(t *testing.T) {
 	app := newBackupExtensionRepairTestApp(t)
 	oldRoot := t.TempDir()

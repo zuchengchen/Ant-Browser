@@ -1,6 +1,7 @@
 package backend
 
 import (
+	"context"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -26,6 +27,56 @@ const (
 	// 这里留足余量但避免个别插件卡住时把启动流程拖到几十秒。
 	extensionLoadBudget = 6 * time.Second
 )
+
+func (a *App) loadProfileExtensionsLocked(profile *BrowserProfile, paths []string) {
+	warning, err := a.prepareProfileExtensionsLocked(context.Background(), profile, paths, false)
+	if err != nil {
+		warning = joinBrowserStartWarnings(warning, "GPT 登录凭据尚未就绪，请检查实例的内置扩展后重试")
+	}
+	a.appendProfileRuntimeWarningLocked(profile.ProfileId, profile, warning)
+}
+
+func (a *App) prepareProfileExtensionsLocked(ctx context.Context, p *BrowserProfile, paths []string, recovered bool) (string, error) {
+	warning := a.ensureProfileExtensionsLoaded(p.ProfileId, p.DebugPort, paths)
+	if warning != "" {
+		logger.New("Browser").Warn("实例已启动，但插件加载不完整",
+			logger.F("profile_id", p.ProfileId), logger.F("debug_port", p.DebugPort), logger.F("warning", warning))
+	}
+	if a.browserMgr == nil || a.appRoot == "" {
+		return warning, nil
+	}
+	credential, err := a.readLocalGPTCredential(p.ProfileId)
+	if err != nil {
+		return warning, err
+	}
+	if recovered {
+		dir := a.browserMgr.ResolveUserDataDir(p)
+		previous, err := gptSessionExtension(dir)
+		if err != nil {
+			return warning, err
+		}
+		builtin := a.resolveAppPath(filepath.Join("data", keyPouchExtensionDirectory))
+		selected := false
+		for _, path := range paths {
+			if sameGPTDirectory(path, builtin) {
+				selected = true
+				break
+			}
+		}
+		if previous != "" && (credential == nil || !selected || !sameGPTDirectory(previous, builtin)) {
+			if err := clearRecoveredGPTSession(ctx, p.DebugPort, dir, previous); err != nil {
+				return warning, err
+			}
+		}
+		if credential != nil && !selected {
+			return joinBrowserStartWarnings(warning, "请为该实例启用内置的「登录 GPT」扩展"), nil
+		}
+	}
+	if credential != nil {
+		return warning, a.publishGPTCredentialLocked(ctx, p, paths, credential)
+	}
+	return warning, nil
+}
 
 // ensureProfileExtensionsLoaded 在浏览器就绪后通过 CDP 补齐插件加载。
 // 返回给用户看的警告文案（加载失败时非空），不影响实例启动结果。

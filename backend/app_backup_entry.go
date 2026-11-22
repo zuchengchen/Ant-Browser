@@ -68,7 +68,7 @@ func (a *App) BackupExportPackage() (map[string]interface{}, error) {
 		"includedEntries":        includedEntries,
 		"skippedEntries":         skippedEntries,
 		"fileCount":              fileCount,
-		"portableSessionWarning": "全量备份不会迁移跨电脑登录态；如需保留登录 Cookie，请选择实例备份并设置登录态迁移密码。",
+		"portableSessionWarning": "如需迁移登录 Cookie 和 GPT 登录凭据，请选择实例备份并设置登录态迁移密码。",
 		"message":                "导出完成",
 	}, nil
 }

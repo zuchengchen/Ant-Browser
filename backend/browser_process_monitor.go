@@ -30,6 +30,9 @@ type browserProcessMonitor struct {
 	stderrDone chan struct{}
 	waitDone   chan struct{}
 
+	// Captured under the manager lock when this process is first registered.
+	userDataDir string
+
 	mu        sync.Mutex
 	result    browserProcessExitResult
 	debugPort int

@@ -454,6 +454,10 @@ export function BrowserProfileGetCode(arg1) {
   return window['go']['main']['App']['BrowserProfileGetCode'](arg1);
 }
 
+export function BrowserProfileHasLocalGPTCredential(arg1) {
+  return window['go']['main']['App']['BrowserProfileHasLocalGPTCredential'](arg1);
+}
+
 export function BrowserProfileList() {
   return window['go']['main']['App']['BrowserProfileList']();
 }
@@ -714,6 +718,10 @@ export function GetInterceptor() {
   return window['go']['main']['App']['GetInterceptor']();
 }
 
+export function GetKeyPouchSettings() {
+  return window['go']['main']['App']['GetKeyPouchSettings']();
+}
+
 export function GetLaunchServerInfo() {
   return window['go']['main']['App']['GetLaunchServerInfo']();
 }
@@ -808,6 +816,10 @@ export function SaveBrowserProxyVirtualGroup(arg1) {
 
 export function SaveBrowserSettings(arg1) {
   return window['go']['main']['App']['SaveBrowserSettings'](arg1);
+}
+
+export function SaveKeyPouchSettings(arg1) {
+  return window['go']['main']['App']['SaveKeyPouchSettings'](arg1);
 }
 
 export function SaveLaunchServerSettings(arg1) {

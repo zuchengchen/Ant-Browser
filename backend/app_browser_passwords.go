@@ -11,7 +11,21 @@ import (
 // Copies have their own user-data directory, so they receive the same defaults.
 // Explicit choices, including false, remain authoritative on subsequent starts.
 func ensureBrowserPasswordManagerDefaults(userDataDir string) error {
-	profileDir := filepath.Join(userDataDir, "Default")
+	return updateBrowserPreferences(filepath.Join(userDataDir, "Default"), func(prefs map[string]json.RawMessage) (bool, error) {
+		changed := false
+		for _, key := range []string{"credentials_enable_service", "credentials_enable_autosignin"} {
+			if _, exists := prefs[key]; !exists {
+				prefs[key] = json.RawMessage("true")
+				changed = true
+			}
+		}
+		return changed, nil
+	})
+}
+
+// Call only while Chromium is stopped. Preserve unrelated preference values
+// as raw JSON (including large integers) and replace the file atomically.
+func updateBrowserPreferences(profileDir string, update func(map[string]json.RawMessage) (bool, error)) error {
 	prefsPath := filepath.Join(profileDir, "Preferences")
 	prefs := map[string]json.RawMessage{}
 	mode := os.FileMode(0o600)
@@ -32,21 +46,14 @@ func ensureBrowserPasswordManagerDefaults(userDataDir string) error {
 		return err
 	}
 
-	// These are the two toggle pref keys in Chromium's password manager settings.
-	changed := false
-	for _, key := range []string{"credentials_enable_service", "credentials_enable_autosignin"} {
-		if _, exists := prefs[key]; !exists {
-			prefs[key] = json.RawMessage("true")
-			changed = true
-		}
-	}
-	if !changed {
-		return nil
+	changed, err := update(prefs)
+	if err != nil || !changed {
+		return err
 	}
 	if err := os.MkdirAll(profileDir, 0o755); err != nil {
 		return err
 	}
-	temporary, err := os.CreateTemp(profileDir, ".password-preferences-*.tmp")
+	temporary, err := os.CreateTemp(profileDir, ".browser-preferences-*.tmp")
 	if err != nil {
 		return err
 	}

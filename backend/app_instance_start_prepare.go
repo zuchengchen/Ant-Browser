@@ -3,6 +3,7 @@ package backend
 import (
 	"ant-chrome/backend/internal/browser"
 	"ant-chrome/backend/internal/logger"
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -85,6 +86,10 @@ func (a *App) resolveBrowserStartProfile(input browserStartInput) (*BrowserProfi
 		return nil, false, err
 	}
 	a.ensureProfileLaunchCode(profile)
+	if err := a.checkGPTBrowserOwnerLocked(profile, browserRuntimeDetection{}); err != nil {
+		profile.LastError = err.Error()
+		return profile, false, err
+	}
 	if input.RejectExistingRuntime && browserProfileHasRuntime(a, profile, a.browserMgr.BrowserProcesses[input.ProfileID]) {
 		return profile, false, fmt.Errorf("%w: 实例「%s」正在运行，请先停止实例后再迁移登录态", errBrowserStartRejectedExistingRuntime, profile.ProfileName)
 	}
@@ -179,6 +184,10 @@ func (a *App) prepareBrowserStartPlan(input browserStartInput, profile *BrowserP
 	extensionPaths := a.browserMgr.ProfileExtensionLoadPaths(profile)
 	instanceArgs := buildBrowserLaunchArgs(userDataDir, assignedDebugPort, effectiveProxy, fingerprintLaunchArgs, sanitizedProfileLaunchArgs, sanitizedExtraLaunchArgs, extensionPaths, launchTargets, restoreLastSession)
 	extensionWarning := ""
+	if err := a.prepareGPTToolbarPin(userDataDir, instanceArgs, extensionPaths); err != nil {
+		extensionWarning = "未能设置「登录 GPT」的默认工具栏位置，可在扩展菜单中手动固定"
+		logger.New("Extension").Warn(extensionWarning, logger.F("profile_id", profile.ProfileId), logger.F("error", err))
+	}
 
 	return &browserStartPlan{
 		profile:              profile,
@@ -236,11 +245,6 @@ func (a *App) fingerprintCheckExpectedArgsForRunningProfile(profile *BrowserProf
 func (a *App) prepareBrowserLaunchContext(input browserStartInput, profile *BrowserProfile, bookmarks []BrowserBookmark) ([]string, []string, []string, string, string, error) {
 	log := logger.New("Browser")
 
-	sanitizedProfileLaunchArgs, managedProfileArgs := sanitizeManagedLaunchArgs(profile.LaunchArgs)
-	sanitizedExtraLaunchArgs, managedExtraArgs := sanitizeManagedLaunchArgs(input.ExtraLaunchArgs)
-	logManagedLaunchArgOverrides(log, input.ProfileID, "profile.launchArgs", managedProfileArgs)
-	logManagedLaunchArgOverrides(log, input.ProfileID, "start.extraLaunchArgs", managedExtraArgs)
-
 	proxyChanged, proxyNotice, proxyErr := a.browserMgr.ApplyDefaults(profile)
 	if proxyChanged {
 		_ = a.browserMgr.SaveProfile(profile)
@@ -261,6 +265,13 @@ func (a *App) prepareBrowserLaunchContext(input browserStartInput, profile *Brow
 		profile.LastError = startErr.Error()
 		return nil, nil, nil, "", "", startErr
 	}
+
+	// KeyPouch can create and launch a profile in one action. Include the
+	// configured launch defaults on this first start as well as later starts.
+	sanitizedProfileLaunchArgs, managedProfileArgs := sanitizeManagedLaunchArgs(profile.LaunchArgs)
+	sanitizedExtraLaunchArgs, managedExtraArgs := sanitizeManagedLaunchArgs(input.ExtraLaunchArgs)
+	logManagedLaunchArgOverrides(log, input.ProfileID, "profile.launchArgs", managedProfileArgs)
+	logManagedLaunchArgOverrides(log, input.ProfileID, "start.extraLaunchArgs", managedExtraArgs)
 
 	chromeBinaryPath, err := a.browserMgr.ResolveChromeBinary(profile)
 	if err != nil {
@@ -311,12 +322,28 @@ func (a *App) prepareBrowserLaunchContext(input browserStartInput, profile *Brow
 		log.Error("浏览器语言偏好写入失败", logger.F("profile_id", input.ProfileID), logger.F("error", err.Error()))
 	}
 
-	if detection, ok := detectBrowserRuntimeByActivePort(userDataDir); ok && detection.DebugReady {
+	detection, detected := detectBrowserRuntimeByActivePort(userDataDir)
+	if !detected {
+		// Fixed-port processes can lack the file; some kernels only write
+		// a port. Reconcile marked directories and incomplete endpoint files
+		// against the OS process's actual user-data directory.
+		_, markerErr := os.Lstat(filepath.Join(userDataDir, gptSessionMarker))
+		_, endpointErr := os.Lstat(filepath.Join(userDataDir, "DevToolsActivePort"))
+		marked := !os.IsNotExist(markerErr)
+		if marked || endpointErr == nil {
+			detection, detected = detectBrowserRuntimeFromProcesses(userDataDir)
+			if marked && detected && !detection.DebugReady {
+				return nil, nil, nil, "", "", errGPTSessionRecovery
+			}
+		}
+	}
+	if detected && detection.DebugReady {
 		if input.RejectExistingRuntime {
 			return nil, nil, nil, "", "", fmt.Errorf("%w: 实例「%s」已有浏览器运行，请先停止实例后再迁移登录态", errBrowserStartRejectedExistingRuntime, profile.ProfileName)
 		}
-		a.markProfileLastLaunchArgsLocked(profile, nil)
-		a.markProfileRunningLocked(input.ProfileID, profile, nil, detection.PID, detection.DebugPort, true, "")
+		if err := a.adoptDetectedBrowserLocked(context.Background(), profile, detection); err != nil {
+			return nil, nil, nil, "", "", err
+		}
 		log.Warn("检测到同一用户数据目录已有浏览器运行，已接管为当前实例状态",
 			logger.F("profile_id", input.ProfileID),
 			logger.F("user_data_dir", userDataDir),

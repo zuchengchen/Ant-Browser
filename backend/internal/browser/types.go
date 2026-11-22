@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os/exec"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -71,6 +72,7 @@ type ProfileInput struct {
 type ProfileCopyOptions struct {
 	Mode              string   `json:"mode"`
 	AutomationTargets []string `json:"automationTargets"`
+	CopyGPTCredential bool     `json:"copyGptCredential,omitempty"`
 }
 
 // Tab 浏览器标签页
@@ -182,6 +184,8 @@ type Manager struct {
 	BookmarkDAO                     BookmarkDAO
 	GroupDAO                        GroupDAO
 	ExtensionDAO                    ExtensionDAO
+	// Suppress the login extension while its local site file could be stale.
+	KeyPouchSiteUnavailable atomic.Bool
 }
 
 // XrayBridge Xray 桥接进程

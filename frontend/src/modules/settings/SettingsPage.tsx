@@ -3,11 +3,13 @@ import { RotateCcw, Save } from 'lucide-react'
 
 import { Button, Card, ThemeSwitcher, toast } from '../../shared/components'
 import { useTheme } from '../../shared/theme'
+import { errorMessage } from '../../utils/errors'
 import {
   automationProbeSystemNode,
   automationRuntimeSelfCheck,
   defaultAutomationState,
   fetchAutomationState,
+  fetchKeyPouchSettings,
   fetchLaunchServerSettings,
   fetchSettings,
   installAutomationRuntime,
@@ -15,10 +17,11 @@ import {
   saveAutomationRuntimeSettings,
   saveAutomationScriptPackageSettings,
   saveAutomationSettings,
+  saveKeyPouchSettings,
   saveLaunchServerSettings,
   saveSettings,
 } from './api'
-import type { AutomationNodeSource, AutomationRuntimeCheck, AutomationState, AutomationSystemNodeProbe } from './api'
+import type { AutomationNodeSource, AutomationRuntimeCheck, AutomationState, AutomationSystemNodeProbe, KeyPouchSettings } from './api'
 import { AutomationSettingsCard } from './components/AutomationSettingsCard'
 import { useSettingsProgressEffects } from './hooks/useSettingsProgressEffects'
 import { SettingsAdvancedCard, SettingsBasicFeatureCards } from './components/SettingsGeneralCards'
@@ -31,6 +34,10 @@ type AutomationBusyState = 'none' | 'toggle' | 'probe' | 'runtime' | 'package' |
 export function SettingsPage() {
   const { setTheme } = useTheme()
   const [settings, setSettings] = useState<AppSettings>(defaultSettings)
+  const [savedSettings, setSavedSettings] = useState(settings)
+  const [keyPouch, setKeyPouch] = useState<KeyPouchSettings | null | undefined>(undefined)
+  const [siteUrlDraft, setSiteUrlDraft] = useState('')
+  const [siteError, setSiteError] = useState('')
   const [automationState, setAutomationState] = useState<AutomationState>(defaultAutomationState)
   const [automationProgress, setAutomationProgress] = useState<AutomationRuntimeProgress | null>(null)
   const [automationBusy, setAutomationBusy] = useState<AutomationBusyState>('none')
@@ -45,7 +52,8 @@ export function SettingsPage() {
   const [launchServerSaving, setLaunchServerSaving] = useState(false)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [hasChanges, setHasChanges] = useState(false)
+  const generalChanged = settings !== savedSettings
+  const siteChanged = keyPouch !== undefined && siteUrlDraft.trim() !== (keyPouch?.siteUrl ?? '')
 
   useEffect(() => {
     void loadSettings()
@@ -63,6 +71,20 @@ export function SettingsPage() {
     setAutomationRuntimeDirty(false)
   }, [automationState.settings.nodeSource, automationState.settings.systemNodePath])
 
+  const loadKeyPouch = async () => {
+    setKeyPouch(undefined)
+    try {
+      const result = await fetchKeyPouchSettings()
+      setSiteUrlDraft(result.siteUrl)
+      setKeyPouch(result)
+      setSiteError('')
+    } catch (error) {
+      setKeyPouch(null)
+      setSiteUrlDraft('')
+      setSiteError(`${errorMessage(error, '读取 KeyPouch 站点地址失败')}。可填写新的 HTTPS 地址后保存。`)
+    }
+  }
+
   const loadSettings = async () => {
     setLoading(true)
     try {
@@ -70,13 +92,14 @@ export function SettingsPage() {
         fetchSettings(),
         fetchAutomationState(),
         fetchLaunchServerSettings(),
+        loadKeyPouch(),
       ])
       setSettings(data)
+      setSavedSettings(data)
       setAutomationState(automation)
       setLaunchServerPortDraft(String(launchServer.preferredPort || launchServer.port || 19876))
       setLaunchServerBaseUrl(launchServer.baseUrl)
       setLaunchServerReady(launchServer.ready)
-      setHasChanges(false)
     } catch (error: any) {
       toast.error(error?.message || '系统设置加载失败')
     } finally {
@@ -86,34 +109,49 @@ export function SettingsPage() {
 
   const handleChange = <K extends keyof AppSettings>(key: K, value: AppSettings[K]) => {
     setSettings(prev => ({ ...prev, [key]: value }))
-    setHasChanges(true)
   }
 
   const handleSave = async () => {
     setSaving(true)
     try {
-      const success = await saveSettings(settings)
-      if (success) {
-        setHasChanges(false)
-        toast.success('设置已保存')
+      if (siteChanged) {
+        try {
+          const result = await saveKeyPouchSettings(siteUrlDraft.trim())
+          setKeyPouch(result)
+          setSiteUrlDraft(result.siteUrl)
+          setSiteError('')
+        } catch (error) {
+          const message = errorMessage(error, 'KeyPouch 站点地址保存失败')
+          setSiteError(message)
+          toast.error(message)
+          return
+        }
       }
-    } catch (error: any) {
-      toast.error(error?.message || '保存失败，请检查配置')
+      if (generalChanged) {
+        if (!await saveSettings(settings)) throw new Error('通用设置保存失败，请重试')
+        setSavedSettings(settings)
+      }
+      toast.success('设置已保存')
+    } catch (error) {
+      toast.error(errorMessage(error, '保存失败，请检查配置'))
     } finally {
       setSaving(false)
     }
   }
 
   const handleReset = async () => {
-    if (!confirm('确定要重置所有设置吗？将重置通用设置、自动化、备份渠道和 Launch Server；不会删除浏览器实例、代理或内核数据。')) return
+    if (!confirm('确定要重置所有设置吗？将重置通用设置、KeyPouch 站点地址、自动化、备份渠道和 Launch Server；不会删除浏览器实例、代理或内核数据。')) return
 
+    setLoading(true)
     try {
       const nextSettings = await resetSettings()
+      setSettings(nextSettings)
+      setSavedSettings(nextSettings)
       const [automation, launchServer] = await Promise.all([
         fetchAutomationState(),
         fetchLaunchServerSettings(),
+        loadKeyPouch(),
       ])
-      setSettings(nextSettings)
       setTheme('light')
       setAutomationState(automation)
       setAutomationProgress(null)
@@ -125,10 +163,11 @@ export function SettingsPage() {
       setLaunchServerPortDraft(String(launchServer.preferredPort || launchServer.port || 19876))
       setLaunchServerBaseUrl(launchServer.baseUrl)
       setLaunchServerReady(launchServer.ready)
-      setHasChanges(false)
       toast.success('设置已重置')
-    } catch (error: any) {
-      toast.error(error?.message || '设置重置失败')
+    } catch (error) {
+      toast.error(errorMessage(error, '设置重置失败'))
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -283,11 +322,11 @@ export function SettingsPage() {
         <div className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
           <h1 className="text-xl font-semibold text-[var(--color-text-primary)]">系统设置</h1>
           <div className="flex flex-wrap gap-2 sm:justify-end">
-            <Button variant="secondary" size="sm" onClick={handleReset}>
+            <Button variant="secondary" size="sm" onClick={handleReset} disabled={saving}>
               <RotateCcw className="h-4 w-4" />
               重置
             </Button>
-            <Button variant="danger" size="sm" onClick={handleSave} loading={saving} disabled={!hasChanges}>
+            <Button variant="danger" size="sm" onClick={handleSave} loading={saving} disabled={!generalChanged && !siteChanged}>
               <Save className="h-4 w-4" />
               保存
             </Button>
@@ -298,7 +337,18 @@ export function SettingsPage() {
       <Card title="主题">
         <ThemeSwitcher />
       </Card>
-      <SettingsBasicFeatureCards settings={settings} onChange={handleChange} />
+      <SettingsBasicFeatureCards
+        settings={settings}
+        onChange={handleChange}
+        siteUrl={siteUrlDraft}
+        fallbackUrl={keyPouch?.fallbackUrl ?? ''}
+        siteDisabled={keyPouch === undefined || saving}
+        siteError={siteError}
+        onSiteUrlChange={value => {
+          setSiteUrlDraft(value)
+          setSiteError('')
+        }}
+      />
       <AutomationSettingsCard
         automationState={automationState}
         automationProgress={automationProgress}

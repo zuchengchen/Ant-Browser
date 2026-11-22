@@ -27,9 +27,10 @@ const (
 )
 
 type portableProfileSession struct {
-	Version   int          `json:"version"`
-	ProfileID string       `json:"profileId"`
-	Cookies   []CookieInfo `json:"cookies"`
+	Version       int                 `json:"version"`
+	ProfileID     string              `json:"profileId"`
+	Cookies       []CookieInfo        `json:"cookies"`
+	GPTCredential *localGPTCredential `json:"gptCredential,omitempty"`
 }
 
 type portableSessionEnvelope struct {
@@ -59,7 +60,7 @@ func derivePortableSessionKey(password string, salt []byte) ([]byte, error) {
 	return scrypt.Key([]byte(password), salt, 1<<15, 8, 1, 32)
 }
 
-func encryptPortableProfileSession(profileID string, cookies []CookieInfo, password string) ([]byte, error) {
+func encryptPortableProfileSession(profileID string, cookies []CookieInfo, credential *localGPTCredential, password string) ([]byte, error) {
 	profileID = strings.TrimSpace(profileID)
 	if profileID == "" {
 		return nil, fmt.Errorf("登录态迁移缺少实例 ID")
@@ -69,9 +70,10 @@ func encryptPortableProfileSession(profileID string, cookies []CookieInfo, passw
 	}
 
 	payload, err := json.Marshal(portableProfileSession{
-		Version:   portableSessionVersion,
-		ProfileID: profileID,
-		Cookies:   cookies,
+		Version:       portableSessionVersion,
+		ProfileID:     profileID,
+		Cookies:       cookies,
+		GPTCredential: credential,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("序列化登录态失败: %w", err)
@@ -109,7 +111,7 @@ func encryptPortableProfileSession(profileID string, cookies []CookieInfo, passw
 	})
 }
 
-func decryptPortableProfileSession(profileID string, encrypted []byte, password string) ([]CookieInfo, error) {
+func decryptPortableProfileSession(profileID string, encrypted []byte, password string) (*portableProfileSession, error) {
 	profileID = strings.TrimSpace(profileID)
 	if profileID == "" {
 		return nil, fmt.Errorf("登录态迁移缺少实例 ID")
@@ -165,7 +167,12 @@ func decryptPortableProfileSession(profileID string, encrypted []byte, password 
 	if session.Version != portableSessionVersion || !strings.EqualFold(strings.TrimSpace(session.ProfileID), profileID) {
 		return nil, fmt.Errorf("登录态数据与实例不匹配")
 	}
-	return session.Cookies, nil
+	if session.GPTCredential != nil {
+		if err := session.GPTCredential.Validate(); err != nil {
+			return nil, err
+		}
+	}
+	return &session, nil
 }
 
 func (a *App) collectPortableProfileSessions(profiles []browser.Profile) (map[string][]CookieInfo, error) {
@@ -224,7 +231,7 @@ func (a *App) collectPortableProfileSessions(profiles []browser.Profile) (map[st
 	return sessions, nil
 }
 
-func readPortableProfileSessionFile(fileReader io.Reader, fileSize uint64, profileID string, password string) ([]CookieInfo, error) {
+func readPortableProfileSessionFile(fileReader io.Reader, fileSize uint64, profileID string, password string) (*portableProfileSession, error) {
 	if fileSize > portableSessionEntryLimit {
 		return nil, fmt.Errorf("实例登录态迁移文件过大")
 	}

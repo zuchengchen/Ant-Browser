@@ -13,6 +13,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -34,7 +35,7 @@ func TestBrowserStartupExtensionWarningDoesNotDeadlock(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, mode := range []string{"control", "warning"} {
+	for _, mode := range []string{"control", "warning", "late", "restored"} {
 		t.Run(mode, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
@@ -47,7 +48,7 @@ func TestBrowserStartupExtensionWarningDoesNotDeadlock(t *testing.T) {
 			if !strings.Contains(string(output), "startup-returned") {
 				t.Fatalf("helper exited without completing startup:\n%s", output)
 			}
-			if mode == "warning" && !strings.Contains(string(output), "cdp-extension-load-rejected") {
+			if mode != "control" && !strings.Contains(string(output), "cdp-extension-load-rejected") {
 				t.Fatalf("helper did not exercise the failed extension path:\n%s", output)
 			}
 		})
@@ -96,6 +97,35 @@ func runExtensionWarningStartupChild(t *testing.T, mode string) {
 	port, err := strconv.Atoi(portText)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if mode == "late" || mode == "restored" {
+		app, db := startPersistenceTestApp(t)
+		manager := app.browserMgr
+		manager.ExtensionDAO = browser.NewSQLiteExtensionDAO(db.GetConn())
+		if err := manager.SyncBuiltinExtensions(); err != nil {
+			t.Fatal(err)
+		}
+		profile := manager.Profiles["target"]
+		if mode == "late" {
+			profile.Running = true
+			profile.DebugPort = port
+			app.waitBrowserDebugReadyAsync(profile.ProfileId, port, time.Second, nil)
+			if _, changed := app.setProfileDebugReady(profile.ProfileId, port); changed {
+				t.Fatal("a repeated readiness check discarded the extension warning")
+			}
+		} else {
+			app.restoreRunningBrowserProfiles(context.Background(), func(dir string) (browserRuntimeDetection, bool) {
+				return browserRuntimeDetection{DebugReady: true, DebugPort: port}, filepath.Base(dir) == "target"
+			})
+		}
+		manager.Mutex.Lock()
+		snapshot := copyBrowserProfileSnapshot(profile)
+		manager.Mutex.Unlock()
+		if !snapshot.DebugReady || !strings.Contains(snapshot.RuntimeWarning, "synthetic extension load failure") {
+			t.Fatalf("missing extension load on %s instance: %+v", mode, snapshot)
+		}
+		fmt.Println("startup-returned")
+		return
 	}
 	truePath, err := exec.LookPath("true")
 	if err != nil {

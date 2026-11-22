@@ -157,7 +157,7 @@ func backupSHA256File(path string) (string, error) {
 	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
-func backupShouldSkipAppDBFile(rel string) bool {
+func backupShouldSkipAppDataFile(rel string) bool {
 	r := strings.TrimSpace(filepath.ToSlash(rel))
-	return r == "app.db" || r == "app.db-wal" || r == "app.db-shm"
+	return r == "app.db" || r == "app.db-wal" || r == "app.db-shm" || isKeyPouchExtensionSiteFile(r)
 }

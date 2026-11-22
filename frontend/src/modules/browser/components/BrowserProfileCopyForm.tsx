@@ -1,5 +1,7 @@
 import clsx from 'clsx'
+import { useEffect, useState } from 'react'
 import { FormItem, Input } from '../../../shared/components'
+import { hasBrowserProfileGPTCredential } from '../api'
 import {
   BROWSER_PROFILE_AUTOMATION_TARGET_OPTIONS,
   isBrowserProfileCopyOptionsValid,
@@ -7,6 +9,7 @@ import {
 import type { BrowserProfileAutomationTarget, BrowserProfileCopyOptions } from '../types'
 
 interface BrowserProfileCopyFormProps {
+  sourceId?: string
   sourceName?: string
   copyName: string
   copyOptions: BrowserProfileCopyOptions
@@ -16,6 +19,7 @@ interface BrowserProfileCopyFormProps {
 }
 
 export function BrowserProfileCopyForm({
+  sourceId,
   sourceName,
   copyName,
   copyOptions,
@@ -23,6 +27,22 @@ export function BrowserProfileCopyForm({
   onCopyOptionsChange,
   autoFocusName = false,
 }: BrowserProfileCopyFormProps) {
+  const [credentialSource, setCredentialSource] = useState('')
+  const [credentialError, setCredentialError] = useState('')
+  useEffect(() => {
+    let current = true
+    setCredentialSource('')
+    setCredentialError('')
+    if (sourceId) {
+      hasBrowserProfileGPTCredential(sourceId).then(hasCredential => {
+        if (hasCredential && current) setCredentialSource(sourceId)
+      }).catch(() => {
+        if (current) setCredentialError(sourceId)
+      })
+    }
+    return () => { current = false }
+  }, [sourceId])
+
   const setMode = (mode: BrowserProfileCopyOptions['mode']) => {
     onCopyOptionsChange({
       ...copyOptions,
@@ -62,6 +82,19 @@ export function BrowserProfileCopyForm({
             autoFocus={autoFocusName}
           />
         </FormItem>
+        {sourceId && credentialSource === sourceId && (
+          <label className="flex items-center gap-2 text-sm text-[var(--color-text-primary)]">
+            <input
+              type="checkbox"
+              checked={!!copyOptions.copyGptCredential}
+              onChange={event => onCopyOptionsChange({ ...copyOptions, copyGptCredential: event.target.checked })}
+            />
+            同时复制 GPT 登录凭据
+          </label>
+        )}
+        {sourceId && credentialError === sourceId && (
+          <p role="alert" className="text-sm text-[var(--color-error)]">无法读取源实例的 GPT 登录凭据。</p>
+        )}
       </div>
 
       <div className="space-y-3">

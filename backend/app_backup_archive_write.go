@@ -80,6 +80,14 @@ func backupWritePackageZip(zipPath string, scope backup.Scope, manifest backup.M
 				fileCount += entryStats.fileCount
 				entryAddedFiles = entryStats.fileCount
 			} else {
+				private, err := isGPTVaultArchiveEntry(entry.SourcePath, entry.SourcePath, nil)
+				if err != nil {
+					return err
+				}
+				if private {
+					skippedEntries++
+					continue
+				}
 				if backupSamePath(entry.SourcePath, zipPath) || backupSamePath(entry.SourcePath, zipPath+".tmp") || backupSamePath(entry.SourcePath, metadataPath) || backupSamePath(entry.SourcePath, metadataPath+".tmp") {
 					skippedEntries++
 					progress := 20 + int(float64(i+1)/float64(totalEntries)*70)
@@ -168,6 +176,16 @@ func backupZipAddDir(w *zip.Writer, srcDir, archiveBase, outputZipPath, outputMe
 		if d.Type()&os.ModeSymlink != 0 {
 			return nil
 		}
+		private, err := isGPTVaultArchiveEntry(srcDir, path, d)
+		if err != nil {
+			return err
+		}
+		if private {
+			if d.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
 		rel, err := filepath.Rel(srcDir, path)
 		if err != nil {
 			return err
@@ -176,6 +194,9 @@ func backupZipAddDir(w *zip.Writer, srcDir, archiveBase, outputZipPath, outputMe
 			return nil
 		}
 		rel = filepath.ToSlash(rel)
+		if base == "payload/app/data" && isKeyPouchExtensionSiteFile(rel) {
+			return nil
+		}
 		targetName := base + "/" + rel
 		if d.IsDir() {
 			_, err := w.Create(strings.TrimSuffix(targetName, "/") + "/")

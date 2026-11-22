@@ -1,7 +1,9 @@
 package browser
 
 import (
+	"ant-chrome/backend/internal/keypouch"
 	"ant-chrome/backend/internal/logger"
+	"errors"
 	"fmt"
 	"regexp"
 	"strings"
@@ -32,7 +34,7 @@ var profileCopyNameSuffixPattern = regexp.MustCompile(`[[:space:]]*(?:\([[:space
 
 // Copy 复制实例配置（除指纹参数外全部复制，指纹使用默认值生成新种子）
 func (m *Manager) Copy(profileId string, newName string) (*Profile, error) {
-	return m.copyProfile(profileId, newName, nil, func(*Profile) []string {
+	return m.copyProfile(profileId, newName, nil, false, func(*Profile) []string {
 		return append([]string{}, m.Config.Browser.DefaultFingerprintArgs...)
 	})
 }
@@ -51,7 +53,7 @@ func (m *Manager) CopyWithOptions(profileId string, newName string, options Prof
 	if err != nil {
 		return nil, err
 	}
-	return m.copyProfile(profileId, newName, nil, func(src *Profile) []string {
+	return m.copyProfile(profileId, newName, nil, options.CopyGPTCredential, func(src *Profile) []string {
 		switch normalizedMode {
 		case copyModeRegular:
 			return append([]string{}, src.FingerprintArgs...)
@@ -62,18 +64,18 @@ func (m *Manager) CopyWithOptions(profileId string, newName string, options Prof
 }
 
 type copyDestination struct {
-	id, group string
+	id, rootGroupName string
 }
 
-// CopyBoundProfile saves a copy directly in its destination group. A stable
+// CopyBoundProfile saves a new copy directly in the named root group. A stable
 // ID lets a retried KeyPouch ticket find the same local profile after restart.
-func (m *Manager) CopyBoundProfile(sourceID, newName, id, group string) (*Profile, error) {
-	return m.copyProfile(sourceID, newName, &copyDestination{id, group}, func(*Profile) []string {
+func (m *Manager) CopyBoundProfile(sourceID, newName, id, rootGroupName string) (*Profile, error) {
+	return m.copyProfile(sourceID, newName, &copyDestination{id, rootGroupName}, false, func(*Profile) []string {
 		return append([]string{}, m.Config.Browser.DefaultFingerprintArgs...)
 	})
 }
 
-func (m *Manager) copyProfile(profileId string, newName string, dest *copyDestination, fingerprintResolver func(*Profile) []string) (*Profile, error) {
+func (m *Manager) copyProfile(profileId string, newName string, dest *copyDestination, copyGPTCredential bool, fingerprintResolver func(*Profile) []string) (*Profile, error) {
 	log := logger.New("Browser")
 	m.InitData()
 	m.Mutex.Lock()
@@ -88,14 +90,11 @@ func (m *Manager) copyProfile(profileId string, newName string, dest *copyDestin
 	now := time.Now()
 	nowText := now.Format(time.RFC3339)
 	newId := uuid.NewString()
-	groupID := src.GroupId
-	groupIDs := CloneGroupIDs(src.GroupIds)
 	if dest != nil {
 		if m.Profiles[dest.id] != nil {
-			return nil, fmt.Errorf("目标实例已存在")
+			return nil, ErrBoundProfileConflict
 		}
-		newId, groupID = dest.id, dest.group
-		groupIDs = uniqueGroupIDs([]string{groupID})
+		newId = dest.id
 	}
 
 	profileName := strings.TrimSpace(newName)
@@ -142,8 +141,8 @@ func (m *Manager) copyProfile(profileId string, newName string, dest *copyDestin
 		LaunchArgs:         append([]string{}, src.LaunchArgs...),
 		Tags:               append([]string{}, src.Tags...),
 		Keywords:           append([]string{}, src.Keywords...),
-		GroupId:            groupID,
-		GroupIds:           groupIDs,
+		GroupId:            src.GroupId,
+		GroupIds:           CloneGroupIDs(src.GroupIds),
 		Running:            false,
 		DebugPort:          0,
 		Pid:                0,
@@ -152,14 +151,35 @@ func (m *Manager) copyProfile(profileId string, newName string, dest *copyDestin
 		UpdatedAt:          nowText,
 	}
 
+	if copyGPTCredential {
+		c, err := keypouch.ReadLocalGPTCredential(m.AppRoot, profileId)
+		if err != nil {
+			return nil, err
+		}
+		if c == nil {
+			return nil, errors.New("源实例没有可复制的 GPT 登录凭据")
+		}
+		if err := keypouch.SaveLocalGPTCredential(m.AppRoot, newId, *c); err != nil {
+			return nil, err
+		}
+	}
 	m.Profiles[newId] = profile
-	log.Info("实例复制成功", logger.F("src_id", profileId), logger.F("new_id", newId), logger.F("new_name", profileName))
-
-	if err := m.SaveProfile(profile); err != nil {
+	var err error
+	if dest == nil {
+		err = m.SaveProfile(profile)
+	} else if dao, ok := m.ProfileDAO.(*SQLiteProfileDAO); ok {
+		err = dao.saveProfile(profile, &dest.rootGroupName)
+	} else {
+		err = fmt.Errorf("当前存储不支持实例分组")
+	}
+	if err != nil {
 		delete(m.Profiles, newId)
+		if copyGPTCredential {
+			err = errors.Join(err, keypouch.RemoveLocalGPTCredential(m.AppRoot, newId))
+		}
 		return nil, err
 	}
-
+	log.Info("实例复制成功", logger.F("src_id", profileId), logger.F("new_id", newId), logger.F("new_name", profileName))
 	m.ensureProfileLaunchCode(profile)
 	return profile, nil
 }

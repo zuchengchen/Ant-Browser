@@ -1,6 +1,7 @@
 package backend
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"strings"
@@ -19,7 +20,9 @@ func (a *App) BrowserInstanceStatus(profileId string) (*BrowserProfile, error) {
 	if !profile.Running {
 		userDataDir := a.browserMgr.ResolveUserDataDir(profile)
 		if detection, ok := detectBrowserRuntimeByUserDataDir(userDataDir); ok && detection.DebugReady {
-			a.markProfileRunningLocked(profileId, profile, nil, detection.PID, detection.DebugPort, true, "")
+			if err := a.adoptDetectedBrowserLocked(context.Background(), profile, detection); err != nil {
+				return profile, err
+			}
 			logger.New("Browser").Warn("状态查询发现同一用户数据目录浏览器已运行，已同步实例状态",
 				logger.F("profile_id", profileId),
 				logger.F("user_data_dir", userDataDir),
@@ -51,7 +54,10 @@ func (a *App) BrowserInstanceOpenUrl(profileId string, targetUrl string) (bool, 
 	if !profile.Running {
 		userDataDir := a.browserMgr.ResolveUserDataDir(profile)
 		if detection, ok := detectBrowserRuntimeByUserDataDir(userDataDir); ok && detection.DebugReady {
-			a.markProfileRunningLocked(profileId, profile, nil, detection.PID, detection.DebugPort, true, "")
+			if err := a.adoptDetectedBrowserLocked(context.Background(), profile, detection); err != nil {
+				a.browserMgr.Mutex.Unlock()
+				return false, err
+			}
 			log.Warn("打开地址前发现同一用户数据目录浏览器已运行，已同步实例状态",
 				logger.F("profile_id", profileId),
 				logger.F("user_data_dir", userDataDir),
@@ -79,6 +85,10 @@ func (a *App) BrowserInstanceOpenUrl(profileId string, targetUrl string) (bool, 
 		return false, fmt.Errorf("%s", profile.LastError)
 	}
 
+	if err := a.checkGPTBrowserOwnerLocked(profile, browserRuntimeDetection{}); err != nil {
+		a.browserMgr.Mutex.Unlock()
+		return false, err
+	}
 	snapshot := copyBrowserProfileSnapshot(profile)
 	a.browserMgr.Mutex.Unlock()
 	fingerprintExpectedArgs := a.fingerprintCheckExpectedArgsFromProfile(snapshot)

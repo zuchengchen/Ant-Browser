@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"ant-chrome/backend/internal/browser"
+	"ant-chrome/backend/internal/keypouch"
 
 	"github.com/google/uuid"
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
@@ -165,7 +166,7 @@ func (a *App) BrowserProfilePackageExport(profileIds []string) (ProfilePackageEx
 	return a.browserProfilePackageExportWithOptions(profileIds, ProfilePackageExportOptions{})
 }
 
-// BrowserProfilePackageExportWithOptions 导出实例，并可选择迁移密码保护的登录 Cookie。
+// BrowserProfilePackageExportWithOptions 导出实例，并可用迁移密码保护登录 Cookie 和 GPT 登录凭据。
 func (a *App) BrowserProfilePackageExportWithOptions(profileIds []string, options ProfilePackageExportOptions) (ProfilePackageExportResult, error) {
 	return a.browserProfilePackageExportWithOptions(profileIds, options)
 }
@@ -208,7 +209,7 @@ func (a *App) browserProfilePackageExportWithOptions(profileIds []string, option
 	}
 	portableSessionWarning := ""
 	if portableSessionPassword == "" {
-		portableSessionWarning = "未迁移跨电脑登录态；如需保留登录 Cookie，请使用登录态迁移密码导出。"
+		portableSessionWarning = "如需迁移登录 Cookie 和 GPT 登录凭据，请设置登录态迁移密码。"
 	}
 	return ProfilePackageExportResult{
 		Cancelled:                   false,
@@ -335,6 +336,10 @@ func (a *App) writeProfilePackageWithPortableSessions(zipPath string, profiles [
 			return 0, 0, err
 		}
 	}
+	return a.writeProfilePackageArchive(zipPath, profiles, databaseSnapshot, portableSessions, portableSessionPassword)
+}
+
+func (a *App) writeProfilePackageArchive(zipPath string, profiles []browser.Profile, databaseSnapshot ProfilePackageDatabase, portableSessions map[string][]CookieInfo, portableSessionPassword string) (int, int, error) {
 	if err := os.MkdirAll(filepath.Dir(zipPath), 0o755); err != nil {
 		return 0, 0, fmt.Errorf("创建导出目录失败: %w", err)
 	}
@@ -422,7 +427,11 @@ func (a *App) writeProfilePackageWithPortableSessions(zipPath string, profiles [
 			if !exists {
 				continue
 			}
-			encrypted, err := encryptPortableProfileSession(profileID, cookies, portableSessionPassword)
+			credential, err := a.readLocalGPTCredential(profileID)
+			if err != nil {
+				return err
+			}
+			encrypted, err := encryptPortableProfileSession(profileID, cookies, credential, portableSessionPassword)
 			if err != nil {
 				return err
 			}
@@ -522,6 +531,19 @@ func openProfilePackageContents(zipPath string) (*profilePackageContents, error)
 			return nil, fmt.Errorf("实例包包含重复的登录态迁移文件: %s", profileID)
 		}
 		portableEntries[profileID] = file
+	}
+	// Encrypted exports produced by Ant declare one authenticated entry per
+	// profile. A dropped or unrelated entry must fail before any overwrite.
+	if manifest.PortableSessionVersion > 0 || manifest.PortableSessionProfileCount > 0 {
+		if manifest.PortableSessionVersion != portableSessionVersion || len(portableEntries) != len(profiles) ||
+			manifest.PortableSessionProfileCount != len(profiles) {
+			return nil, fmt.Errorf("实例包的登录态迁移条目不完整")
+		}
+		for _, profile := range profiles {
+			if portableEntries[profile.ProfileId] == nil {
+				return nil, fmt.Errorf("实例包缺少对应的登录态迁移条目")
+			}
+		}
 	}
 	contents.PortableSessionEntries = portableEntries
 	completed = true
@@ -698,6 +720,7 @@ func (a *App) importProfilePackageFromPathWithModeAndPortableSession(zipPath str
 		return ProfilePackageImportResult{}, fmt.Errorf("浏览器管理器未初始化")
 	}
 	portableSessions := make(map[string][]CookieInfo, len(contents.PortableSessionEntries))
+	portableCredentials := make(map[string]*localGPTCredential)
 	portableSessionWarnings := make([]string, 0)
 	if len(contents.PortableSessionEntries) > 0 {
 		if portableSessionPassword == "" {
@@ -718,7 +741,7 @@ func (a *App) importProfilePackageFromPathWithModeAndPortableSession(zipPath str
 			if openErr != nil {
 				return ProfilePackageImportResult{}, fmt.Errorf("读取实例「%s」登录态迁移文件失败: %w", source.ProfileName, openErr)
 			}
-			cookies, readErr := readPortableProfileSessionFile(reader, file.UncompressedSize64, sourceID, portableSessionPassword)
+			session, readErr := readPortableProfileSessionFile(reader, file.UncompressedSize64, sourceID, portableSessionPassword)
 			closeErr := reader.Close()
 			if readErr != nil {
 				return ProfilePackageImportResult{}, fmt.Errorf("实例「%s」登录态迁移失败: %w", source.ProfileName, readErr)
@@ -726,7 +749,10 @@ func (a *App) importProfilePackageFromPathWithModeAndPortableSession(zipPath str
 			if closeErr != nil {
 				return ProfilePackageImportResult{}, fmt.Errorf("关闭实例「%s」登录态迁移文件失败: %w", source.ProfileName, closeErr)
 			}
-			portableSessions[sourceID] = cookies
+			portableSessions[sourceID] = session.Cookies
+			if session.GPTCredential != nil {
+				portableCredentials[sourceID] = session.GPTCredential
+			}
 		}
 	}
 	a.browserMgr.InitData()
@@ -798,11 +824,15 @@ func (a *App) importProfilePackageFromPathWithModeAndPortableSession(zipPath str
 	swaps := make([]profilePackageDirectorySwap, 0, len(contents.Profiles))
 	originalProfiles := make(map[string]*browser.Profile, len(contents.Profiles))
 	createdExtensionPaths := make([]string, 0)
+	createdCredentialIDs := make([]string, 0, len(portableCredentials))
 	committed := false
 	defer func() {
 		_ = os.RemoveAll(stagingRoot)
 		if committed {
 			return
+		}
+		for _, id := range createdCredentialIDs {
+			_ = keypouch.RemoveLocalGPTCredential(a.appRoot, id)
 		}
 		for index := len(createdExtensionPaths) - 1; index >= 0; index-- {
 			_ = os.RemoveAll(createdExtensionPaths[index])
@@ -991,6 +1021,16 @@ func (a *App) importProfilePackageFromPathWithModeAndPortableSession(zipPath str
 			return ProfilePackageImportResult{}, err
 		}
 		swaps = append(swaps, swap)
+	}
+	// New, renamed and overwritten imports each receive a fresh ID. Stage the
+	// new credentials before committing profiles; replaced IDs remain in trash.
+	for _, item := range prepared {
+		if credential := portableCredentials[item.OldProfileID]; credential != nil {
+			if err := a.saveLocalGPTCredential(item.Profile.ProfileId, *credential); err != nil {
+				return ProfilePackageImportResult{}, err
+			}
+			createdCredentialIDs = append(createdCredentialIDs, item.Profile.ProfileId)
+		}
 	}
 	legacyDatabaseRestore := contents.DatabaseSnapshot == nil && a.db != nil && a.db.GetConn() != nil
 	if contents.DatabaseSnapshot != nil {
@@ -1452,6 +1492,16 @@ func writeProfilePackageDir(zipWriter *zip.Writer, srcDir string, destPrefix str
 		if walkErr != nil {
 			return walkErr
 		}
+		private, err := isGPTVaultArchiveEntry(srcDir, path, entry)
+		if err != nil {
+			return err
+		}
+		if private {
+			if entry.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
 		rel, err := filepath.Rel(srcDir, path)
 		if err != nil {
 			return err
@@ -1488,6 +1538,13 @@ func writeProfilePackageDir(zipWriter *zip.Writer, srcDir string, destPrefix str
 }
 
 func writeProfilePackageFile(zipWriter *zip.Writer, srcPath string, destPath string) error {
+	private, err := isGPTVaultArchiveEntry(srcPath, srcPath, nil)
+	if err != nil {
+		return err
+	}
+	if private {
+		return fmt.Errorf("不能将本机 GPT 凭据目录的文件用作实例包附件")
+	}
 	file, err := os.Open(srcPath)
 	if err != nil {
 		return err

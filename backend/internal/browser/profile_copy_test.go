@@ -51,7 +51,7 @@ func TestCopyDynamicProfilePreservesGroupWithoutFixedBinding(t *testing.T) {
 		ProxyBindUpdatedAt: "2026-08-24T00:00:00Z",
 	}
 
-	profile, err := manager.copyProfile("source-profile", "复制实例", nil, func(*Profile) []string { return nil })
+	profile, err := manager.copyProfile("source-profile", "复制实例", nil, false, func(*Profile) []string { return nil })
 	if err != nil {
 		t.Fatalf("copyProfile returned error: %v", err)
 	}

@@ -5,6 +5,7 @@ import (
 	"ant-chrome/backend/internal/launchcode"
 	"errors"
 	"fmt"
+	"os"
 	"time"
 )
 
@@ -27,6 +28,9 @@ func (a *App) resetManagedSettings() error {
 		defer scheduler.endReset()
 	}
 
+	// A KeyPouch link may acquire maintenanceMu while opening a profile.
+	a.keyPouchActionMu.Lock()
+	defer a.keyPouchActionMu.Unlock()
 	a.maintenanceMu.Lock()
 	defer a.maintenanceMu.Unlock()
 
@@ -73,12 +77,12 @@ func (a *App) resetManagedSettings() error {
 		}
 	}
 
-	if err := a.removeBackupLocalConfigs(); err != nil {
+	if err := a.resetLocalManagedSettingsLocked(); err != nil {
 		rollbackErr := a.rollbackManagedSettings(previous, previousServerPort)
 		if rollbackErr != nil {
-			return fmt.Errorf("删除本地备份凭据失败：%w；恢复设置失败：%v", err, rollbackErr)
+			return fmt.Errorf("重置本机设置失败：%w；恢复设置失败：%v", err, rollbackErr)
 		}
-		return fmt.Errorf("删除本地备份凭据失败：%w", err)
+		return err
 	}
 
 	if a.automationMgr != nil {
@@ -89,6 +93,32 @@ func (a *App) resetManagedSettings() error {
 		scheduler.applyResetSettings(defaults.Backup)
 	}
 	return nil
+}
+
+func (a *App) resetLocalManagedSettingsLocked() error {
+	path, err := a.keyPouchSettingsPath()
+	if err != nil {
+		return err
+	}
+	return a.updateKeyPouchSiteLocked(validKeyPouchFallback(), func() error {
+		previous, err := readKeyPouchSiteFile(path)
+		if errors.Is(err, os.ErrNotExist) {
+			return a.removeBackupLocalConfigs()
+		}
+		if err != nil {
+			return fmt.Errorf("读取 KeyPouch 本机设置失败：%w", err)
+		}
+		if err := os.Remove(path); err != nil {
+			return fmt.Errorf("清除 KeyPouch 本机设置失败：%w", err)
+		}
+		if err := a.removeBackupLocalConfigs(); err != nil {
+			if restoreErr := writeKeyPouchSiteFile(path, previous); restoreErr != nil {
+				return errors.Join(err, fmt.Errorf("恢复 KeyPouch 本机设置失败：%w", restoreErr))
+			}
+			return err
+		}
+		return nil
+	})
 }
 
 func (s *backupScheduler) beginReset() error {

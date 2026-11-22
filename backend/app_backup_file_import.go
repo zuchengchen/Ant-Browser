@@ -24,7 +24,7 @@ func (a *App) backupImportFileTreesWithRollback(payloadRoot string, incomingCfg 
 	appDataSrc := filepath.Join(payloadRoot, "app", "data")
 	appDataDst := a.resolveAppPath("data")
 	if backupPathExists(appDataSrc) {
-		if err := backupSyncDir(appDataSrc, appDataDst, stats, backupShouldSkipAppDBFile, rollback); err != nil {
+		if err := backupSyncDir(appDataSrc, appDataDst, stats, backupShouldSkipAppDataFile, rollback); err != nil {
 			report("app_data_root", "应用数据目录（含数据库、快照及默认浏览器数据）", err)
 		}
 	}

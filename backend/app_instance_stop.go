@@ -23,6 +23,7 @@ func (a *App) BrowserInstanceStop(profileId string) (*BrowserProfile, error) {
 	}
 
 	cmd := a.browserMgr.BrowserProcesses[profileId]
+	debugPort := profile.DebugPort
 	if cmd == nil && (!profile.Running || profile.DebugPort <= 0 || !debugPortReachableForStop(profile.DebugPort, 250*time.Millisecond)) {
 		userDataDir := a.browserMgr.ResolveUserDataDir(profile)
 		if detection, detected := detectBrowserRuntimeForStop(userDataDir); detected {
@@ -31,8 +32,12 @@ func (a *App) BrowserInstanceStop(profileId string) (*BrowserProfile, error) {
 				profile.LastError = err.Error()
 				return profile, err
 			}
-			a.markProfileRunningLocked(profileId, profile, nil, detection.PID, detection.DebugPort, true, "")
-			log.Warn("停止前发现同一用户数据目录浏览器仍在运行，已同步实例状态",
+			if err := a.checkGPTBrowserOwnerLocked(profile, detection); err != nil {
+				profile.LastError = err.Error()
+				return profile, err
+			}
+			debugPort = detection.DebugPort
+			log.Warn("停止前确认同一用户数据目录的浏览器仍在运行",
 				logger.F("profile_id", profileId),
 				logger.F("user_data_dir", userDataDir),
 				logger.F("pid", detection.PID),
@@ -40,7 +45,6 @@ func (a *App) BrowserInstanceStop(profileId string) (*BrowserProfile, error) {
 			)
 		}
 	}
-	debugPort := profile.DebugPort
 	if closeBrowserViaCDPForStop(debugPort, 5*time.Second) {
 		a.markProfileStoppedLocked(profileId, profile)
 		log.Info("实例停止", logger.F("profile_id", profileId), logger.F("method", "cdp"), logger.F("debug_port", debugPort))

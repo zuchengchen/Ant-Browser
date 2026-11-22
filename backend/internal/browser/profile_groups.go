@@ -3,12 +3,18 @@ package browser
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
+)
+
+var (
+	ErrAmbiguousGroupName   = errors.New("分组名称有歧义，请改用 groupIds 指定分组")
+	ErrRootGroupUnavailable = errors.New("目标顶层分组不可用")
 )
 
 func CloneGroupIDs(ids []string) []string {
@@ -58,6 +64,18 @@ func ResolveLegacyGroupNames(tx *sql.Tx, names []string, create bool) ([]string,
 func ResolveLegacyRootGroupNames(tx *sql.Tx, names []string) ([]string, error) {
 	return resolveLegacyGroupNames(tx, names, true, true)
 }
+
+func ensureRootGroup(tx *sql.Tx, name string) (string, error) {
+	ids, err := ResolveLegacyRootGroupNames(tx, []string{strings.TrimSpace(name)})
+	if err != nil {
+		return "", fmt.Errorf("%w: %w", ErrRootGroupUnavailable, err)
+	}
+	if len(ids) != 1 {
+		return "", ErrRootGroupUnavailable
+	}
+	return ids[0], nil
+}
+
 func resolveLegacyGroupNames(tx *sql.Tx, names []string, create, rootOnly bool) ([]string, error) {
 	ids := []string{}
 	for _, name := range names {
@@ -87,7 +105,7 @@ func resolveLegacyGroupNames(tx *sql.Tx, names []string, create, rootOnly bool) 
 		}
 		rows.Close()
 		if len(matches) > 1 {
-			return nil, fmt.Errorf("分组名称有歧义，请改用 groupIds 指定分组")
+			return nil, ErrAmbiguousGroupName
 		}
 		if len(matches) == 1 {
 			ids = append(ids, matches[0])
@@ -343,6 +361,40 @@ func (d *SQLiteProfileDAO) ChangeGroupsWithSnapshot(profileIDs, groupIDs []strin
 	}
 	return snapshot, nil
 }
+
+// EnsureProfileRootGroup resolves the named root and adds its membership in
+// one transaction. Return the committed profile so the manager can refresh its
+// classification while retaining process state.
+func (d *SQLiteProfileDAO) EnsureProfileRootGroup(profileID, name string) (*Profile, bool, error) {
+	tx, err := d.db.Begin()
+	if err != nil {
+		return nil, false, err
+	}
+	defer tx.Rollback()
+	id, err := ensureRootGroup(tx, name)
+	if err != nil {
+		return nil, false, err
+	}
+	var member bool
+	err = tx.QueryRow(`SELECT EXISTS(SELECT 1 FROM browser_profile_groups WHERE profile_id=? AND group_id=?)`, profileID, id).Scan(&member)
+	if err != nil {
+		return nil, false, err
+	}
+	if !member {
+		if err := d.changeGroupsTx(tx, []string{profileID}, []string{id}, "add"); err != nil {
+			return nil, false, err
+		}
+	}
+	p, err := scanProfile(tx.QueryRow(profileSelect+` WHERE profile_id=? AND COALESCE(deleted_at,'')=''`, profileID))
+	if err != nil {
+		return nil, false, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, false, err
+	}
+	return p, !member, nil
+}
+
 func (d *SQLiteProfileDAO) ChangeLegacyTagsWithSnapshot(profileIDs, names []string, remove bool) ([]*Profile, error) {
 	tx, err := d.db.Begin()
 	if err != nil {

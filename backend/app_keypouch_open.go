@@ -9,187 +9,188 @@ import (
 	"net/url"
 	"regexp"
 	"runtime"
-	"slices"
 	"strconv"
 	"strings"
 	"time"
 
+	"ant-chrome/backend/internal/browser"
 	"ant-chrome/backend/internal/keypouch"
 	"github.com/google/uuid"
 )
 
 type keyPouchOpenClaim struct {
-	Action    string `json:"action"`
-	RecordID  int64  `json:"record_id"`
-	Email     string `json:"email"`
-	GroupID   int64  `json:"group_id"`
-	GroupName string `json:"group_name"`
+	Action         string `json:"action"`
+	RecordID       int64  `json:"record_id"`
+	Email          string `json:"email"`
+	GroupID        int64  `json:"group_id"`
+	GroupName      string `json:"group_name"`
+	CredentialSync bool   `json:"credential_sync"`
 }
 
 const keyPouchTemplate = "KeyPouch 实例模板"
 
-func keyPouchProfileID(recordID int64) string {
-	return uuid.NewSHA1(uuid.NameSpaceURL, []byte(keyPouchSite()+"/records/"+strconv.FormatInt(recordID, 10))).String()
+func keyPouchProfileID(site string, recordID int64) string {
+	return uuid.NewSHA1(uuid.NameSpaceURL, []byte(site+"/records/"+strconv.FormatInt(recordID, 10))).String()
 }
 
-func (a *App) keyPouchGroup(name string, bound *BrowserProfile) (string, string) {
-	groups, err := a.browserMgr.GroupDAO.List()
-	if err != nil {
-		return "", "group_unavailable"
-	}
-	var id string
-	for _, g := range groups {
-		if g.ParentId != "" || g.GroupName != name {
-			continue
-		}
-		if id != "" {
-			return "", "group_conflict"
-		}
-		id = g.GroupId
-	}
-	if bound != nil {
-		member := slices.Contains(bound.GroupIds, id) || (bound.GroupIds == nil && bound.GroupId == id)
-		if id == "" || !member {
-			return "", "group_conflict"
-		}
-	}
-	if id != "" {
-		return id, ""
-	}
-	g, err := a.CreateGroup(BrowserGroupInput{GroupName: name})
-	if err != nil {
-		return "", "group_unavailable"
-	}
-	return g.GroupId, ""
+// Only a user-confirmed local ID may be adopted. The site's grammar also
+// permits IDs from older Ant releases, while UUIDv5 identifies bound copies.
+var keyPouchLocalID = regexp.MustCompile("^[A-Za-z0-9_-]{1,128}$")
+
+type keyPouchProfileMatch struct {
+	bound, candidate, template string
 }
 
-func (a *App) keyPouchProfile(c keyPouchOpenClaim, links *keypouch.ProfileLinks, acceptExisting func() bool) (string, string) {
+func (a *App) keyPouchProfile(site string, c keyPouchOpenClaim, links *keypouch.ProfileLinks, acceptExisting func() bool) (string, string) {
 	m := a.browserMgr
 	if m == nil || m.ProfileDAO == nil || m.GroupDAO == nil {
 		return "", "storage_error"
 	}
-	linked := links.ProfileID(c.RecordID)
-	id := linked
+	id := links.ProfileID(c.RecordID)
 	if id == "" {
-		id = keyPouchProfileID(c.RecordID)
+		id = keyPouchProfileID(site, c.RecordID)
 	}
-	// Read through the DAOs to distinguish unavailable storage, deleted profiles,
-	// and existing Ant profiles that happen to use the same email.
+	match, reason := a.resolveKeyPouchProfile(c, id, "", links)
+	if reason != "" {
+		return "", reason
+	}
+	if match.candidate != "" {
+		if !acceptExisting() {
+			return "", "cancelled"
+		}
+		// Both the identity and the memberships can change while the dialog is open.
+		match, reason = a.resolveKeyPouchProfile(c, id, match.candidate, links)
+		if reason != "" {
+			return "", reason
+		}
+	}
+	if match.bound != "" {
+		return match.bound, ""
+	}
+	if match.template == "" {
+		template, err := a.BrowserProfileCreate(BrowserProfileInput{ProfileName: keyPouchTemplate})
+		if err != nil {
+			return "", "template_missing"
+		}
+		match.template = template.ProfileId
+	}
+	_, err := m.CopyBoundProfile(match.template, c.Email, id, c.GroupName)
+	switch {
+	case err == nil:
+		return id, ""
+	case errors.Is(err, browser.ErrBoundProfileConflict):
+		return "", "profile_conflict"
+	case errors.Is(err, browser.ErrAmbiguousGroupName):
+		return "", "group_conflict"
+	case errors.Is(err, browser.ErrRootGroupUnavailable):
+		return "", "group_unavailable"
+	default:
+		return "", "create_failed"
+	}
+}
+
+func (a *App) resolveKeyPouchProfile(c keyPouchOpenClaim, recordProfileID, confirmedID string, links *keypouch.ProfileLinks) (match keyPouchProfileMatch, reason string) {
+	m := a.browserMgr
+	m.Mutex.Lock()
+	var updated *BrowserProfile
+	defer func() {
+		m.Mutex.Unlock()
+		a.emitBrowserInstanceUpdated(updated)
+	}()
+	id := recordProfileID
+	if confirmedID != "" {
+		id = confirmedID
+	}
+	if !links.Available(c.RecordID, id) {
+		return match, "profile_conflict"
+	}
 	profiles, err := m.ProfileDAO.List()
 	if err != nil {
-		return "", "storage_error"
+		return match, "storage_error"
 	}
 	deleted, err := m.ProfileDAO.ListDeleted()
 	if err != nil {
-		return "", "storage_error"
+		return match, "storage_error"
 	}
-	var bound, candidate, template *BrowserProfile
 	templateDeleted := false
 	for _, p := range deleted {
-		if p.ProfileId == id {
-			return "", "profile_unavailable"
+		if p.ProfileId == id || p.ProfileId == recordProfileID {
+			return match, "profile_unavailable"
 		}
 		templateDeleted = templateDeleted || p.ProfileName == keyPouchTemplate
 	}
 	for _, p := range profiles {
 		if p.ProfileId == id {
 			if p.ProfileName != c.Email {
-				return "", "profile_conflict"
+				return match, "profile_conflict"
 			}
-			bound = p
+			match.bound = p.ProfileId
+		} else if p.ProfileId == recordProfileID {
+			return match, "profile_conflict"
 		} else if strings.EqualFold(p.ProfileName, c.Email) {
-			if candidate != nil || p.ProfileName != c.Email {
-				return "", "profile_conflict"
+			if match.candidate != "" || p.ProfileName != c.Email {
+				return match, "profile_conflict"
 			}
-			candidate = p
+			match.candidate = p.ProfileId
 		}
 		if p.ProfileName == keyPouchTemplate {
-			if template != nil {
-				return "", "profile_conflict"
+			if match.template != "" {
+				return match, "profile_conflict"
 			}
-			template = p
+			match.template = p.ProfileId
 		}
 	}
-	if bound == nil && linked != "" {
-		return "", "profile_unavailable"
+	if match.bound == "" && (confirmedID != "" || links.ProfileID(c.RecordID) != "") {
+		return match, "profile_unavailable"
 	}
-	if candidate != nil {
-		if bound != nil {
-			return "", "profile_conflict"
+	if match.candidate != "" {
+		uid, err := uuid.Parse(match.candidate)
+		if match.bound != "" || !keyPouchLocalID.MatchString(match.candidate) ||
+			(err == nil && uid.Version() == 5) || !links.Available(c.RecordID, match.candidate) {
+			return match, "profile_conflict"
 		}
-		return a.adoptKeyPouchProfile(c, candidate, links, acceptExisting)
+		return match, ""
 	}
-	if bound == nil && template == nil && templateDeleted {
-		return "", "template_missing"
-	}
-	group, reason := a.keyPouchGroup(c.GroupName, bound)
-	if reason != "" {
-		return "", reason
-	}
-	if bound != nil {
-		return id, ""
-	}
-	if template == nil {
-		template, err = a.BrowserProfileCreate(BrowserProfileInput{ProfileName: keyPouchTemplate})
-		if err != nil {
-			return "", "template_missing"
+	if match.bound == "" {
+		if match.template == "" && templateDeleted {
+			return match, "template_missing"
 		}
+		return match, ""
 	}
-	_, err = m.CopyBoundProfile(template.ProfileId, c.Email, id, group)
+	dao, ok := m.ProfileDAO.(*browser.SQLiteProfileDAO)
+	if !ok {
+		return match, "group_unavailable"
+	}
+	p, changed, err := dao.EnsureProfileRootGroup(id, c.GroupName)
+	if errors.Is(err, browser.ErrAmbiguousGroupName) {
+		return match, "group_conflict"
+	}
 	if err != nil {
-		return "", "create_failed"
+		return match, "group_unavailable"
 	}
-	return id, ""
+	m.ApplyGroupSnapshotLocked([]*browser.Profile{p})
+	if changed {
+		updated = copyBrowserProfileSnapshot(m.Profiles[id])
+	}
+	if confirmedID != "" {
+		if err := links.Bind(c.RecordID, id); err != nil {
+			return match, "storage_error"
+		}
+	}
+	return match, ""
 }
 
-// Match only the original local profile explicitly selected by the user. The
-// site's profile-ID grammar also permits IDs from older Ant releases.
-var keyPouchLocalID = regexp.MustCompile("^[A-Za-z0-9_-]{1,128}$")
-
-func (a *App) adoptKeyPouchProfile(c keyPouchOpenClaim, p *BrowserProfile, links *keypouch.ProfileLinks, accept func() bool) (string, string) {
-	uid, err := uuid.Parse(p.ProfileId)
-	if !keyPouchLocalID.MatchString(p.ProfileId) || (err == nil && uid.Version() == 5) || !links.Available(c.RecordID, p.ProfileId) {
-		return "", "profile_conflict"
-	}
-	group, reason := a.keyPouchGroup(c.GroupName, p)
-	if reason != "" {
-		return "", reason
-	}
-	if !accept() {
-		return "", "cancelled"
-	}
-	// The confirmation dialog may stay open while the local profile changes.
-	current, err := a.browserMgr.ProfileDAO.GetById(p.ProfileId)
-	if err != nil || current == nil || current.DeletedAt != "" {
-		return "", "profile_unavailable"
-	}
-	if current.ProfileName != c.Email {
-		return "", "profile_conflict"
-	}
-	currentGroup, reason := a.keyPouchGroup(c.GroupName, current)
-	if reason != "" {
-		return "", reason
-	}
-	if currentGroup != group {
-		return "", "group_conflict"
-	}
-	if err = links.Bind(c.RecordID, p.ProfileId); err != nil {
-		return "", "storage_error"
-	}
-	return p.ProfileId, ""
-}
-
-func (a *App) keyPouchOpen(ctx context.Context, c keyPouchOpenClaim, device *keypouch.Device, focusWindow func(int) bool) (string, string) {
+func (a *App) keyPouchOpenProfile(ctx context.Context, site string, c keyPouchOpenClaim, device *keypouch.Device) (string, string) {
 	links, err := device.LoadProfileLinks()
 	if err != nil {
 		return "", "storage_error"
 	}
-	id, reason := a.keyPouchProfile(c, links, func() bool { return confirmKeyPouchProfile(ctx, c) })
-	if reason != "" {
-		return "", reason
-	}
+	return a.keyPouchProfile(site, c, links, func() bool { return confirmKeyPouchProfile(ctx, c) })
+}
+
+func (a *App) openKeyPouchWindow(ctx context.Context, id string, focusWindow func(int) bool) string {
 	if _, err := a.BrowserInstanceStart(id); err != nil {
-		return "", "open_failed"
+		return "open_failed"
 	}
 	// The native launcher can return while Chromium is still creating a window.
 	// Do not acknowledge the open until the window can be brought forward.
@@ -199,6 +200,8 @@ func (a *App) keyPouchOpen(ctx context.Context, c keyPouchOpenClaim, device *key
 	defer tick.Stop()
 	var lastLookup time.Time
 	detachedPID := 0
+	openedWindow := false
+	windowGrace := time.Now().Add(600 * time.Millisecond)
 	for {
 		a.browserMgr.Mutex.Lock()
 		p := a.browserMgr.Profiles[id]
@@ -211,7 +214,7 @@ func (a *App) keyPouchOpen(ctx context.Context, c keyPouchOpenClaim, device *key
 		a.browserMgr.Mutex.Unlock()
 		if runtime.GOOS == "windows" {
 			if pid > 0 && focusWindow(pid) {
-				return id, ""
+				return ""
 			}
 			// A packaged Chromium launcher can exit before its actual window appears.
 			if dir != "" && time.Since(lastLookup) >= time.Second {
@@ -221,14 +224,23 @@ func (a *App) keyPouchOpen(ctx context.Context, c keyPouchOpenClaim, device *key
 				}
 			}
 			if detachedPID > 0 && detachedPID != pid && focusWindow(detachedPID) {
-				return id, ""
+				return ""
 			}
 		} else if (pid > 0 && focusKeyPouchBrowserWindow(pid)) || (port > 0 && keyPouchFocusTab(focus, port) == nil) {
-			return id, ""
+			return ""
+		}
+		// A background Chromium can be live with zero windows. The explicit
+		// web action should open one, including on first launch while Chromium
+		// is finishing its startup. Never add a tab to an existing window.
+		if !openedWindow && port > 0 && time.Now().After(windowGrace) {
+			if pages, err := keyPouchPageIDs(focus, port); err == nil && len(pages) == 0 {
+				openedWindow = true
+				_, _ = cdpBrowserCallResult(port, "Target.createTarget", map[string]any{"url": "about:blank", "newWindow": true})
+			}
 		}
 		select {
 		case <-focus.Done():
-			return "", "focus_failed"
+			return "focus_failed"
 		case <-tick.C:
 		}
 	}

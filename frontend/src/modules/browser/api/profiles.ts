@@ -11,7 +11,13 @@ import type {
   BrowserProfilePackageImportAction,
   BrowserProfilePackageImportResult,
 } from '../types'
-import { getBindings, getMockProfiles, nowISOString, setMockProfiles } from './runtime'
+import { getBindings, getGoApp, getMockProfiles, nowISOString, setMockProfiles } from './runtime'
+
+export async function hasBrowserProfileGPTCredential(profileId: string): Promise<boolean> {
+  const app = getGoApp()
+  if (!app?.BrowserProfileHasLocalGPTCredential) return false
+  return app.BrowserProfileHasLocalGPTCredential(profileId)
+}
 
 export async function fetchBrowserProfiles(): Promise<BrowserProfile[]> {
   const bindings: any = await getBindings()
@@ -322,6 +328,9 @@ export async function copyBrowserProfile(
   const bindings: any = await getBindings()
   if (bindings?.BrowserProfileCopyWithOptions) {
     return (await bindings.BrowserProfileCopyWithOptions(profileId, newName, options)) || null
+  }
+  if (options.copyGptCredential) {
+    throw new Error('当前版本无法复制 GPT 登录凭据。')
   }
   if (bindings?.BrowserProfileCopyWithMode) {
     return (await bindings.BrowserProfileCopyWithMode(profileId, newName, options.mode)) || null

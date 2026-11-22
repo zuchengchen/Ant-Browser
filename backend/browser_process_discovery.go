@@ -3,6 +3,8 @@ package backend
 import (
 	"errors"
 	"fmt"
+	"net/http"
+	"net/url"
 	"os"
 	"regexp"
 	"strconv"
@@ -50,7 +52,10 @@ func detectBrowserRuntimeByUserDataDir(userDataDir string) (browserRuntimeDetect
 	if detection, ok := detectBrowserRuntimeByActivePort(userDataDir); ok {
 		return detection, true
 	}
+	return detectBrowserRuntimeFromProcesses(userDataDir)
+}
 
+func detectBrowserRuntimeFromProcesses(userDataDir string) (browserRuntimeDetection, bool) {
 	processes, err := findBrowserUserDataProcesses(userDataDir)
 	if err != nil || len(processes) == 0 {
 		return browserRuntimeDetection{}, false
@@ -78,13 +83,22 @@ func detectBrowserRuntimeByActivePort(userDataDir string) (browserRuntimeDetecti
 		return browserRuntimeDetection{}, false
 	}
 
-	if debugPort, err := readBrowserDebugPortFile(userDataDir); err == nil && debugPort > 0 {
-		if err := probeBrowserDebugPort(debugPort, browserDebugProbeTimeout); err == nil {
-			return browserRuntimeDetection{DebugPort: debugPort, DebugReady: true}, true
-		}
+	port, path, err := readBrowserDebugEndpointFile(userDataDir)
+	if err != nil || !strings.HasPrefix(path, "/devtools/browser/") || path == "/devtools/browser/" {
+		return browserRuntimeDetection{}, false
 	}
-
-	return browserRuntimeDetection{}, false
+	// A stale file can have the new port of a different live instance. Match
+	// the browser UUID as well. Kernels without it use OS process discovery.
+	client := &http.Client{Timeout: browserDebugProbeTimeout, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	var version cdpBrowserVersion
+	if fetchBrowserDebugJSON(client, port, "/json/version", &version) != nil {
+		return browserRuntimeDetection{}, false
+	}
+	endpoint, err := url.Parse(version.WebSocketDebuggerUrl)
+	if err != nil || endpoint.Scheme != "ws" || endpoint.Path != path || endpoint.Host != "127.0.0.1:"+strconv.Itoa(port) {
+		return browserRuntimeDetection{}, false
+	}
+	return browserRuntimeDetection{DebugPort: port, DebugReady: true}, true
 }
 
 // terminateBrowserUserDataOrphans 结束同一用户数据目录下无法被 CDP 接管的残留浏览器进程。

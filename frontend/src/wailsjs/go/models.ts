@@ -2060,6 +2060,7 @@ export namespace browser {
 	export class ProfileCopyOptions {
 	    mode: string;
 	    automationTargets: string[];
+	    copyGptCredential?: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new ProfileCopyOptions(source);
@@ -2069,6 +2070,7 @@ export namespace browser {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.mode = source["mode"];
 	        this.automationTargets = source["automationTargets"];
+	        this.copyGptCredential = source["copyGptCredential"];
 	    }
 	}
 	export class ProfileExtensionSettings {

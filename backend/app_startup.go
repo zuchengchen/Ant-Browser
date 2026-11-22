@@ -211,10 +211,15 @@ func (a *App) startupInitManagers(cfg *config.Config, db *database.DB) error {
 	}
 
 	a.browserMgr.InitData()
-	a.recoverBrowserRuntimeStates()
+	a.keyPouchActionMu.Lock()
 	if err := a.browserMgr.SyncBuiltinExtensions(); err != nil {
 		logger.New("Browser").Error("初始化内置插件失败", logger.F("error", err))
 	}
+	if err := a.syncKeyPouchExtensionSite(a.keyPouchSite()); err != nil {
+		logger.New("Browser").Error("初始化「登录 GPT」插件的站点失败", logger.F("error", err))
+	}
+	a.keyPouchActionMu.Unlock()
+	a.recoverBrowserRuntimeStates()
 	if err := a.browserMgr.MigrateLegacyExternalExtensionRegistry(); err != nil {
 		logger.New("Browser").Error("启动迁移旧版插件外部注册失败", logger.F("error", err))
 	}
