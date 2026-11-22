@@ -294,11 +294,18 @@ func chainSocks5Outbound(hop chainSocks5Hop, tag string, nextTag string) map[str
 		}
 		return chainHTTPOutbound(hop, tag, nextTag)
 	}
+	hop.Username = strings.TrimSpace(hop.Username)
+	if strings.TrimSpace(hop.Password) == "" {
+		hop.Password = ""
+	}
+	return xraySocksOutbound(hop, tag, nextTag)
+}
 
+func xraySocksOutbound(hop chainSocks5Hop, tag string, nextTag string) map[string]interface{} {
 	user := map[string]interface{}{}
-	if strings.TrimSpace(hop.Username) != "" {
-		user["user"] = strings.TrimSpace(hop.Username)
-		if strings.TrimSpace(hop.Password) != "" {
+	if hop.Username != "" {
+		user["user"] = hop.Username
+		if hop.Password != "" {
 			user["pass"] = hop.Password
 		}
 	}

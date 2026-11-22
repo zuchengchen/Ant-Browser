@@ -29,18 +29,18 @@ func buildDirectProxyBridgeOutbound(src string) (map[string]interface{}, bool, e
 		return nil, false, nil
 	}
 
-	if spec.Scheme == "socks5" || spec.Scheme == "http" || spec.Scheme == "https" {
-		return chainSocks5Outbound(chainSocks5Hop{
-			Protocol: spec.Scheme,
-			Server:   spec.Server,
-			Port:     spec.Port,
-			Username: spec.Username,
-			Password: spec.Password,
-			TLS:      spec.Scheme == "https",
-		}, "proxy-out", ""), true, nil
+	hop := chainSocks5Hop{
+		Protocol: spec.Scheme,
+		Server:   spec.Server,
+		Port:     spec.Port,
+		Username: spec.Username,
+		Password: spec.Password,
+		TLS:      spec.Scheme == "https",
 	}
-
-	return nil, false, nil
+	if spec.Scheme == "socks5" {
+		return xraySocksOutbound(hop, "proxy-out", ""), true, nil
+	}
+	return chainHTTPOutbound(hop, "proxy-out", ""), true, nil
 }
 
 func parseDirectProxyBridgeSpec(src string) (*directProxyBridgeSpec, error) {
@@ -64,7 +64,10 @@ func parseDirectProxyBridgeSpec(src string) (*directProxyBridgeSpec, error) {
 		if parsed.User == nil {
 			return nil, nil
 		}
-		username := strings.TrimSpace(parsed.User.Username())
+		username := parsed.User.Username()
+		if scheme != "socks5" {
+			username = strings.TrimSpace(username)
+		}
 		if username == "" {
 			return nil, nil
 		}

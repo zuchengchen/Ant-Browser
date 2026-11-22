@@ -90,7 +90,7 @@ func TestRequiresLocalProxyBridgeForBrowserAuthenticatedSocks5(t *testing.T) {
 }
 
 func TestBuildDirectProxyBridgeOutboundAuthenticatedSocks5(t *testing.T) {
-	outbound, ok, err := buildDirectProxyBridgeOutbound("socks5://user:pass@127.0.0.1:1080")
+	outbound, ok, err := buildDirectProxyBridgeOutbound("socks5://%20user%40example%20:pass%3A%25%20@127.0.0.1:1080")
 	if err != nil {
 		t.Fatalf("buildDirectProxyBridgeOutbound returned error: %v", err)
 	}
@@ -127,7 +127,7 @@ func TestBuildDirectProxyBridgeOutboundAuthenticatedSocks5(t *testing.T) {
 	if !ok {
 		t.Fatalf("user invalid: %+v", users[0])
 	}
-	if user["user"] != "user" || user["pass"] != "pass" {
+	if user["user"] != " user@example " || user["pass"] != "pass:% " {
 		t.Fatalf("unexpected user payload: %+v", user)
 	}
 }
