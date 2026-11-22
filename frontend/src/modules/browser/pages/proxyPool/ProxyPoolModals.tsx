@@ -8,6 +8,7 @@ import {
   type ProxyDisplayInfo,
   type ProxyImportMode,
 } from './helpers'
+import { socks5ProxyInputProps } from './socks5ProxyPaste'
 
 export interface ProxyEditFormValue {
   proxyName: string
@@ -305,6 +306,8 @@ export function ProxyPoolEditModal({
                 <Input
                   value={directEditForm.server}
                   onChange={(event) => onDirectEditFormChange({ server: event.target.value })}
+                  {...socks5ProxyInputProps(onDirectEditFormChange)}
+                  placeholder="主机名、IP 或 socks5:// 代理链接"
                 />
               </FormItem>
               <FormItem label="代理端口" required>

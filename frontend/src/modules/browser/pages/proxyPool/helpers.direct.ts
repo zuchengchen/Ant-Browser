@@ -74,6 +74,9 @@ export function parseDirectProxyURL(raw: string): DirectImportForm {
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
     throw new Error('代理地址缺少有效端口')
   }
+  if (parsedURL.password && !parsedURL.username) {
+    throw new Error('填写密码时请同时填写账号')
+  }
 
   return {
     proxyName: '',
@@ -119,7 +122,7 @@ export function buildDirectImportCandidate(form: DirectImportForm): ImportCandid
     throw new Error('代理端口必须在 1-65535 之间')
   }
 
-  const username = form.username.trim()
+  const username = form.protocol === 'socks5' ? form.username : form.username.trim()
   const password = form.password
   if (password && !username) {
     throw new Error('填写密码时请同时填写账号')

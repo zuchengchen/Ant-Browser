@@ -1,5 +1,6 @@
 import { Button, FormItem, Input, Modal, Select, Switch, Textarea } from '../../../../shared/components'
 import type { BrowserProxy } from '../../types'
+import { socks5ProxyInputProps } from './socks5ProxyPaste'
 import {
   CHAIN_QUICK_IMPORT_TEMPLATE,
   DIRECT_QUICK_IMPORT_TEMPLATE,
@@ -104,6 +105,13 @@ export function ProxyPoolImportModal({
   onCopyDirectTemplate,
   onDirectImportFormChange,
 }: ProxyPoolImportModalProps) {
+  const applyProxyAddress = (fields: Omit<DirectImportForm, 'proxyName'>) => {
+    if (importMode !== 'direct') onImportModeChange('direct')
+    onDirectImportFormChange(fields)
+    onDirectImportTextChange('')
+  }
+  const proxyAddressProps = socks5ProxyInputProps(applyProxyAddress)
+
   return (
     <Modal
       open={open}
@@ -149,7 +157,8 @@ export function ProxyPoolImportModal({
                 <Input
                   value={importUrl}
                   onChange={(event) => onImportUrlChange(event.target.value)}
-                  placeholder="订阅 URL"
+                  {...proxyAddressProps}
+                  placeholder="订阅 URL 或 socks5:// 代理链接"
                   className="flex-1"
                 />
                 <Select
@@ -185,6 +194,10 @@ export function ProxyPoolImportModal({
             <Textarea
               value={importText}
               onChange={(event) => onImportTextChange(event.target.value)}
+              {...socks5ProxyInputProps(fields => {
+                applyProxyAddress(fields)
+                onImportTextChange('')
+              })}
               rows={12}
               placeholder={`proxies:\n  - name: vless-v6\n    type: vless\n    server: example.com\n    port: 443\n    uuid: your-uuid\n    ...`}
             />
@@ -213,7 +226,8 @@ export function ProxyPoolImportModal({
                 <Input
                   value={directImportForm.server}
                   onChange={(event) => onDirectImportFormChange({ server: event.target.value })}
-                  placeholder="例如：127.0.0.1 或 hk.example.com"
+                  {...proxyAddressProps}
+                  placeholder="主机名、IP 或 socks5:// 代理链接"
                 />
               </FormItem>
               <FormItem label="代理端口" required>

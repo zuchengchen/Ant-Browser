@@ -44,7 +44,7 @@ const directJSON = `{
 
 const directLines = `http://账号:密码@gw.example.com:8080
 https://账号:密码@gw.example.com:8443
-socks5://账号:密码@ep.example.com:6616`
+socks5://demo-user:demo-pass@proxy.example.com:1080`
 
 const ipflyJSON = `{
   "name": "IPFLY-落地",
@@ -141,15 +141,15 @@ function DirectGuide() {
   return (
     <div className="space-y-3">
       <div className="grid gap-3 sm:grid-cols-3">
-        <GuideCard title="1. 单个导入" text="用表单填写协议、地址、端口、账号密码；留空文本辅助。" />
-        <GuideCard title="2. 批量导入" text="在文本辅助填 JSON、JSON 数组或多行代理 URL，再点击应用文本或解析。" />
-        <GuideCard title="3. 写入代理池" text="解析后确认名称、分组和数量，再保存到代理池。" />
+        <GuideCard title="1. 单个导入" text="打开「导入代理」，把一条带账号密码的 SOCKS5 链接粘贴到默认页的「订阅 URL」或 YAML 输入框。弹窗会切换到「HTTP / SOCKS5」并填好连接参数。" />
+        <GuideCard title="2. 批量导入" text="将 JSON、JSON 数组或多行代理 URL 粘贴到「文本辅助」，再点「解析」。" />
+        <GuideCard title="3. 写入代理池" text="解析后核对预览中的名称、地址和端口，再点「确认导入」。" />
       </div>
       <div className="grid gap-3 lg:grid-cols-[0.95fr_1.05fr]">
         <InfoPanel
           title="字段规则"
           items={[
-            '表单地址只填域名或 IP，不带 http://、https://、socks5://。',
+            '「代理地址」可填写域名或 IP，也可直接粘贴 SOCKS5 链接。手动输入完整链接后，按 Tab 即可识别。',
             '文本 URL 必须带协议头，格式是 协议://账号:密码@地址:端口。',
             '支持 http、https、socks5；密码有值时账号也必须填写。',
           ]}

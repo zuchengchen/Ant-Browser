@@ -1,6 +1,8 @@
 import yaml from 'js-yaml'
 import type { BrowserProxy } from '../types'
-import { CHAIN_SOCKS5_PREFIX, type ChainImportForm, type ChainHopForm, type ChainSocks5Config, type ChainSocks5HopConfig, type ClashProxy, type DirectImportForm, type ImportCandidate, type ProxyDisplayInfo } from './ProxyImportModal.types'
+import { CHAIN_SOCKS5_PREFIX, type ChainImportForm, type ChainHopForm, type ChainSocks5Config, type ChainSocks5HopConfig, type ClashProxy, type ImportCandidate, type ProxyDisplayInfo } from './ProxyImportModal.types'
+
+export { buildDirectImportCandidate } from '../pages/proxyPool/helpers.direct'
 
 function parseChainSocks5Config(proxyConfig: string): ChainSocks5Config | null {
   const cfg = proxyConfig.trim()
@@ -184,89 +186,6 @@ export function parseClashImportText(raw: string): ClashProxy[] {
     throw new Error(String((lastError as { message?: string }).message || '解析失败'))
   }
   throw new Error('无效的 YAML 格式，需要包含 proxies 数组')
-}
-
-function normalizeDirectProxyConfig(raw: string): string {
-  const trimmed = raw.trim()
-  if (!trimmed) return ''
-  if (/^socket:\/\//i.test(trimmed)) {
-    return trimmed.replace(/^socket:\/\//i, 'socks5://')
-  }
-  if (/^socks:\/\//i.test(trimmed)) {
-    return trimmed.replace(/^socks:\/\//i, 'socks5://')
-  }
-  return trimmed
-}
-
-function resolveDirectProxyName(rawName: string, scheme: string, server: string, port: number, index: number, prefix: string): string {
-  const name = rawName.trim()
-  const fallbackName = server
-    ? `${scheme.toUpperCase()}-${server}${port > 0 ? `:${port}` : ''}`
-    : `导入代理 ${index + 1}`
-  const finalName = name || fallbackName
-  return prefix ? `${prefix}-${finalName}` : finalName
-}
-
-function formatDirectProxyHost(raw: string): string {
-  const host = raw.trim()
-  if (!host) return ''
-  if (host.startsWith('[') && host.endsWith(']')) {
-    return host
-  }
-  return host.includes(':') ? `[${host}]` : host
-}
-
-export function buildDirectImportCandidate(form: DirectImportForm): ImportCandidate {
-  const serverInput = form.server.trim()
-  if (!serverInput) {
-    throw new Error('请输入代理地址')
-  }
-  if (/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(serverInput)) {
-    throw new Error('代理地址只需要填写主机名或 IP，不需要协议头')
-  }
-
-  const portInput = form.port.trim()
-  if (!portInput) {
-    throw new Error('请输入代理端口')
-  }
-  if (!/^\d+$/.test(portInput)) {
-    throw new Error('代理端口必须为数字')
-  }
-
-  const port = Number(portInput)
-  if (port < 1 || port > 65535) {
-    throw new Error('代理端口必须在 1-65535 之间')
-  }
-
-  const username = form.username.trim()
-  const password = form.password
-  if (password && !username) {
-    throw new Error('填写密码时请同时填写账号')
-  }
-
-  const auth = username
-    ? `${encodeURIComponent(username)}${password ? `:${encodeURIComponent(password)}` : ''}@`
-    : ''
-  const rawConfig = `${form.protocol}://${auth}${formatDirectProxyHost(serverInput)}:${port}`
-
-  let parsedURL: URL
-  try {
-    parsedURL = new URL(rawConfig)
-  } catch {
-    throw new Error('请输入有效的代理地址')
-  }
-
-  if (!parsedURL.hostname) {
-    throw new Error('请输入有效的代理地址')
-  }
-
-  const normalizedConfig = normalizeDirectProxyConfig(parsedURL.toString()).replace(/\/$/, '')
-  const normalizedServer = parsedURL.hostname.replace(/^\[(.*)\]$/, '$1')
-
-  return {
-    proxyName: resolveDirectProxyName(form.proxyName, form.protocol, normalizedServer, port, 0, ''),
-    proxyConfig: normalizedConfig,
-  }
 }
 
 export function buildChainImportCandidate(form: ChainImportForm): ImportCandidate {

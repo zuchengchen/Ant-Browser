@@ -2,6 +2,7 @@ import { Button, FormItem, Input, Modal, Select, Table, Textarea } from '../../.
 import type { TableColumn } from '../../../shared/components/Table'
 import type { BrowserProxy } from '../types'
 import { DIRECT_QUICK_IMPORT_TEMPLATE } from '../pages/proxyPool/helpers'
+import { socks5ProxyInputProps } from '../pages/proxyPool/socks5ProxyPaste'
 import {
   DIRECT_PROXY_PROTOCOL_OPTIONS,
   type ChainHopForm,
@@ -96,6 +97,17 @@ export function ProxyImportModalView({
   onPreviewModalOpenChange,
   onConfirmImport,
 }: ProxyImportModalViewProps) {
+  const applySocks5Proxy = (fields: Omit<DirectImportForm, 'proxyName'>) => {
+    if (importMode !== 'direct') onImportModeChange('direct')
+    onDirectImportFormChange(form => ({ ...form, ...fields }))
+    onDirectImportTextChange('')
+  }
+  const proxyInputProps = socks5ProxyInputProps(applySocks5Proxy)
+  const clashTextInputProps = socks5ProxyInputProps(fields => {
+    applySocks5Proxy(fields)
+    onImportTextChange('')
+  })
+
   return (
     <>
       <Modal
@@ -137,6 +149,7 @@ export function ProxyImportModalView({
                 <div className="grid grid-cols-[minmax(0,1fr)_150px_auto] gap-2">
                   <Input
                     value={importUrl}
+                    {...proxyInputProps}
                     onChange={e => {
                       const next = e.target.value
                       onImportUrlChange(next)
@@ -144,7 +157,7 @@ export function ProxyImportModalView({
                         onImportResolvedUrlChange('')
                       }
                     }}
-                    placeholder="订阅 URL"
+                    placeholder="订阅 URL 或 socks5:// 代理链接"
                     className="flex-1"
                   />
                   <Select
@@ -176,6 +189,7 @@ export function ProxyImportModalView({
               </FormItem>
               <Textarea
                 value={importText}
+                {...clashTextInputProps}
                 onChange={e => onImportTextChange(e.target.value)}
                 rows={12}
                 placeholder={`proxies:\n  - name: vless-v6\n    type: vless\n    server: example.com\n    port: 443\n    uuid: your-uuid\n    ...`}
@@ -202,8 +216,9 @@ export function ProxyImportModalView({
                 <FormItem label="代理地址" required>
                   <Input
                     value={directImportForm.server}
+                    {...proxyInputProps}
                     onChange={e => onDirectImportFormChange(prev => ({ ...prev, server: e.target.value }))}
-                    placeholder="例如：127.0.0.1 或 hk.example.com"
+                    placeholder="主机名、IP 或 socks5:// 代理链接"
                   />
                 </FormItem>
                 <FormItem label="代理端口" required>
