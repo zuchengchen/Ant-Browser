@@ -26,16 +26,18 @@ func TestKeyPouchCredentialRefreshBindsRecordAndClearsRemovedFields(t *testing.T
 	p.ProfileName = email
 	claim := keyPouchOpenClaim{Action: "create-open", RecordID: 42, Email: email, CredentialSync: true}
 	const route = "/api/ant/device/instance-opens/test-ticket/"
+	const binding = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
 	var response map[string]any
 	calls := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var request struct {
-			ID      int64  `json:"record_id"`
-			Profile string `json:"profile_id"`
-			Email   string `json:"email"`
+			LoginReporting bool   `json:"login_reporting"`
+			ID             int64  `json:"record_id"`
+			Profile        string `json:"profile_id"`
+			Email          string `json:"email"`
 		}
 		if r.Method != "POST" || r.URL.Path != route+"credentials" || r.Header.Get("X-Ant-Signature") == "" ||
-			json.NewDecoder(r.Body).Decode(&request) != nil || request.Profile != id || request.ID != claim.RecordID || request.Email != email {
+			json.NewDecoder(r.Body).Decode(&request) != nil || request.LoginReporting != claim.LoginReporting || request.Profile != id || request.ID != claim.RecordID || request.Email != email {
 			http.Error(w, "unexpected request", http.StatusBadRequest)
 			return
 		}
@@ -53,12 +55,16 @@ func TestKeyPouchCredentialRefreshBindsRecordAndClearsRemovedFields(t *testing.T
 	check := func(password, seed string) {
 		t.Helper()
 		c, err := app.readLocalGPTCredential(id)
-		if err != nil || c == nil || c.RecordID != claim.RecordID || c.Site != server.URL || c.Email != email || c.Password != password || c.TOTPSecret != seed {
+		if err != nil || c == nil || c.RecordID != claim.RecordID || c.Site != server.URL || c.Email != email || c.Password != password || c.TOTPSecret != seed || claim.LoginReporting && response["login_binding"] == binding && (c.LoginBinding != binding || c.PortableCopy().LoginBinding != "") {
 			t.Fatal("stored credential did not match the expected snapshot")
 		}
 	}
 	for _, fields := range [][2]string{{"test pass", "test seed"}, {" changed password ", "changed seed"}} {
 		response = map[string]any{"record_id": 42, "email": email, "password": fields[0], "totp_secret": fields[1]}
+		if fields[0] == " changed password " {
+			claim.LoginReporting = true
+			response["login_binding"] = binding
+		}
 		if err := refresh(); err != nil {
 			t.Fatal(err)
 		}

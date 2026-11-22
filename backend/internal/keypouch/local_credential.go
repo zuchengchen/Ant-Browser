@@ -12,6 +12,7 @@ import (
 	"net/mail"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"sync"
@@ -20,14 +21,26 @@ import (
 // LocalGPTCredential is the complete snapshot for one explicitly selected record.
 // Empty passwords and seeds are significant: a refresh must clear the old value.
 type LocalGPTCredential struct {
-	Site       string `json:"site"`
-	RecordID   int64  `json:"record_id"`
-	Email      string `json:"email"`
-	Password   string `json:"password"`
-	TOTPSecret string `json:"totp_secret"`
+	Site         string `json:"site"`
+	RecordID     int64  `json:"record_id"`
+	Email        string `json:"email"`
+	Password     string `json:"password"`
+	TOTPSecret   string `json:"totp_secret"`
+	LoginBinding string `json:"login_binding,omitempty"`
 }
 
+// A clone or an imported copy may log in locally but cannot report for the original device.
+func (c LocalGPTCredential) PortableCopy() LocalGPTCredential {
+	c.LoginBinding = ""
+	return c
+}
+
+var loginBindingPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{32}\.[A-Za-z0-9_-]{43}$`)
+
 func (c LocalGPTCredential) Validate() error {
+	if c.LoginBinding != "" && !loginBindingPattern.MatchString(c.LoginBinding) {
+		return errors.New("GPT 登录回执绑定无效")
+	}
 	site, siteErr := NormalizeOrigin(c.Site)
 	addr, emailErr := mail.ParseAddress(c.Email)
 	if siteErr != nil || c.Site != site || c.RecordID <= 0 || emailErr != nil || addr.Address != c.Email ||

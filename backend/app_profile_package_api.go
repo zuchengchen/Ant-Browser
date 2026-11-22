@@ -1026,7 +1026,7 @@ func (a *App) importProfilePackageFromPathWithModeAndPortableSession(zipPath str
 	// new credentials before committing profiles; replaced IDs remain in trash.
 	for _, item := range prepared {
 		if credential := portableCredentials[item.OldProfileID]; credential != nil {
-			if err := a.saveLocalGPTCredential(item.Profile.ProfileId, *credential); err != nil {
+			if err := a.saveLocalGPTCredential(item.Profile.ProfileId, credential.PortableCopy()); err != nil {
 				return ProfilePackageImportResult{}, err
 			}
 			createdCredentialIDs = append(createdCredentialIDs, item.Profile.ProfileId)

@@ -129,6 +129,7 @@ test('OpenSSL verifies fresh P-256 signatures over each exact action, key, time,
   const replies = {
     account: { ...metadata, unrelated: 'fixture' },
     login: { ...selected, password, totp_secret: 'unused fixture' },
+    'login-attempt': { ...selected, password, attempt: 'r'.repeat(32) },
     totp: { ...selected, code: '001234', expires_at: expires, totp_secret: 'unused fixture' },
   }
   const requests = t.mock.method(globalThis, 'fetch', async url => reply(replies[url.split('/').pop()]))
@@ -136,6 +137,7 @@ test('OpenSSL verifies fresh P-256 signatures over each exact action, key, time,
   const record = await client.account()
   assert.deepEqual(record, { ...selected, hasPassword: true, hasTOTP: true })
   assert.deepEqual(await client.login(record), { email, password })
+  assert.deepEqual(await client.login(record, undefined, true), { email, password, attempt: 'r'.repeat(32) })
   assert.deepEqual(await client.totp(record), { code: '001234', expires })
   await Promise.all(Array.from({ length: 16 }, () => client.account()))
   const nonces = new Set()
@@ -164,7 +166,7 @@ test('OpenSSL verifies fresh P-256 signatures over each exact action, key, time,
     assert.equal(verify('sha256', Buffer.from(message), key, signature), true)
     assert.equal(verify('sha256', Buffer.from(message + 'x'), key, signature), false)
   }
-  assert.equal(nonces.size, 19)
+  assert.equal(nonces.size, 20)
 })
 
 test('account distinguishes an ungranted key from an unsupported or unavailable site; failed credentials never use another identity', async t => {

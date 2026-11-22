@@ -1,5 +1,7 @@
 import { accountEmail, normalizeVaultSite, VaultError } from './vault.js'
 
+import { localLoginAttempt } from './receipt.js'
+
 export const localKey = 'antLocalGPT'
 
 // The desktop writes one complete snapshot to this extension's trusted,
@@ -43,6 +45,8 @@ export const localVault = {
     if (!entry || entry.recordId !== record.id || entry.email !== record.email || entry.site !== record.site) {
       throw new VaultError('local_changed')
     }
-    return { email: entry.email, password: entry.password, totpSecret: entry.totpSecret }
+    const attempt = await localLoginAttempt(entry, signal)
+    signal.throwIfAborted()
+    return { email: entry.email, password: entry.password, totpSecret: entry.totpSecret, ...(attempt && { attempt }) }
   },
 }

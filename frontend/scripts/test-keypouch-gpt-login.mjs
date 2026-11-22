@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { createHmac } from 'node:crypto'
 import test from 'node:test'
 import vm from 'node:vm'
-import { loginToChatGPT } from '../../backend/internal/browser/builtinassets/keypouch-gpt/login.js'
+import { loginToChatGPT, verifyAfterChallenge } from '../../backend/internal/browser/builtinassets/keypouch-gpt/login.js'
 
 const email = 'sample@example.test'
 const password = ' sample $ & password '
@@ -120,6 +120,7 @@ function browser(t, spec) {
     const main = document.body.append('main', { innerText: options.conversation ? '' : options.text || '' })
     if (options.conversation) main.append('article', { 'data-message-author-role': 'user', innerText: options.text })
     if (options.composer) main.append('div', { contenteditable: 'true', innerText: options.composer })
+    if (options.alert) main.append('div', { role: 'alert', innerText: options.alert })
     if (options.iframe) main.append('iframe', { src: options.iframe })
     const callbacks = {}
     const win = { addEventListener: (event, cb) => { callbacks[event] = cb } }
@@ -837,4 +838,52 @@ test('a replaced inspected document is never injected by tab ID with its credent
   } })
   assert.equal((await b.run()).status, 'manual')
   assert.ok(!b.calls.some(call => call.value))
+})
+
+test('only a submitted saved credential and the selected verified account produce a positive receipt', async t => {
+  const b = browser(t, { kind: 'password', text: email, next: verified })
+  assert.equal((await b.run()).verdict, 'success')
+  b.navigate(verified)
+  assert.equal((await b.run()).verdict, undefined)
+  b.navigate({ kind: 'password', text: email, next: { kind: 'settings', text: 'Email\nother@example.test' } })
+  assert.equal((await b.run()).verdict, undefined)
+})
+
+test('explicit password rejection is distinct from network, rate limit and challenge outcomes', async t => {
+  const b = browser(t, {})
+  for (const [alert, verdict] of [['Incorrect email or password.', 'rejected'], ['Too many requests', undefined], ['Unable to connect', undefined], ['Expired code', undefined]]) {
+    b.navigate({ kind: 'password', text: email, next: { kind: 'password', text: email, alert } })
+    assert.equal((await b.run()).verdict, verdict)
+  }
+  b.navigate({ kind: 'password', text: email, alert: 'Incorrect email or password.' })
+  assert.equal((await b.run()).verdict, undefined)
+  b.navigate({ kind: 'password', text: email, next: { title: 'Security verification' } })
+  const awaiting = await b.run({ ...account, attempt: 'a'.repeat(32) })
+  assert.equal(awaiting.waitForIdentity, true)
+  assert.equal(awaiting.verdict, undefined)
+})
+
+test('manual challenge completion reads only account identity in a background tab and closes it', async t => {
+  const b = browser(t, verified)
+  const inspected = []
+  globalThis.chrome.tabs.get = async () => ({ id: tabId, windowId: 2, url: 'https://chatgpt.com/' })
+  globalThis.chrome.tabs.create = async options => {
+    assert.deepEqual(options, { windowId: 2, url: settings, active: false })
+    return { id: 707 }
+  }
+  let closed
+  globalThis.chrome.tabs.remove = async id => { closed = id }
+  globalThis.chrome.scripting.executeScript = async call => {
+    if (call.target.tabId === tabId) return [{ frameId: 0, result: 'signedIn' }]
+    assert.equal(call.target.tabId, 707)
+    const [payload] = call.args
+    inspected.push(payload)
+    return [{ frameId: 0, result: await vm.runInContext('(' + call.func.toString() + ')(payload)', Object.assign(b.page.world, { payload })) }]
+  }
+  assert.equal(await verifyAfterChallenge(tabId, email, b.controller.signal), 'success')
+  assert.equal(closed, 707)
+  assert.equal(inspected.length, 1)
+  assert.deepEqual(Object.keys(inspected[0]).sort(), ['email', 'id', 'receiptOnly', 'redirectPages'])
+  b.navigate({ kind: 'settings', text: 'Email\nother@example.test' })
+  assert.equal(await verifyAfterChallenge(tabId, email, b.controller.signal), undefined)
 })

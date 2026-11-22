@@ -56,7 +56,7 @@ function loginPage(request) {
   if (window !== window.top || !official(here)) return 'external'
 
   const key = '__antKeyPouchLogin'
-  let guard = globalThis[key]
+  let guard = request.receiptOnly ? { id: request.id } : globalThis[key]
   if (request.end) {
     if (guard?.id === request.id) { guard.events.abort(); delete globalThis[key] }
     return 'ended'
@@ -132,7 +132,7 @@ function loginPage(request) {
     || shown(document, 'iframe[src*="challenges.cloudflare.com"],iframe[src*="recaptcha"],iframe[src*="hcaptcha.com"]').length) return 'challenge'
   if (redirect) return humanPrompt.test((document.querySelector('main') || document.body)?.innerText || '') ? 'challenge' : 'signInRedirect'
   if (unsafePath(here.pathname)) return 'unknown'
-  if (chat && !settings && !/^\/(?:auth\/login\/?)?$/.test(here.pathname)) return 'unknown'
+  if (chat && !settings && !request.receiptOnly && !/^\/(?:auth\/login\/?)?$/.test(here.pathname)) return 'unknown'
   // A redirect observed by tabs.get may have just committed a different
   // document. Wait for its next inspection with the usual account checks.
   if (!request.email) return 'waiting'
@@ -211,11 +211,15 @@ function loginPage(request) {
   const findControl = pattern => controls.find(el => enabled(el) && pattern.test(label(el)))
   const profileMenu = chat && (findControl(/^(?:Account menu|Open (?:the )?profile menu|个人资料菜单|账户菜单|帳戶選單)$/i)
     || controls.find(el => ['profile-button', 'accounts-profile-button'].includes(el.getAttribute('data-testid'))))
+  if (request.receiptOnly) return profileMenu && authScope === document ? 'signedIn' : 'waiting'
   const guestChooser = chat && !settings && !profileMenu && (here.pathname.startsWith('/auth/login') || authScope !== document
     && (request.openedLogin || shown(authScope, 'h1,h2,h3,[role="heading"]').some(el => /^(?:Log in(?: or sign up)?|Sign in|登录|登入|登錄)$/i.test(label(el)))))
   const text = chat ? '' : (document.querySelector('main') || document.body).innerText
   if (!chat && humanPrompt.test(text)) return 'challenge'
-  if (shown(authScope, '[role="alert"],[aria-live="assertive"],[data-error],.error-message').some(el => /incorrect|invalid|too many|expired|wrong|unable to|try again|不正确|不正確|无效|無效|错误|錯誤|过期|過期|次数过多/i.test(el.innerText))) return 'rejected'
+  const alerts = shown(authScope, '[role="alert"],[aria-live="assertive"],[data-error],.error-message')
+  const invalidCredential = /^(?:(?:incorrect|invalid|wrong) (?:email(?: address)? (?:or|and) password|username or password|password|credentials)|(?:your |the )?password (?:is (?:incorrect|invalid|wrong)|isn['’]t correct)|(?:邮箱或密码|电子邮件或密码|账号或密码|密码)(?:不正确|错误|有误)|(?:電子郵件或密碼|密碼)(?:不正確|錯誤))[.!。！]?$/i
+  if (!chat && alerts.some(el => !el.closest(userContent) && invalidCredential.test(el.innerText.trim()))) return 'credentialRejected'
+  if (alerts.some(el => /incorrect|invalid|too many|expired|wrong|unable to|try again|不正确|不正確|无效|無效|错误|錯誤|过期|過期|次数过多/i.test(el.innerText))) return 'rejected'
   if (shown(authScope, '[aria-busy="true"],[role="progressbar"]').length) return 'waiting'
 
   let stage, field, button, slots
@@ -461,6 +465,15 @@ export async function loginToChatGPT(tabId, account, signal, getCurrentCode) {
   if (!Number.isInteger(tabId) || !email) return result('unavailable')
   const id = crypto.randomUUID()
   const submitted = new Map()
+  let usedSavedCredential = false
+  const finishResult = reason => {
+    const outcome = result(reason === 'credentialRejected' ? 'rejected' : reason)
+    if (usedSavedCredential) {
+      if (reason === 'success' || reason === 'credentialRejected') outcome.verdict = reason === 'success' ? 'success' : 'rejected'
+      if (account.attempt && ['emailCode', 'challenge', 'authenticator'].includes(reason)) outcome.waitForIdentity = true
+    }
+    return outcome
+  }
   let interrupted = false, documentId, confirmedEmail = false, currentCode
   let typing, delay = 0
   let redirectDeadline = 0
@@ -470,6 +483,7 @@ export async function loginToChatGPT(tabId, account, signal, getCurrentCode) {
     // A form can navigate within the same document. An earlier stage's receipt
     // must never end a later field that is still waiting to submit.
     if (message.type === 'keypouch-login-submitted' && sender.documentId === documentId && submitted.has(message.stage)) {
+      if (message.stage === 'password' || message.stage === 'totp') usedSavedCredential = true
       if (typing?.stage === message.stage && typing.documentId === sender.documentId) typing = undefined
       if (message.stage === 'email' || message.stage === 'password') confirmedEmail = true
     }
@@ -527,6 +541,7 @@ export async function loginToChatGPT(tabId, account, signal, getCurrentCode) {
       if (typing?.codeEntered && (documentId !== typing.documentId || stage !== 'totp' && stage !== 'waiting')) {
         // Some OTP widgets navigate as soon as the last digit arrives, without
         // a submit event. Wait for that actual transition and never retype it.
+        usedSavedCredential = true
         submitted.set('totp', Date.now())
         typing = undefined
       }
@@ -545,9 +560,9 @@ export async function loginToChatGPT(tabId, account, signal, getCurrentCode) {
         const finish = await inject({ documentIds: [documentId] }, { ...info, stage: 'openChat' }).catch(() => null)
         if (stopped()) return result('interrupted')
         if (finish && finish.result !== 'success') return result(Object.hasOwn(messages, finish.result) ? finish.result : 'unknown')
-        return result('success')
+        return finishResult('success')
       }
-      if (Object.hasOwn(messages, stage)) return result(stage)
+      if (stage === 'credentialRejected' || Object.hasOwn(messages, stage)) return finishResult(stage)
       if (!stage || stage === 'waiting') continue
       if (submitted.has(stage)) {
         if (Date.now() - submitted.get(stage) > 12000) return result('stalled')
@@ -560,17 +575,17 @@ export async function loginToChatGPT(tabId, account, signal, getCurrentCode) {
         action.value = account.password
       }
       if (stage === 'chooseAuthenticator' || stage === 'totp') {
-        if (!getCurrentCode && !account.totpSecret) return result('authenticator')
+        if (!getCurrentCode && !account.totpSecret) return finishResult('authenticator')
         if (stage === 'totp') {
-          if (typing && currentCode && currentCode.expires - Date.now() < 3000) return result('authenticator')
+          if (typing && currentCode && currentCode.expires - Date.now() < 3000) return finishResult('authenticator')
           if (!currentCode || currentCode.expires <= Date.now()) {
             try {
               currentCode = getCurrentCode ? await getCurrentCode(signal) : await authenticatorCode(account.totpSecret, Date.now())
             } catch {
-              return result(stopped() ? 'interrupted' : 'authenticator')
+              return finishResult(stopped() ? 'interrupted' : 'authenticator')
             }
           }
-          if (!currentCode) return result('authenticator')
+          if (!currentCode) return finishResult('authenticator')
           if (!typing && currentCode.expires - Date.now() < 7000) continue
           Object.assign(action, currentCode)
         }
@@ -583,8 +598,10 @@ export async function loginToChatGPT(tabId, account, signal, getCurrentCode) {
       try { outcome = (await inject({ documentIds: [documentId] }, action)).result }
       catch { continue }
       if (stopped()) return result('interrupted')
-      if (Object.hasOwn(messages, outcome)) return result(outcome)
+      if (Object.hasOwn(messages, outcome)) return finishResult(outcome)
+      if (outcome === 'credentialRejected') return finishResult(outcome)
       if (outcome === 'submitted') {
+        if (stage === 'password' || stage === 'totp') usedSavedCredential = true
         typing = undefined
         if (stage === 'email' || stage === 'password') confirmedEmail = true
       } else {
@@ -604,4 +621,41 @@ export async function loginToChatGPT(tabId, account, signal, getCurrentCode) {
     chrome.runtime.onMessage.removeListener(observe)
     if (documentId) void inject({ documentIds: [documentId] }, { id, end: true }).catch(() => {})
   }
+}
+
+// After a manual challenge, observe only the tab from this click. Once it returns
+// to ChatGPT, read the account settings in one background tab without touching
+// the user's form, cookies or session response.
+export async function verifyAfterChallenge(tabId, email, signal) {
+  let settingsTab
+  const deadline = Date.now() + 8 * 60_000
+  try {
+    while (!signal.aborted && Date.now() < deadline) {
+      await pause(signal, 1200)
+      if (signal.aborted) break
+      const tab = await chrome.tabs.get(tabId)
+      const address = tab.pendingUrl || tab.url
+      if (!officialTab(address)) return
+      const url = new URL(address)
+      if (url.origin !== 'https://chatgpt.com' || url.pathname.startsWith('/auth/')) continue
+      const inspect = async id => {
+        const [answer] = await chrome.scripting.executeScript({
+          target: { tabId: id, frameIds: [0] }, world: 'ISOLATED',
+          func: loginPage, args: [{ id: 'receipt', receiptOnly: true, email, redirectPages: [] }],
+        }).catch(() => [])
+        return answer?.frameId === 0 ? answer.result : undefined
+      }
+      if (!settingsTab) {
+        const landing = await inspect(tabId)
+        if (signal.aborted || landing === 'mismatch') return
+        if (landing === 'success') return 'success'
+        if (landing !== 'signedIn') continue
+        settingsTab = await chrome.tabs.create({ windowId: tab.windowId, url: 'https://chatgpt.com/settings/account', active: false })
+      }
+      const identity = await inspect(settingsTab.id)
+      if (signal.aborted || identity === 'mismatch') return
+      if (identity === 'success') return 'success'
+    }
+  } catch { /* Closed tabs and offline accounts have no conclusive result. */ }
+  finally { if (settingsTab) await chrome.tabs.remove(settingsTab.id).catch(() => {}) }
 }

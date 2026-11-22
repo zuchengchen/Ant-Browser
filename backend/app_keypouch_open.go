@@ -26,6 +26,7 @@ type keyPouchOpenClaim struct {
 	GroupID        int64  `json:"group_id"`
 	GroupName      string `json:"group_name"`
 	CredentialSync bool   `json:"credential_sync"`
+	LoginReporting bool   `json:"login_reporting"`
 }
 
 const keyPouchTemplate = "KeyPouch 实例模板"

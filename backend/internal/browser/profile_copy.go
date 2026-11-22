@@ -159,7 +159,7 @@ func (m *Manager) copyProfile(profileId string, newName string, dest *copyDestin
 		if c == nil {
 			return nil, errors.New("源实例没有可复制的 GPT 登录凭据")
 		}
-		if err := keypouch.SaveLocalGPTCredential(m.AppRoot, newId, *c); err != nil {
+		if err := keypouch.SaveLocalGPTCredential(m.AppRoot, newId, c.PortableCopy()); err != nil {
 			return nil, err
 		}
 	}

@@ -158,3 +158,22 @@ test('caller can cancel a slow body read without forwarding its custom abort rea
   assert.equal(requestSignal.reason.name, 'AbortError');
   assert.notEqual(requestSignal.reason, caller.signal.reason);
 });
+
+test('a selected web session obtains a receipt for the exact record version with CSRF', async t => {
+  const paths = [];
+  const attempt = 'w'.repeat(32);
+  const requests = t.mock.method(globalThis, 'fetch', async (url, options) => {
+    paths.push(new URL(url).pathname);
+    if (url.endsWith('/login-attempt')) {
+      assert.equal(options.credentials, 'include');
+      assert.equal(options.headers['X-CSRF-Token'], 'fixture-csrf');
+      assert.deepEqual(JSON.parse(options.body), { version: 3 });
+      return reply({ attempt });
+    }
+    return reply(url.endsWith('/session') ? { csrf: 'fixture-csrf' } : { ...record, version: 3 });
+  });
+  assert.equal((await getVaultAccount(site, 5, email, undefined, true)).attempt, attempt);
+  assert.deepEqual(paths, ['/api/records/5', '/api/session', '/api/records/5/login-attempt']);
+  requests.mock.mockImplementation(async url => url.endsWith('/session') ? reply({}, 401) : reply({ ...record, version: 3 }));
+  assert.deepEqual(await getVaultAccount(site, 5, email, undefined, true), { email, password: record.password, totpSecret: record.totp_secret });
+});

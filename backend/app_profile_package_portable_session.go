@@ -69,6 +69,10 @@ func encryptPortableProfileSession(profileID string, cookies []CookieInfo, crede
 		return nil, err
 	}
 
+	if credential != nil {
+		copy := credential.PortableCopy()
+		credential = &copy
+	}
 	payload, err := json.Marshal(portableProfileSession{
 		Version:       portableSessionVersion,
 		ProfileID:     profileID,

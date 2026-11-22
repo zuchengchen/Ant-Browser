@@ -124,6 +124,9 @@ func installGPTSession(ctx context.Context, port int, profileDir, extensionDir s
 	if credential != nil {
 		fields := map[string]any{"site": credential.Site, "recordId": credential.RecordID, "email": credential.Email,
 			"password": credential.Password, "totpSecret": credential.TOTPSecret}
+		if credential.LoginBinding != "" {
+			fields["loginBinding"] = credential.LoginBinding
+		}
 		write = `async function (record) {
 			const {validateLocalRecord} = await import(chrome.runtime.getURL('local.js'))
 			validateLocalRecord(record)

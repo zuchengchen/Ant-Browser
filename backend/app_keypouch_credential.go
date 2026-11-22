@@ -131,12 +131,16 @@ func (a *App) reconcileKeyPouchCredential(ctx context.Context, id, site string, 
 func (a *App) syncKeyPouchCredential(ctx context.Context, device *keypouch.Device, path, site string, claim keyPouchOpenClaim, id string) error {
 	// A missing field is a protocol error. Only an explicit empty string clears an old value.
 	var fields struct {
-		RecordID int64   `json:"record_id"`
-		Email    string  `json:"email"`
-		Password *string `json:"password"`
-		TOTP     *string `json:"totp_secret"`
+		RecordID     int64   `json:"record_id"`
+		Email        string  `json:"email"`
+		Password     *string `json:"password"`
+		TOTP         *string `json:"totp_secret"`
+		LoginBinding string  `json:"login_binding"`
 	}
 	input := map[string]any{"profile_id": id, "record_id": claim.RecordID, "email": claim.Email}
+	if claim.LoginReporting {
+		input["login_reporting"] = true
+	}
 	if err := device.Post(ctx, path+"credentials", input, &fields); err != nil {
 		return err
 	}
@@ -151,7 +155,7 @@ func (a *App) syncKeyPouchCredential(ctx context.Context, device *keypouch.Devic
 		return errGPTCredentialTarget
 	}
 	return a.saveLocalGPTCredential(id, localGPTCredential{
-		Site: site, RecordID: claim.RecordID, Email: fields.Email, Password: *fields.Password, TOTPSecret: *fields.TOTP,
+		Site: site, RecordID: claim.RecordID, Email: fields.Email, Password: *fields.Password, TOTPSecret: *fields.TOTP, LoginBinding: fields.LoginBinding,
 	})
 }
 

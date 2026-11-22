@@ -51,7 +51,7 @@ export function normalizeVaultSite(raw) {
 
 // Called only from the extension page. Chromium sends the site's session
 // cookie with host permission; the extension never needs its value.
-async function readVault(site, path, signal) {
+async function readVault(site, path, signal, write) {
   const url = normalizeVaultSite(site) + path;
   const controller = new AbortController();
   const cancel = () => controller.abort(new DOMException("读取 KeyPouch 已取消。", "AbortError"));
@@ -62,12 +62,13 @@ async function readVault(site, path, signal) {
   try {
     controller.signal.throwIfAborted();
     const response = await fetch(url, {
-      method: "GET",
+      method: write ? "POST" : "GET",
       credentials: "include",
       cache: "no-store",
       redirect: "error",
       referrerPolicy: "no-referrer",
-      headers: { Accept: "application/json" },
+      headers: write ? { Accept: "application/json", "Content-Type": "application/json", "X-CSRF-Token": write.csrf } : { Accept: "application/json" },
+      ...(write && { body: JSON.stringify({ version: write.version }) }),
       signal: controller.signal,
     });
     if (response.redirected || (response.url && response.url !== url)) throw new VaultError("network");
@@ -141,12 +142,23 @@ export async function listVaultAccounts(site, query = "", offset = 0, signal) {
   return { items, total: page.total };
 }
 
-export async function getVaultAccount(site, id, expectedEmail, signal) {
+export async function getVaultAccount(site, id, expectedEmail, signal, report = false) {
   const selected = accountEmail(expectedEmail);
   if (!positiveID(id) || !selected) throw new VaultError("record_changed");
   const record = await readVault(site, "/api/records/" + id, signal);
   const email = accountEmail(record?.username);
   if (record?.id !== id || record.deleted_at !== null || email !== selected) throw new VaultError("record_changed");
   if (typeof record.password !== "string" || typeof record.totp_secret !== "string") throw new VaultError("invalid_response");
-  return { email, password: record.password, totpSecret: record.totp_secret };
+  let attempt;
+  if (report && Number.isSafeInteger(record.version)) {
+    try {
+      const session = await readVault(site, "/api/session", signal);
+      if (session?.csrf) {
+        const response = await readVault(site, "/api/records/" + id + "/login-attempt", signal, { csrf: session.csrf, version: record.version });
+        if (typeof response?.attempt === "string" && /^[A-Za-z0-9_-]{32}$/.test(response.attempt)) attempt = response.attempt;
+      }
+    } catch { /* Login remains available on old or disconnected vaults. */ }
+    signal?.throwIfAborted();
+  }
+  return { email, password: record.password, totpSecret: record.totp_secret, ...(attempt && { attempt }) };
 }

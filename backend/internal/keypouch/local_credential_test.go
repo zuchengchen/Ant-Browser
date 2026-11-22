@@ -25,7 +25,7 @@ func credentialTestInstallation(t *testing.T) (string, string) {
 
 func TestLocalGPTCredentialEncryptedBoundAndRenewed(t *testing.T) {
 	root, path := credentialTestInstallation(t)
-	c := LocalGPTCredential{"https://keys.example.test", 17, "one@example.test", "  synthetic password  ", "synthetic-seed"}
+	c := LocalGPTCredential{"https://keys.example.test", 17, "one@example.test", "  synthetic password  ", "synthetic-seed", ""}
 	if got, err := ReadLocalGPTCredential(root, "first"); err != nil || got != nil {
 		t.Fatal("new instance should have no credential")
 	}
@@ -95,7 +95,7 @@ func TestLocalGPTCredentialEncryptedBoundAndRenewed(t *testing.T) {
 
 func TestLocalGPTCredentialConcurrentSnapshots(t *testing.T) {
 	root, _ := credentialTestInstallation(t)
-	old := LocalGPTCredential{"https://keys.example.test", 8, "steps@example.test", "first password", "first seed"}
+	old := LocalGPTCredential{"https://keys.example.test", 8, "steps@example.test", "first password", "first seed", ""}
 	next := old
 	next.Email, next.Password, next.TOTPSecret = "renamed@example.test", "second password", "second seed"
 	if err := SaveLocalGPTCredential(root, "first", old); err != nil {

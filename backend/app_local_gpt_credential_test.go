@@ -16,7 +16,7 @@ import (
 )
 
 func testLocalGPTCredential() localGPTCredential {
-	return localGPTCredential{Site: "https://keys.example.test", RecordID: 92, Email: "member@example.test", Password: " synthetic-password-for-member ", TOTPSecret: "synthetic-verification-seed"}
+	return localGPTCredential{Site: "https://keys.example.test", RecordID: 92, Email: "member@example.test", Password: " synthetic-password-for-member ", TOTPSecret: "synthetic-verification-seed", LoginBinding: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}
 }
 
 func TestLocalGPTExplicitCloneAndRecycle(t *testing.T) {
@@ -58,7 +58,7 @@ func TestLocalGPTExplicitCloneAndRecycle(t *testing.T) {
 		t.Fatal(err)
 	}
 	got, err := app.readLocalGPTCredential(copy.ProfileId)
-	if err != nil || got == nil || *got != credential {
+	if err != nil || got == nil || *got != credential.PortableCopy() {
 		t.Fatal("clone did not retain its independent snapshot")
 	}
 	if err := app.BrowserProfileDelete(copy.ProfileId); err != nil {
@@ -67,7 +67,7 @@ func TestLocalGPTExplicitCloneAndRecycle(t *testing.T) {
 	if _, err := app.BrowserProfileRestore(copy.ProfileId); err != nil {
 		t.Fatal(err)
 	}
-	if got, err := app.readLocalGPTCredential(copy.ProfileId); err != nil || got == nil || *got != credential {
+	if got, err := app.readLocalGPTCredential(copy.ProfileId); err != nil || got == nil || *got != credential.PortableCopy() {
 		t.Fatal("restored profile lost its credential")
 	}
 	if err := app.BrowserProfileDelete(copy.ProfileId); err != nil {
@@ -165,7 +165,7 @@ func TestLocalGPTCredentialArchivesAndMigration(t *testing.T) {
 				t.Fatal(err)
 			}
 			if filepath.Base(entry.Name) == gptSessionMarker || strings.Contains(entry.Name, keypouch.LocalGPTVaultName) || strings.Contains(entry.Name, "local-key-link") ||
-				bytes.Contains(data, localKey) || bytes.Contains(data, []byte(c.Password)) || bytes.Contains(data, []byte(c.TOTPSecret)) {
+				bytes.Contains(data, localKey) || bytes.Contains(data, []byte(c.Password)) || bytes.Contains(data, []byte(c.TOTPSecret)) || bytes.Contains(data, []byte(c.LoginBinding)) {
 				t.Fatalf("archive included private data in %s", entry.Name)
 			}
 			sawMarker = sawMarker || bytes.Equal(data, []byte("synthetic-profile-marker"))
@@ -181,7 +181,7 @@ func TestLocalGPTCredentialArchivesAndMigration(t *testing.T) {
 		}
 	}
 	session, err := decryptPortableProfileSession(profile.ProfileId, protectedEntry, pass)
-	if err != nil || session.GPTCredential == nil || *session.GPTCredential != c {
+	if err != nil || session.GPTCredential == nil || *session.GPTCredential != c.PortableCopy() {
 		t.Fatal("password-protected entry did not include the complete credential")
 	}
 
@@ -215,7 +215,7 @@ func TestLocalGPTCredentialArchivesAndMigration(t *testing.T) {
 	}
 	newID := result.ProfileMappings[profile.ProfileId]
 	got, err := NewApp(target.appRoot).readLocalGPTCredential(newID)
-	if err != nil || got == nil || *got != c || newID == existing.ProfileId || newID == profile.ProfileId || result.OverwrittenCount != 1 {
+	if err != nil || got == nil || *got != c.PortableCopy() || newID == existing.ProfileId || newID == profile.ProfileId || result.OverwrittenCount != 1 {
 		t.Fatal("restarted destination could not use the imported credential")
 	}
 	result, err = target.importProfilePackageFromPathWithModeAndConfirmation(plainPackage, profilePackageImportModeNew, true)

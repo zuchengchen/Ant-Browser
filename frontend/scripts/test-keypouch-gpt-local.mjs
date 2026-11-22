@@ -194,3 +194,27 @@ test('refreshing or clearing this instance during an in-flight login stops the o
   assert.equal(state.targets.length, 1)
   assert.equal(state.keyReads, 0)
 })
+
+test('a synchronized original can report a single outcome without exposing its password, seed or session', async t => {
+  const { sendLoginResult } = await import('../../backend/internal/browser/builtinassets/keypouch-gpt/receipt.js')
+  const token = 'a'.repeat(32)
+  const entry = { ...source, loginBinding: 'b'.repeat(32) + '.' + 'c'.repeat(43) }
+  replaceGlobal(t, 'chrome', { storage: { session: { get: async key => ({ [key]: entry }) } } })
+  const calls = []
+  t.mock.method(globalThis, 'fetch', async (url, request) => {
+    calls.push({ url, body: JSON.parse(request.body) })
+    assert.equal(request.credentials, 'omit')
+    assert.equal(request.redirect, 'error')
+    return new Response(JSON.stringify(url.endsWith('/local-login-attempt') ? { attempt: token } : {}))
+  })
+  const signal = new AbortController().signal
+  const record = await localVault.account()
+  const credentials = await localVault.login(record, signal)
+  assert.equal(credentials.attempt, token)
+  assert.equal(await sendLoginResult(record.site, token, record.email, undefined, signal), undefined)
+  assert.equal(await sendLoginResult(record.site, token, record.email, 'success', signal), true)
+  assert.deepEqual(calls, [
+    { url: source.site + '/api/gpt-plugin/local-login-attempt', body: { binding: entry.loginBinding } },
+    { url: source.site + '/api/gpt-plugin/login-result', body: { attempt: token, email: source.email, result: 'success' } },
+  ])
+})

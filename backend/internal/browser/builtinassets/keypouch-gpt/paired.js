@@ -1,5 +1,7 @@
 import { accountEmail, normalizeVaultSite, VaultError } from './vault.js'
 
+import { receiptToken } from './receipt.js'
+
 const storeName = 'site-keys'
 const curve = { name: 'ECDSA', namedCurve: 'P-256' }
 
@@ -144,10 +146,17 @@ export async function openPairedVault(rawSite) {
         throw error
       }
     },
-    async login(record, signal) {
-      const data = await readSelected('login', record, signal)
+    async login(record, signal, report = false) {
+      let data
+      try {
+        data = await readSelected(report ? 'login-attempt' : 'login', record, signal)
+      } catch (error) {
+        if (!report || error.code !== 'unsupported') throw error
+        data = await readSelected('login', record, signal)
+      }
       if (typeof data.password !== 'string') throw new VaultError('invalid_response')
-      return { email: data.email, password: data.password }
+      const attempt = receiptToken(data.attempt)
+      return { email: data.email, password: data.password, ...(attempt && { attempt }) }
     },
     async totp(record, signal) {
       const data = await readSelected('totp', record, signal)

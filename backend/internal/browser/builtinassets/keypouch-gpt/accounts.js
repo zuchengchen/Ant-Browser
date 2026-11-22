@@ -1,5 +1,6 @@
 import { getVaultAccount, getVaultSession, listVaultAccounts, normalizeVaultSite, VAULT_PAGE_SIZE, VaultError } from './vault.js'
-import { loginToChatGPT } from './login.js'
+import { loginToChatGPT, verifyAfterChallenge } from './login.js'
+import { sendLoginResult } from './receipt.js'
 import { openPairedVault } from './paired.js'
 import { localKey, localVault } from './local.js'
 
@@ -197,7 +198,7 @@ async function startLogin(record, vault) {
         connectionMessage('KeyPouch 站点已变更，请重新连接并选择账号。')
         return
       }
-      const account = vault ? await vault.login(record, signal) : await getVaultAccount(site, record.id, record.email, signal)
+      const account = vault ? await vault.login(record, signal, true) : await getVaultAccount(site, record.id, record.email, signal, true)
       if (vault !== localVault && await configuredSite(signal) !== site) {
         connectionMessage('KeyPouch 站点已变更，请重新连接并选择账号。')
         return
@@ -218,7 +219,20 @@ async function startLogin(record, vault) {
       const result = await loginToChatGPT(target.id, account, signal, getCurrentCode)
       if (signal.aborted) return
       const needsAttention = result.status === 'failed' || result.status === 'mismatch'
-      showSection('login', result.message, needsAttention)
+      let message = result.message
+      let verdict = result.verdict
+      if (result.waitForIdentity) {
+        showSection('login', message)
+        verdict = await verifyAfterChallenge(target.id, account.email, signal)
+        if (signal.aborted) return
+        if (verdict === 'success') message = '已确认此实例登录的是所选 ChatGPT 账号。'
+      }
+      if (verdict && account.attempt) {
+        const reported = await sendLoginResult(vault === localVault ? record.site : site, account.attempt, record.email, verdict, signal)
+        if (signal.aborted) return
+        message += reported ? ' 已回填到 KeyPouch。' : ' 本次结果未能回填到 KeyPouch。'
+      }
+      showSection('login', message, needsAttention)
       if (needsAttention) {
         const [active] = await chrome.tabs.query({ windowId: tab.windowId, active: true })
         if (active?.id === target.id && !signal.aborted) await chrome.tabs.update(tab.id, { active: true })
