@@ -1,0 +1,50 @@
+{
+  "recorded_at": "2026-11-10T05:14:50.524904+00:00",
+  "goal_file": "/home/czc/projects/working/Ant-Browser/.codex/goals/2026-11-09-linux-performance.md",
+  "blocker": "Required 10000-entry GUI baseline cannot reliably complete; approved stop condition requires user direction before changing acceptance or measurement environment.",
+  "consecutive_goal_turns_with_same_blocker": 2,
+  "turns": [
+    {
+      "index": 1,
+      "classification": "progress",
+      "evidence": "Native diagnostic naturally failed after 1800 seconds; failure and cleanup were independently verified; complete evidence was archived; user direction was requested."
+    },
+    {
+      "index": 2,
+      "classification": "no_progress",
+      "evidence": "Revalidated unchanged approved goal, terminal failed producer, unchanged raw evidence, all 41 original process identities absent, and preserved archive. No user choice or changed environment is available."
+    }
+  ],
+  "goal_status": "blocked",
+  "next_required_action": "Continue approved v2 work. No unanswered approval gate.",
+  "blocked_threshold_met": false,
+  "resolution": {
+    "recorded_at": "2026-11-10T05:19:22.721352+00:00",
+    "user_answer": "1",
+    "selected_direction": "Revise 10000-entry acceptance as offered; preserve baseline timeouts and continue smaller catalog/runtime quantitative verification plus candidate large-catalog validation.",
+    "successor_path": "/home/czc/projects/working/Ant-Browser/.codex/goals/2026-11-10-linux-performance-v2.md",
+    "state": "drafted; full successor and path displayed; exact save-and-continue choice pending",
+    "blocked_status_applied": false
+  },
+  "approval_gate": {
+    "recorded_at": "2026-11-10T05:28:40.579882+00:00",
+    "consecutive_goal_turns": 3,
+    "previous_turn_classification": "no_progress: exact successor approval remained unanswered",
+    "current_turn_classification": "no_progress: revalidated unchanged original goal, absent successor and failed required GUI baseline; no authorized dependent work",
+    "async_question_pending": true,
+    "blocked_threshold_met": true,
+    "goal_status": "blocked",
+    "status_change_confirmed": true
+  },
+  "approval_gate_resolution": {
+    "recorded_at": "2026-11-10T06:42:58.695095+00:00",
+    "user_answer": "1",
+    "execution_intent": "save_and_start",
+    "successor_path": "/home/czc/projects/working/Ant-Browser/.codex/goals/2026-11-10-linux-performance-v2.md",
+    "exact_readback": true,
+    "goal_tool_status": "blocked",
+    "no_callable_resume": true,
+    "work_state": "user-authorized execution resumed",
+    "new_blocked_audit_consecutive_turns": 0
+  }
+}

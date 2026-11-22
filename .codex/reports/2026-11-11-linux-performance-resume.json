@@ -1,0 +1,13 @@
+{
+  "started_ns": 1794356095739445582,
+  "authorization": "User reply 1: continue locating and fixing regressions; retain original 5% threshold",
+  "approved_goal": "/home/czc/projects/working/Ant-Browser/.codex/goals/2026-11-10-linux-performance-v2.md",
+  "approved_goal_sha256": "9d3cb85cfbdd0d52a76f2b519a99b7b47c44edc71b54d8727d07a02d19cfd571",
+  "starting_source_hash": "86c82c47b33344a15cba3aadf2c87ddf0701fccac27a0f4edc86910eb37aae19",
+  "original_evidence_root": "/tmp/ant-linux-perf-cntr19l1",
+  "new_evidence_root": "/tmp/ant-linux-perf-resume-gokzruj0",
+  "goal_tool_status_at_start": "blocked; no exposed resume operation; user explicitly authorized work",
+  "criteria_changed": false,
+  "old_evidence_read_only": true,
+  "acceptance": false
+}
