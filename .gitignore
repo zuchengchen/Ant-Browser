@@ -97,6 +97,7 @@ __pycache__/
 .tmp/runtime-cache/
 
 # Test outputs / coverage
+/.codex/artifacts/
 coverage/
 *.out
 tmp-debug-port*/
