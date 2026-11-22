@@ -96,6 +96,29 @@ func (a *App) resetManagedSettings() error {
 }
 
 func (a *App) resetLocalManagedSettingsLocked() error {
+	a.mofaSiteMu.Lock()
+	defer a.mofaSiteMu.Unlock()
+	mofaPath, err := a.mofaSettingsPath()
+	if err != nil {
+		return err
+	}
+	mofa, err := readMofaSite(mofaPath)
+	if err != nil {
+		return err
+	}
+	if mofa != "" {
+		if err := a.saveMofaSiteLocked(mofaPath, ""); err != nil {
+			return err
+		}
+	}
+	err = a.resetKeyPouchAndBackupSettingsLocked()
+	if err != nil && mofa != "" {
+		err = errors.Join(err, a.saveMofaSiteLocked(mofaPath, mofa))
+	}
+	return err
+}
+
+func (a *App) resetKeyPouchAndBackupSettingsLocked() error {
 	path, err := a.keyPouchSettingsPath()
 	if err != nil {
 		return err
@@ -112,7 +135,7 @@ func (a *App) resetLocalManagedSettingsLocked() error {
 			return fmt.Errorf("清除 KeyPouch 本机设置失败：%w", err)
 		}
 		if err := a.removeBackupLocalConfigs(); err != nil {
-			if restoreErr := writeKeyPouchSiteFile(path, previous); restoreErr != nil {
+			if restoreErr := writeLocalSiteFile(path, previous); restoreErr != nil {
 				return errors.Join(err, fmt.Errorf("恢复 KeyPouch 本机设置失败：%w", restoreErr))
 			}
 			return err

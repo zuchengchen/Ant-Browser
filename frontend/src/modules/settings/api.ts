@@ -88,6 +88,18 @@ export async function saveKeyPouchSettings(siteUrl: string): Promise<KeyPouchSet
   return bindings.SaveKeyPouchSettings(siteUrl)
 }
 
+export async function fetchMofaSite(): Promise<string> {
+  const bindings = await getBindings()
+  if (!bindings?.GetMofaSite) throw new Error('当前环境不支持 MOFA 地址设置')
+  return bindings.GetMofaSite()
+}
+
+export async function saveMofaSite(siteUrl: string): Promise<string> {
+  const bindings = await getBindings()
+  if (!bindings?.SaveMofaSite) throw new Error('当前环境不支持 MOFA 地址设置')
+  return bindings.SaveMofaSite(siteUrl)
+}
+
 export const defaultAutomationState: AutomationState = {
   settings: {
     enabled: false,

@@ -15,7 +15,15 @@ import (
 // origin. Keeping the marker beside the list in the same Preferences write
 // means a later manual unpin or reorder remains the user's choice.
 func (a *App) prepareGPTToolbarPin(userDataDir string, args, extensionPaths []string) error {
-	builtin := a.resolveAppPath(filepath.Join("data", keyPouchExtensionDirectory))
+	return a.prepareBuiltinToolbarPin(userDataDir, args, extensionPaths, keyPouchExtensionDirectory, "ant_gpt_toolbar_pin_default")
+}
+
+func (a *App) prepareMofaToolbarPin(userDataDir string, args, extensionPaths []string) error {
+	return a.prepareBuiltinToolbarPin(userDataDir, args, extensionPaths, mofaExtensionDirectory, "ant_mofa_toolbar_pin_default")
+}
+
+func (a *App) prepareBuiltinToolbarPin(userDataDir string, args, extensionPaths []string, directory, marker string) error {
+	builtin := a.resolveAppPath(filepath.Join("data", directory))
 	for _, path := range extensionPaths {
 		if !sameGPTDirectory(path, builtin) {
 			continue
@@ -29,7 +37,7 @@ func (a *App) prepareGPTToolbarPin(userDataDir string, args, extensionPaths []st
 			return err
 		}
 		return updateBrowserPreferences(profile, func(prefs map[string]json.RawMessage) (bool, error) {
-			changed, err := setGPTToolbarPinDefault(prefs, id)
+			changed, err := setBuiltinToolbarPinDefault(prefs, id, marker)
 			if err != nil {
 				return false, err
 			}
@@ -109,8 +117,7 @@ func browserToolbarProfileDir(userDataDir string, args []string) (string, error)
 	return filepath.Join(userDataDir, name), nil
 }
 
-func setGPTToolbarPinDefault(prefs map[string]json.RawMessage, id string) (bool, error) {
-	const marker = "ant_gpt_toolbar_pin_default"
+func setBuiltinToolbarPinDefault(prefs map[string]json.RawMessage, id, marker string) (bool, error) {
 	var previous string
 	if value, ok := prefs[marker]; ok {
 		if err := json.Unmarshal(value, &previous); err != nil {

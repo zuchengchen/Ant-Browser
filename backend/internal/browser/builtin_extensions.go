@@ -27,6 +27,9 @@ const builtinExtensionAssetRoot = "builtinassets"
 // KeyPouchGPTExtensionID identifies the bundled package in Ant's extension catalog.
 const KeyPouchGPTExtensionID = "bhejekdbkkhikmkocgglbbaiakpdcife"
 
+// MofaImportExtensionID identifies the bundled MOFA account import extension.
+const MofaImportExtensionID = "ahgeagcnemihfgepigpindnndfbckbbg"
+
 // VerifyKeyPouchGPTFiles checks the installation before handing a credential
 // to its extension origin. Backups from older installations may also contain
 // unpacked extension directories with the same path and version.
@@ -80,6 +83,7 @@ type builtinExtensionSpec struct {
 var builtinExtensionSpecs = []builtinExtensionSpec{
 	{ID: "ababababcdcdcdefefefefghghghgh", Dir: "iso-pro"},
 	{ID: KeyPouchGPTExtensionID, Dir: "keypouch-gpt", DefaultInstall: true},
+	{ID: MofaImportExtensionID, Dir: "mofa-import", DefaultInstall: true},
 }
 
 // NormalizeCatalogExtensionID also recognizes Ant's older built-in catalog
@@ -328,6 +332,19 @@ func writeBuiltinExtensionFiles(sourceDir string, targetDir string) error {
 		}
 		if err := os.MkdirAll(filepath.Dir(destination), 0o755); err != nil {
 			return err
+		}
+		// The desktop owns this installation-specific address. Install the
+		// empty default on first use and leave an existing configuration intact.
+		if sourceDir == "builtinassets/mofa-import" && relative == "site.json" {
+			file, err := os.OpenFile(destination, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+			if os.IsExist(err) {
+				return nil
+			}
+			if err != nil {
+				return err
+			}
+			_, writeErr := file.Write(data)
+			return errors.Join(writeErr, file.Close())
 		}
 		return os.WriteFile(destination, data, 0o644)
 	})

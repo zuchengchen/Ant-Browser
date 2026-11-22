@@ -376,6 +376,8 @@ export function GetLogLevel():Promise<string>;
 
 export function GetMemoryStats():Promise<Record<string, any>>;
 
+export function GetMofaSite():Promise<string>;
+
 export function GetProxyCheckSettings():Promise<config.ProxyCheckConfig>;
 
 export function GetRunningInstances():Promise<Array<browser.Profile>>;
@@ -421,6 +423,8 @@ export function SaveBrowserSettings(arg1:browser.Settings):Promise<void>;
 export function SaveKeyPouchSettings(arg1:string):Promise<Record<string, string>>;
 
 export function SaveLaunchServerSettings(arg1:number):Promise<Record<string, any>>;
+
+export function SaveMofaSite(arg1:string):Promise<string>;
 
 export function SaveProxyCheckSettings(arg1:config.ProxyCheckConfig):Promise<void>;
 

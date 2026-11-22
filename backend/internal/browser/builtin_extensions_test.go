@@ -106,13 +106,20 @@ func TestKeyPouchExtensionFollowsDefaultAndProfileOverrides(t *testing.T) {
 	if err != nil || !gpt.Enabled || !gpt.DefaultInstall || gpt.Name != "登录 GPT" {
 		t.Fatalf("unexpected built-in GPT extension: %+v, %v", gpt, err)
 	}
+	mofa, err := dao.Get(MofaImportExtensionID)
+	if err != nil || !mofa.Enabled || !mofa.DefaultInstall || mofa.Name != "导入到 MOFA" {
+		t.Fatalf("unexpected built-in MOFA extension: %+v, %v", mofa, err)
+	}
 	check := func(profile string, want ...string) {
 		t.Helper()
-		if got := m.ProfileExtensionLoadPaths(&Profile{ProfileId: profile}); !slices.Equal(got, want) {
+		got := m.ProfileExtensionLoadPaths(&Profile{ProfileId: profile})
+		slices.Sort(got)
+		slices.Sort(want)
+		if !slices.Equal(got, want) {
 			t.Fatalf("%s loads %v, want %v", profile, got, want)
 		}
 	}
-	check("inherit", gpt.InstallDir)
+	check("inherit", gpt.InstallDir, mofa.InstallDir)
 	check("empty")
 	if _, err := dao.SetProfileSettings("explicit", []string{KeyPouchGPTExtensionID}, true); err != nil {
 		t.Fatal(err)
@@ -123,7 +130,7 @@ func TestKeyPouchExtensionFollowsDefaultAndProfileOverrides(t *testing.T) {
 	if err := m.SyncBuiltinExtensions(); err != nil {
 		t.Fatal(err)
 	}
-	check("inherit")
+	check("inherit", mofa.InstallDir)
 	check("explicit", gpt.InstallDir)
 	if err := dao.SetEnabled(KeyPouchGPTExtensionID, false); err != nil {
 		t.Fatal(err)
@@ -132,4 +139,25 @@ func TestKeyPouchExtensionFollowsDefaultAndProfileOverrides(t *testing.T) {
 		t.Fatal(err)
 	}
 	check("explicit")
+}
+
+func TestMofaSiteSurvivesBuiltinUpdate(t *testing.T) {
+	dir := t.TempDir()
+	if err := writeBuiltinExtensionFiles("builtinassets/mofa-import", dir); err != nil {
+		t.Fatal(err)
+	}
+	site := filepath.Join(dir, "site.json")
+	if got, err := os.ReadFile(site); err != nil || string(got) != "{\"site\":\"\"}\n" {
+		t.Fatalf("initial site configuration = %q, %v", got, err)
+	}
+	configured := []byte(`{"site":"https://mofa.example.test"}`)
+	if err := os.WriteFile(site, configured, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeBuiltinExtensionFiles("builtinassets/mofa-import", dir); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := os.ReadFile(site); err != nil || !slices.Equal(got, configured) {
+		t.Fatalf("site configuration after reinstallation = %q, %v", got, err)
+	}
 }

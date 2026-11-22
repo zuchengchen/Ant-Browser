@@ -734,6 +734,10 @@ export function GetMemoryStats() {
   return window['go']['main']['App']['GetMemoryStats']();
 }
 
+export function GetMofaSite() {
+  return window['go']['main']['App']['GetMofaSite']();
+}
+
 export function GetProxyCheckSettings() {
   return window['go']['main']['App']['GetProxyCheckSettings']();
 }
@@ -824,6 +828,10 @@ export function SaveKeyPouchSettings(arg1) {
 
 export function SaveLaunchServerSettings(arg1) {
   return window['go']['main']['App']['SaveLaunchServerSettings'](arg1);
+}
+
+export function SaveMofaSite(arg1) {
+  return window['go']['main']['App']['SaveMofaSite'](arg1);
 }
 
 export function SaveProxyCheckSettings(arg1) {

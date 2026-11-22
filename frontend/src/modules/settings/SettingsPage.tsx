@@ -11,6 +11,7 @@ import {
   fetchAutomationState,
   fetchKeyPouchSettings,
   fetchLaunchServerSettings,
+  fetchMofaSite,
   fetchSettings,
   installAutomationRuntime,
   resetSettings,
@@ -19,6 +20,7 @@ import {
   saveAutomationSettings,
   saveKeyPouchSettings,
   saveLaunchServerSettings,
+  saveMofaSite,
   saveSettings,
 } from './api'
 import type { AutomationNodeSource, AutomationRuntimeCheck, AutomationState, AutomationSystemNodeProbe, KeyPouchSettings } from './api'
@@ -38,6 +40,9 @@ export function SettingsPage() {
   const [keyPouch, setKeyPouch] = useState<KeyPouchSettings | null | undefined>(undefined)
   const [siteUrlDraft, setSiteUrlDraft] = useState('')
   const [siteError, setSiteError] = useState('')
+  const [mofaSite, setMofaSite] = useState<string | null | undefined>(undefined)
+  const [mofaSiteDraft, setMofaSiteDraft] = useState('')
+  const [mofaSiteError, setMofaSiteError] = useState('')
   const [automationState, setAutomationState] = useState<AutomationState>(defaultAutomationState)
   const [automationProgress, setAutomationProgress] = useState<AutomationRuntimeProgress | null>(null)
   const [automationBusy, setAutomationBusy] = useState<AutomationBusyState>('none')
@@ -54,6 +59,7 @@ export function SettingsPage() {
   const [saving, setSaving] = useState(false)
   const generalChanged = settings !== savedSettings
   const siteChanged = keyPouch !== undefined && siteUrlDraft.trim() !== (keyPouch?.siteUrl ?? '')
+  const mofaSiteChanged = mofaSite !== undefined && mofaSiteDraft.trim() !== (mofaSite ?? '')
 
   useEffect(() => {
     void loadSettings()
@@ -85,6 +91,20 @@ export function SettingsPage() {
     }
   }
 
+  const loadMofaSite = async () => {
+    setMofaSite(undefined)
+    try {
+      const result = await fetchMofaSite()
+      setMofaSiteDraft(result)
+      setMofaSite(result)
+      setMofaSiteError('')
+    } catch (error) {
+      setMofaSite(null)
+      setMofaSiteDraft('')
+      setMofaSiteError(errorMessage(error, '读取 MOFA 后台地址失败'))
+    }
+  }
+
   const loadSettings = async () => {
     setLoading(true)
     try {
@@ -93,6 +113,7 @@ export function SettingsPage() {
         fetchAutomationState(),
         fetchLaunchServerSettings(),
         loadKeyPouch(),
+        loadMofaSite(),
       ])
       setSettings(data)
       setSavedSettings(data)
@@ -127,6 +148,19 @@ export function SettingsPage() {
           return
         }
       }
+      if (mofaSiteChanged) {
+        try {
+          const result = await saveMofaSite(mofaSiteDraft)
+          setMofaSite(result)
+          setMofaSiteDraft(result)
+          setMofaSiteError('')
+        } catch (error) {
+          const message = errorMessage(error, 'MOFA 后台地址保存失败')
+          setMofaSiteError(message)
+          toast.error(message)
+          return
+        }
+      }
       if (generalChanged) {
         if (!await saveSettings(settings)) throw new Error('通用设置保存失败，请重试')
         setSavedSettings(settings)
@@ -140,7 +174,7 @@ export function SettingsPage() {
   }
 
   const handleReset = async () => {
-    if (!confirm('确定要重置所有设置吗？将重置通用设置、KeyPouch 站点地址、自动化、备份渠道和 Launch Server；不会删除浏览器实例、代理或内核数据。')) return
+    if (!confirm('确定要重置所有设置吗？将重置通用设置、KeyPouch 和 MOFA 地址、自动化、备份渠道和 Launch Server。浏览器实例、代理和内核数据会保留。')) return
 
     setLoading(true)
     try {
@@ -151,6 +185,7 @@ export function SettingsPage() {
         fetchAutomationState(),
         fetchLaunchServerSettings(),
         loadKeyPouch(),
+        loadMofaSite(),
       ])
       setTheme('light')
       setAutomationState(automation)
@@ -326,7 +361,7 @@ export function SettingsPage() {
               <RotateCcw className="h-4 w-4" />
               重置
             </Button>
-            <Button variant="danger" size="sm" onClick={handleSave} loading={saving} disabled={!generalChanged && !siteChanged}>
+            <Button variant="danger" size="sm" onClick={handleSave} loading={saving} disabled={!generalChanged && !siteChanged && !mofaSiteChanged}>
               <Save className="h-4 w-4" />
               保存
             </Button>
@@ -347,6 +382,13 @@ export function SettingsPage() {
         onSiteUrlChange={value => {
           setSiteUrlDraft(value)
           setSiteError('')
+        }}
+        mofaSiteUrl={mofaSiteDraft}
+        mofaSiteDisabled={mofaSite === undefined || saving}
+        mofaSiteError={mofaSiteError}
+        onMofaSiteUrlChange={value => {
+          setMofaSiteDraft(value)
+          setMofaSiteError('')
         }}
       />
       <AutomationSettingsCard

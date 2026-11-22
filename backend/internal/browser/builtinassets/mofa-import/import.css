@@ -1,0 +1,65 @@
+:root {
+  color-scheme: light dark;
+  font: 16px/1.55 system-ui, sans-serif;
+}
+
+body {
+  margin: 0;
+  background: Canvas;
+  color: CanvasText;
+}
+
+main {
+  box-sizing: border-box;
+  margin: clamp(1rem, 8vw, 5rem) auto;
+  width: calc(100% - 2rem);
+  max-width: 34rem;
+  padding: clamp(1rem, 5vw, 2rem);
+  border: 1px solid GrayText;
+  border: 1px solid color-mix(in srgb, CanvasText 18%, Canvas);
+  border-radius: 0.75rem;
+}
+
+h1 {
+  margin: 0 0 0.7rem;
+  font-size: 1.5rem;
+  line-height: 1.25;
+}
+
+p {
+  margin: 0 0 0.9rem;
+  overflow-wrap: anywhere;
+}
+
+#site:empty {
+  display: none;
+}
+
+#status:not(:empty) {
+  margin: 0.9rem 0 0;
+}
+
+#status:empty {
+  margin: 0;
+}
+
+button {
+  appearance: none;
+  border: 1px solid transparent;
+  border-radius: 0.4rem;
+  background: #1b5a91;
+  color: white;
+  padding: 0.6rem 0.95rem;
+  font: inherit;
+  cursor: pointer;
+}
+
+button:focus-visible {
+  outline: 2px solid LinkText;
+  outline-offset: 3px;
+}
+
+button:disabled {
+  opacity: 0.65;
+  cursor: default;
+}

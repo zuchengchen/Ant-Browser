@@ -194,7 +194,7 @@ func backupZipAddDir(w *zip.Writer, srcDir, archiveBase, outputZipPath, outputMe
 			return nil
 		}
 		rel = filepath.ToSlash(rel)
-		if base == "payload/app/data" && isKeyPouchExtensionSiteFile(rel) {
+		if base == "payload/app/data" && (isKeyPouchExtensionSiteFile(rel) || isMofaExtensionSiteFile(rel)) {
 			return nil
 		}
 		targetName := base + "/" + rel

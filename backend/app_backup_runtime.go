@@ -1,13 +1,15 @@
 package backend
 
 import (
-	"ant-chrome/backend/internal/browser"
 	"errors"
 	"fmt"
 	"os/exec"
 	"sort"
 	"strings"
 	"time"
+
+	"ant-chrome/backend/internal/browser"
+	"ant-chrome/backend/internal/logger"
 )
 
 var backupTryCloseBrowserViaCDP = tryCloseBrowserViaCDP
@@ -180,6 +182,9 @@ func (a *App) backupReloadAfterMutation() error {
 	}
 	if a.browserMgr != nil {
 		a.browserMgr.InitData()
+		if err := a.syncSavedMofaExtensionSite(); err != nil {
+			logger.New("Backup").Error("恢复 MOFA 插件地址失败", logger.F("error", err))
+		}
 	}
 	a.autoDetectCores()
 	if err := a.loadProxies(); err != nil {

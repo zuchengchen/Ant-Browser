@@ -219,6 +219,9 @@ func (a *App) startupInitManagers(cfg *config.Config, db *database.DB) error {
 		logger.New("Browser").Error("初始化「登录 GPT」插件的站点失败", logger.F("error", err))
 	}
 	a.keyPouchActionMu.Unlock()
+	if err := a.syncSavedMofaExtensionSite(); err != nil {
+		logger.New("Browser").Error("初始化 MOFA 插件地址失败", logger.F("error", err))
+	}
 	a.recoverBrowserRuntimeStates()
 	if err := a.browserMgr.MigrateLegacyExternalExtensionRegistry(); err != nil {
 		logger.New("Browser").Error("启动迁移旧版插件外部注册失败", logger.F("error", err))

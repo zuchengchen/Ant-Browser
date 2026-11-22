@@ -14,9 +14,16 @@ interface BasicSettingsCardsProps extends SettingsCardsProps {
   siteDisabled: boolean
   siteError: string
   onSiteUrlChange: (value: string) => void
+  mofaSiteUrl: string
+  mofaSiteDisabled: boolean
+  mofaSiteError: string
+  onMofaSiteUrlChange: (value: string) => void
 }
 
-export function SettingsBasicFeatureCards({ settings, onChange, siteUrl, fallbackUrl, siteDisabled, siteError, onSiteUrlChange }: BasicSettingsCardsProps) {
+export function SettingsBasicFeatureCards({
+  settings, onChange, siteUrl, fallbackUrl, siteDisabled, siteError, onSiteUrlChange,
+  mofaSiteUrl, mofaSiteDisabled, mofaSiteError, onMofaSiteUrlChange,
+}: BasicSettingsCardsProps) {
   return (
     <>
       <Card title="基础设置">
@@ -51,6 +58,23 @@ export function SettingsBasicFeatureCards({ settings, onChange, siteUrl, fallbac
               aria-invalid={!!siteError}
               spellCheck={false}
               onChange={e => onSiteUrlChange(e.target.value)}
+            />
+          </FormItem>
+          <FormItem
+            label={<label htmlFor="mofa-site-url">MOFA 后台地址</label>}
+            hint="支持 HTTPS 站点地址或 /admin/accounts 完整地址。清空后关闭后台入口。"
+            error={mofaSiteError}
+          >
+            <Input
+              id="mofa-site-url"
+              type="url"
+              value={mofaSiteUrl}
+              placeholder="https://mofa.example.com/admin/accounts"
+              disabled={mofaSiteDisabled}
+              error={!!mofaSiteError}
+              aria-invalid={!!mofaSiteError}
+              spellCheck={false}
+              onChange={e => onMofaSiteUrlChange(e.target.value)}
             />
           </FormItem>
         </div>

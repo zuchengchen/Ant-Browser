@@ -88,6 +88,7 @@ type App struct {
 	keyPouchRuntimeDevice         *keypouch.Device
 	keyPouchRuntimeCancel         context.CancelFunc
 	keyPouchRuntimeActive         bool
+	mofaSiteMu                    sync.Mutex
 	backupLocalConfigPathOverride string
 	stopServicesOnce              sync.Once
 	finalizeOnce                  sync.Once

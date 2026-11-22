@@ -188,6 +188,11 @@ func (a *App) prepareBrowserStartPlan(input browserStartInput, profile *BrowserP
 		extensionWarning = "未能设置「登录 GPT」的默认工具栏位置，可在扩展菜单中手动固定"
 		logger.New("Extension").Warn(extensionWarning, logger.F("profile_id", profile.ProfileId), logger.F("error", err))
 	}
+	if err := a.prepareMofaToolbarPin(userDataDir, instanceArgs, extensionPaths); err != nil {
+		warning := "未能设置「导入到 MOFA」的默认工具栏位置，可在扩展菜单中手动固定"
+		logger.New("Extension").Warn(warning, logger.F("profile_id", profile.ProfileId), logger.F("error", err))
+		extensionWarning = joinBrowserStartWarnings(extensionWarning, warning)
+	}
 
 	return &browserStartPlan{
 		profile:              profile,

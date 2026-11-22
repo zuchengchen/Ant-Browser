@@ -198,7 +198,50 @@ func TestGPTToolbarSurvivesChromiumFirstRun(t *testing.T) {
 	}
 }
 
-func TestBrowserStartPlanPinsBundledGPTWhenEnabled(t *testing.T) {
+func TestMofaToolbarPreservesManualUnpinAlongsideGPT(t *testing.T) {
+	originalFinder := findBrowserUserDataProcesses
+	findBrowserUserDataProcesses = func(string) ([]browserUserDataProcess, error) { return nil, nil }
+	t.Cleanup(func() { findBrowserUserDataProcesses = originalFinder })
+	app := NewApp(t.TempDir())
+	gpt := app.resolveAppPath(filepath.Join("data", keyPouchExtensionDirectory))
+	mofa := app.resolveAppPath(filepath.Join("data", mofaExtensionDirectory))
+	writePasswordTestPreferences(t, filepath.Join(gpt, "manifest.json"), `{"manifest_version":3}`)
+	writePasswordTestPreferences(t, filepath.Join(mofa, "manifest.json"), `{"manifest_version":3}`)
+	gptID, err := browser.UnpackedExtensionID(gpt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mofaID, err := browser.UnpackedExtensionID(mofa)
+	if err != nil {
+		t.Fatal(err)
+	}
+	root := t.TempDir()
+	prefs := filepath.Join(root, "Default", "Preferences")
+	paths := []string{gpt, mofa}
+	if err := app.prepareMofaToolbarPin(root, nil, paths); err != nil {
+		t.Fatal(err)
+	}
+	if err := app.prepareGPTToolbarPin(root, nil, paths); err != nil {
+		t.Fatal(err)
+	}
+	state := readPasswordTestPreferences(t, prefs)
+	var pins struct {
+		IDs []string `json:"pinned_extensions"`
+	}
+	if json.Unmarshal(state["extensions"], &pins) != nil || !slices.Equal(pins.IDs, []string{mofaID, gptID}) {
+		t.Fatalf("unexpected pins %v", pins.IDs)
+	}
+	manual := fmt.Sprintf(`{"ant_mofa_toolbar_pin_default":%q,"ant_gpt_toolbar_pin_default":%q,"extensions":{"pinned_extensions":["other",%q]}}`, mofaID, gptID, gptID)
+	writePasswordTestPreferences(t, prefs, manual)
+	if err := app.prepareMofaToolbarPin(root, nil, paths); err != nil {
+		t.Fatal(err)
+	}
+	if actual, err := os.ReadFile(prefs); err != nil || string(actual) != manual {
+		t.Fatalf("manual unpin was not preserved: %s, %v", actual, err)
+	}
+}
+
+func TestBrowserStartPlanPinsBundledToolbarExtensionsWhenEnabled(t *testing.T) {
 	app, db := startPersistenceTestApp(t)
 	core := filepath.Join(app.appRoot, "core")
 	if err := os.Mkdir(core, 0755); err != nil {
@@ -242,7 +285,8 @@ func TestBrowserStartPlanPinsBundledGPTWhenEnabled(t *testing.T) {
 		}
 		prefs := readPasswordTestPreferences(t, filepath.Join(plan.userDataDir, "Default", "Preferences"))
 		_, initialized := prefs["ant_gpt_toolbar_pin_default"]
-		if initialized != (id == "target") {
+		_, mofaInitialized := prefs["ant_mofa_toolbar_pin_default"]
+		if initialized != (id == "target") || mofaInitialized != initialized {
 			t.Fatal("start plan did not honor the saved extension selection")
 		}
 		if _, err := os.Stat(filepath.Join(plan.userDataDir, "First Run")); (err == nil) != initialized {

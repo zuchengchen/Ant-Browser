@@ -125,7 +125,7 @@ func (a *App) SaveKeyPouchSettings(siteURL string) (map[string]string, error) {
 	fallback := validKeyPouchFallback()
 	err = a.updateKeyPouchSiteLocked(effectiveKeyPouchSite(site, fallback), func() error {
 		if site != "" {
-			return writeKeyPouchSiteFile(path, []byte(site+"\n"))
+			return writeLocalSiteFile(path, []byte(site+"\n"))
 		}
 		info, err := os.Lstat(path)
 		if err == nil {
@@ -186,7 +186,7 @@ func (a *App) syncKeyPouchExtensionSite(site string) (err error) {
 			return nil
 		}
 	}
-	return replaceKeyPouchSiteFile(path, data)
+	return replaceLocalSiteFile(path, data)
 }
 
 // The canonical installation-specific preference lives outside the app backup.
@@ -196,14 +196,14 @@ func isKeyPouchExtensionSiteFile(dataRelativePath string) bool {
 	return ok && (name == "site.json" || strings.HasPrefix(name, ".site-"))
 }
 
-func writeKeyPouchSiteFile(path string, data []byte) error {
+func writeLocalSiteFile(path string, data []byte) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
 		return err
 	}
-	return replaceKeyPouchSiteFile(path, data)
+	return replaceLocalSiteFile(path, data)
 }
 
-func replaceKeyPouchSiteFile(path string, data []byte) error {
+func replaceLocalSiteFile(path string, data []byte) error {
 	file, err := os.CreateTemp(filepath.Dir(path), ".site-*")
 	if err != nil {
 		return err
