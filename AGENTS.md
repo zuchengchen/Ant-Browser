@@ -36,6 +36,10 @@ These shared skill instructions supplement project-specific rules in this `AGENT
 
 <!-- ant-ready-start-skills:end -->
 
+## 子代理并行协作
+
+处理本项目任务时，主动将可独立推进的工作分配给子代理并行执行，尽量用满当前可用的子代理名额。
+
 ## Fork 开发、上游同步与发布规则
 
 本节适用于整个仓库，放在共享规则自动生成区域之外。后续同步上游时保留本节，并按需要整合上游规则。
