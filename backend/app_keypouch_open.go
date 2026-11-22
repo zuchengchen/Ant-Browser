@@ -15,6 +15,7 @@ import (
 
 	"ant-chrome/backend/internal/browser"
 	"ant-chrome/backend/internal/keypouch"
+	"ant-chrome/backend/internal/logger"
 	"github.com/google/uuid"
 )
 
@@ -42,15 +43,17 @@ type keyPouchProfileMatch struct {
 }
 
 func (a *App) keyPouchProfile(site string, c keyPouchOpenClaim, links *keypouch.ProfileLinks, acceptExisting func() bool) (string, string) {
+	return a.keyPouchProfileWithContext(context.Background(), site, c, links, acceptExisting)
+}
+
+func (a *App) keyPouchProfileWithContext(ctx context.Context, site string, c keyPouchOpenClaim, links *keypouch.ProfileLinks, acceptExisting func() bool) (string, string) {
 	m := a.browserMgr
 	if m == nil || m.ProfileDAO == nil || m.GroupDAO == nil {
 		return "", "storage_error"
 	}
-	id := links.ProfileID(c.RecordID)
-	if id == "" {
-		id = keyPouchProfileID(site, c.RecordID)
-	}
-	match, reason := a.resolveKeyPouchProfile(c, id, "", links)
+	m.InitData()
+	id := keyPouchProfileID(site, c.RecordID)
+	match, reason := a.resolveKeyPouchProfile(ctx, site, c, id, "", links)
 	if reason != "" {
 		return "", reason
 	}
@@ -59,7 +62,7 @@ func (a *App) keyPouchProfile(site string, c keyPouchOpenClaim, links *keypouch.
 			return "", "cancelled"
 		}
 		// Both the identity and the memberships can change while the dialog is open.
-		match, reason = a.resolveKeyPouchProfile(c, id, match.candidate, links)
+		match, reason = a.resolveKeyPouchProfile(ctx, site, c, id, match.candidate, links)
 		if reason != "" {
 			return "", reason
 		}
@@ -89,7 +92,7 @@ func (a *App) keyPouchProfile(site string, c keyPouchOpenClaim, links *keypouch.
 	}
 }
 
-func (a *App) resolveKeyPouchProfile(c keyPouchOpenClaim, recordProfileID, confirmedID string, links *keypouch.ProfileLinks) (match keyPouchProfileMatch, reason string) {
+func (a *App) resolveKeyPouchProfile(ctx context.Context, site string, c keyPouchOpenClaim, recordProfileID, confirmedID string, links *keypouch.ProfileLinks) (match keyPouchProfileMatch, reason string) {
 	m := a.browserMgr
 	m.Mutex.Lock()
 	var updated *BrowserProfile
@@ -98,6 +101,9 @@ func (a *App) resolveKeyPouchProfile(c keyPouchOpenClaim, recordProfileID, confi
 		a.emitBrowserInstanceUpdated(updated)
 	}()
 	id := recordProfileID
+	if linked := links.ProfileID(c.RecordID); linked != "" {
+		id = linked
+	}
 	if confirmedID != "" {
 		id = confirmedID
 	}
@@ -113,6 +119,7 @@ func (a *App) resolveKeyPouchProfile(c keyPouchOpenClaim, recordProfileID, confi
 		return match, "storage_error"
 	}
 	templateDeleted := false
+	var bound *BrowserProfile
 	for _, p := range deleted {
 		if p.ProfileId == id || p.ProfileId == recordProfileID {
 			return match, "profile_unavailable"
@@ -121,9 +128,12 @@ func (a *App) resolveKeyPouchProfile(c keyPouchOpenClaim, recordProfileID, confi
 	}
 	for _, p := range profiles {
 		if p.ProfileId == id {
-			if p.ProfileName != c.Email {
+			// A newly confirmed adoption must still identify the same local
+			// account the user saw in the dialog. Earlier bindings use their ID.
+			if confirmedID != "" && p.ProfileName != c.Email {
 				return match, "profile_conflict"
 			}
+			bound = p
 			match.bound = p.ProfileId
 		} else if p.ProfileId == recordProfileID {
 			return match, "profile_conflict"
@@ -149,6 +159,9 @@ func (a *App) resolveKeyPouchProfile(c keyPouchOpenClaim, recordProfileID, confi
 			(err == nil && uid.Version() == 5) || !links.Available(c.RecordID, match.candidate) {
 			return match, "profile_conflict"
 		}
+		if _, reason := a.keyPouchProfileCredentialEmail(match.candidate, site, c.RecordID); reason != "" {
+			return match, reason
+		}
 		return match, ""
 	}
 	if match.bound == "" {
@@ -157,20 +170,9 @@ func (a *App) resolveKeyPouchProfile(c keyPouchOpenClaim, recordProfileID, confi
 		}
 		return match, ""
 	}
-	dao, ok := m.ProfileDAO.(*browser.SQLiteProfileDAO)
-	if !ok {
-		return match, "group_unavailable"
-	}
-	p, changed, err := dao.EnsureProfileRootGroup(id, c.GroupName)
-	if errors.Is(err, browser.ErrAmbiguousGroupName) {
-		return match, "group_conflict"
-	}
-	if err != nil {
-		return match, "group_unavailable"
-	}
-	m.ApplyGroupSnapshotLocked([]*browser.Profile{p})
-	if changed {
-		updated = copyBrowserProfileSnapshot(m.Profiles[id])
+	updated, reason = a.updateKeyPouchBoundProfileLocked(ctx, site, c, bound)
+	if reason != "" {
+		return match, reason
 	}
 	if confirmedID != "" {
 		if err := links.Bind(c.RecordID, id); err != nil {
@@ -180,12 +182,84 @@ func (a *App) resolveKeyPouchProfile(c keyPouchOpenClaim, recordProfileID, confi
 	return match, ""
 }
 
+func (a *App) keyPouchProfileCredentialEmail(id, site string, recordID int64) (string, string) {
+	credential, err := a.readLocalGPTCredential(id)
+	if err != nil {
+		return "", "storage_error"
+	}
+	if credential == nil {
+		return "", ""
+	}
+	if credential.Site != site || credential.RecordID != recordID {
+		return "", "profile_conflict"
+	}
+	return credential.Email, ""
+}
+
+func (a *App) updateKeyPouchBoundProfileLocked(ctx context.Context, site string, c keyPouchOpenClaim, bound *BrowserProfile) (*BrowserProfile, string) {
+	m := a.browserMgr
+	dao, ok := m.ProfileDAO.(*browser.SQLiteProfileDAO)
+	if !ok {
+		return nil, "group_unavailable"
+	}
+	previousEmail, reason := a.keyPouchProfileCredentialEmail(bound.ProfileId, site, c.RecordID)
+	if reason != "" {
+		return nil, reason
+	}
+	current := m.Profiles[bound.ProfileId]
+	if current == nil {
+		current = bound
+	}
+	var rename *browser.BoundProfileRename
+	var restore func() error
+	var retireErr error
+	if bound.ProfileName != c.Email {
+		// A previous signed snapshot distinguishes a remote rename from a
+		// locally edited display name. Old open-only profiles have no snapshot.
+		if bound.ProfileName == keyPouchTemplate || previousEmail == c.Email {
+			return nil, "profile_conflict"
+		}
+		rename = &browser.BoundProfileRename{From: bound.ProfileName, To: c.Email, BeforeCommit: func() error {
+			restore, retireErr = a.retireRenamedKeyPouchCredentialLocked(ctx, current, site, c)
+			return retireErr
+		}}
+	}
+	p, changed, err := dao.UpdateBoundProfile(bound.ProfileId, c.GroupName, rename)
+	switch {
+	case err == nil:
+		if m.Profiles[p.ProfileId] == nil {
+			m.Profiles[p.ProfileId] = p
+		} else {
+			current.ProfileName = p.ProfileName
+			m.ApplyGroupSnapshotLocked([]*browser.Profile{p})
+		}
+		if changed {
+			return copyBrowserProfileSnapshot(m.Profiles[p.ProfileId]), ""
+		}
+		return nil, ""
+	case retireErr != nil:
+		return nil, "storage_error"
+	case restore != nil:
+		// Only the final SQLite commit could have failed after retirement.
+		if restore() != nil {
+			logger.New("KeyPouch").Warn("实例改名未提交，恢复该实例的原登录凭据或扩展会话失败")
+		}
+		return nil, "storage_error"
+	case errors.Is(err, browser.ErrBoundProfileConflict):
+		return nil, "profile_conflict"
+	case errors.Is(err, browser.ErrAmbiguousGroupName):
+		return nil, "group_conflict"
+	default:
+		return nil, "group_unavailable"
+	}
+}
+
 func (a *App) keyPouchOpenProfile(ctx context.Context, site string, c keyPouchOpenClaim, device *keypouch.Device) (string, string) {
 	links, err := device.LoadProfileLinks()
 	if err != nil {
 		return "", "storage_error"
 	}
-	return a.keyPouchProfile(site, c, links, func() bool { return confirmKeyPouchProfile(ctx, c) })
+	return a.keyPouchProfileWithContext(ctx, site, c, links, func() bool { return confirmKeyPouchProfile(ctx, c) })
 }
 
 func (a *App) openKeyPouchWindow(ctx context.Context, id string, focusWindow func(int) bool) string {

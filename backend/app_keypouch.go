@@ -162,6 +162,9 @@ func (a *App) openKeyPouchRecord(ctx context.Context, site, ticket string, focus
 	if reason != "" {
 		return d.Post(ctx, path+"fail", map[string]string{"reason": reason}, nil)
 	}
+	if err := a.reconcileKeyPouchCredential(ctx, id, site, claim); err != nil {
+		return d.Post(ctx, path+"fail", map[string]string{"reason": "storage_error"}, nil)
+	}
 	synced := false
 	if claim.CredentialSync {
 		synced = a.syncKeyPouchCredential(ctx, d, path, site, claim, id) == nil
@@ -172,7 +175,7 @@ func (a *App) openKeyPouchRecord(ctx context.Context, site, ticket string, focus
 	receipt := map[string]any{"profile_id": id, "opened": true}
 	if claim.CredentialSync {
 		receipt["credential_status"] = "failed"
-		if synced && a.publishOpenedGPTCredential(ctx, id) == nil {
+		if synced && a.publishOpenedGPTCredential(ctx, id, site, claim) == nil {
 			receipt["credential_status"] = "synced"
 		}
 	}

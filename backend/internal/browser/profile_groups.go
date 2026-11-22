@@ -1,6 +1,7 @@
 package browser
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -366,12 +367,70 @@ func (d *SQLiteProfileDAO) ChangeGroupsWithSnapshot(profileIDs, groupIDs []strin
 // one transaction. Return the committed profile so the manager can refresh its
 // classification while retaining process state.
 func (d *SQLiteProfileDAO) EnsureProfileRootGroup(profileID, name string) (*Profile, bool, error) {
-	tx, err := d.db.Begin()
+	return d.UpdateBoundProfile(profileID, name, nil)
+}
+
+// BoundProfileRename records the observed name for a compare-and-swap against
+// the active row. BeforeCommit can retire the old account after a successful write.
+type BoundProfileRename struct {
+	From, To     string
+	BeforeCommit func() error
+}
+
+func renameBoundProfileTx(tx *sql.Tx, profileID string, rename *BoundProfileRename) error {
+	rows, err := tx.Query(`SELECT profile_name FROM browser_profiles WHERE profile_id<>? AND COALESCE(deleted_at,'')=''`, profileID)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return err
+		}
+		// SQLite NOCASE only folds ASCII. Keep the same matching rules as
+		// the resolver and the creation of a new bound copy.
+		if strings.EqualFold(name, rename.To) {
+			return ErrBoundProfileConflict
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	result, err := tx.Exec(`UPDATE browser_profiles SET profile_name=?,updated_at=?
+		WHERE profile_id=? AND profile_name=? AND COALESCE(deleted_at,'')=''`,
+		rename.To, time.Now().Format(time.RFC3339Nano), profileID, rename.From)
+	if err != nil {
+		return err
+	}
+	count, err := result.RowsAffected()
+	if err == nil && count != 1 {
+		return ErrBoundProfileConflict
+	}
+	return err
+}
+
+// UpdateBoundProfile changes only the bound name and group membership. All
+// SQL writes and snapshot reads must succeed before the caller retires the
+// previous login. The caller can restore it if the final commit fails.
+func (d *SQLiteProfileDAO) UpdateBoundProfile(profileID, groupName string, rename *BoundProfileRename) (*Profile, bool, error) {
+	ctx := context.Background()
+	conn, err := d.db.Conn(ctx)
+	if err != nil {
+		return nil, false, err
+	}
+	defer conn.Close()
+	tx, err := conn.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, false, err
 	}
 	defer tx.Rollback()
-	id, err := ensureRootGroup(tx, name)
+	if rename != nil {
+		if err := renameBoundProfileTx(tx, profileID, rename); err != nil {
+			return nil, false, err
+		}
+	}
+	id, err := ensureRootGroup(tx, groupName)
 	if err != nil {
 		return nil, false, err
 	}
@@ -389,10 +448,18 @@ func (d *SQLiteProfileDAO) EnsureProfileRootGroup(profileID, name string) (*Prof
 	if err != nil {
 		return nil, false, err
 	}
+	if rename != nil && rename.BeforeCommit != nil {
+		if err := rename.BeforeCommit(); err != nil {
+			return nil, false, err
+		}
+	}
 	if err := tx.Commit(); err != nil {
+		// SQLite retains the transaction after some commit errors (e.g.
+		// deferred foreign keys), but database/sql already marks tx done.
+		_, _ = conn.ExecContext(ctx, "ROLLBACK")
 		return nil, false, err
 	}
-	return p, !member, nil
+	return p, !member || rename != nil, nil
 }
 
 func (d *SQLiteProfileDAO) ChangeLegacyTagsWithSnapshot(profileIDs, names []string, remove bool) ([]*Profile, error) {

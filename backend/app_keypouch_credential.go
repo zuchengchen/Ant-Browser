@@ -13,6 +13,121 @@ import (
 
 var errGPTCredentialTarget = errors.New("无法确认 GPT 凭据所属的实例或内置扩展")
 
+// The resolver calls this just before committing a bound profile's rename.
+// The manager lock also excludes starts, credential refreshes and explicit clones.
+// The caller runs restore under the same lock if the database commit fails.
+func (a *App) retireRenamedKeyPouchCredentialLocked(ctx context.Context, p *BrowserProfile, site string, claim keyPouchOpenClaim) (restore func() error, err error) {
+	if p == nil || p.DeletedAt != "" {
+		return nil, errGPTCredentialTarget
+	}
+	old, err := a.readLocalGPTCredential(p.ProfileId)
+	if err != nil {
+		return nil, err
+	}
+	if old != nil {
+		if old.Site != site || old.RecordID != claim.RecordID {
+			return nil, errGPTCredentialTarget
+		}
+		if old.Email == claim.Email {
+			return nil, nil
+		}
+		next := localGPTCredential{Site: site, RecordID: claim.RecordID, Email: claim.Email}
+		if err := next.Validate(); err != nil {
+			return nil, err
+		}
+	}
+	dir := a.browserMgr.ResolveUserDataDir(p)
+	extension, err := gptSessionExtension(dir)
+	if err != nil || old == nil && extension == "" {
+		return nil, err
+	}
+	if !a.uniqueGPTProfileDirLocked(p) {
+		return nil, errGPTSharedRuntime
+	}
+	port := 0
+	if extension != "" {
+		port, err = a.keyPouchCredentialSessionPortLocked(ctx, p, dir)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if old == nil {
+		// No credential authorizes a marked session in this profile. This
+		// also repairs an already-running browser after an interrupted open.
+		if port != 0 {
+			return nil, clearRecoveredGPTSession(ctx, port, dir, extension)
+		}
+		return nil, forgetGPTSessionExtension(dir)
+	}
+
+	restore = func() error {
+		if err := a.saveLocalGPTCredential(p.ProfileId, *old); err != nil || port == 0 {
+			return err
+		}
+		candidate := *p
+		candidate.DebugPort = port
+		// Re-verify the built-in files, Chromium directory and extension
+		// even when a cancelled operation needs its old session restored.
+		return a.publishGPTCredentialLocked(context.WithoutCancel(ctx), &candidate, []string{extension}, old)
+	}
+	if port != 0 {
+		if err := clearRecoveredGPTSession(ctx, port, dir, extension); err != nil {
+			// A lost storage reply or a failed marker unlink can follow an
+			// effective removal. Earlier target checks have not touched Chrome.
+			var markerErr *os.PathError
+			if errors.Is(err, errGPTSessionWrite) || errors.As(err, &markerErr) {
+				err = errors.Join(err, restore())
+			}
+			return nil, err
+		}
+	}
+	// Clearing the live session first means a crash after removing the
+	// vault file cannot leave the old login active in a retained Chromium.
+	if err := keypouch.RemoveLocalGPTCredential(a.appRoot, p.ProfileId); err != nil {
+		if port != 0 {
+			err = errors.Join(err, restore())
+		}
+		return nil, err
+	}
+	return restore, nil
+}
+
+func (a *App) keyPouchCredentialSessionPortLocked(ctx context.Context, p *BrowserProfile, dir string) (int, error) {
+	d := browserRuntimeDetection{PID: p.Pid, DebugPort: p.DebugPort}
+	if !p.Running {
+		// A marked browser can outlive Ant. Never interpret an unsuccessful
+		// process scan as confirmation that the old login is gone.
+		var live bool
+		if d, live = detectBrowserRuntimeByActivePort(dir); !live {
+			dirs, err := keyPouchRunningDirs(ctx)
+			if err != nil {
+				return 0, errGPTSessionRecovery
+			}
+			if d, live = dirs[keyPouchDirKey(dir)]; !live {
+				return 0, nil
+			}
+		}
+	}
+	if d.DebugPort <= 0 {
+		return 0, errGPTSessionRecovery
+	}
+	return d.DebugPort, a.checkGPTBrowserOwnerLocked(p, d)
+}
+
+func (a *App) reconcileKeyPouchCredential(ctx context.Context, id, site string, claim keyPouchOpenClaim) error {
+	m := a.browserMgr
+	m.Mutex.Lock()
+	defer m.Mutex.Unlock()
+	p := m.Profiles[id]
+	if p == nil || p.ProfileName != claim.Email {
+		return errGPTCredentialTarget
+	}
+	// An earlier version or an interrupted open may already have the new
+	// display name. A failed/unsupported sync must still retire the old login.
+	_, err := a.retireRenamedKeyPouchCredentialLocked(ctx, p, site, claim)
+	return err
+}
+
 func (a *App) syncKeyPouchCredential(ctx context.Context, device *keypouch.Device, path, site string, claim keyPouchOpenClaim, id string) error {
 	// A missing field is a protocol error. Only an explicit empty string clears an old value.
 	var fields struct {
@@ -69,16 +184,16 @@ func sameGPTDirectory(a, b string) bool {
 	return err == nil && left.IsDir() && right.IsDir() && os.SameFile(left, right)
 }
 
-func (a *App) publishOpenedGPTCredential(ctx context.Context, id string) error {
+func (a *App) publishOpenedGPTCredential(ctx context.Context, id, site string, claim keyPouchOpenClaim) error {
 	m := a.browserMgr
 	m.Mutex.Lock()
 	defer m.Mutex.Unlock()
 	p := m.Profiles[id]
-	if p == nil || p.DeletedAt != "" || !p.Running {
+	if p == nil || p.DeletedAt != "" || !p.Running || p.ProfileName != claim.Email {
 		return errGPTCredentialTarget
 	}
 	credential, err := a.readLocalGPTCredential(id)
-	if err != nil || credential == nil {
+	if err != nil || credential == nil || credential.Site != site || credential.RecordID != claim.RecordID || credential.Email != claim.Email {
 		return errGPTCredentialTarget
 	}
 	return a.publishGPTCredentialLocked(ctx, p, m.ProfileExtensionLoadPaths(p), credential)

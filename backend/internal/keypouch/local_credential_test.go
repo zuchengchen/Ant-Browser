@@ -97,7 +97,7 @@ func TestLocalGPTCredentialConcurrentSnapshots(t *testing.T) {
 	root, _ := credentialTestInstallation(t)
 	old := LocalGPTCredential{"https://keys.example.test", 8, "steps@example.test", "first password", "first seed"}
 	next := old
-	next.Password, next.TOTPSecret = "second password", "second seed"
+	next.Email, next.Password, next.TOTPSecret = "renamed@example.test", "second password", "second seed"
 	if err := SaveLocalGPTCredential(root, "first", old); err != nil {
 		t.Fatal(err)
 	}

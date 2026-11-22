@@ -1,6 +1,7 @@
 package backend
 
 import (
+	"context"
 	"errors"
 	"strings"
 	"testing"
@@ -226,7 +227,7 @@ func TestKeyPouchTemplateCopyRechecksPersistedIdentity(t *testing.T) {
 				t.Fatal(err)
 			}
 			id := keyPouchProfileID(keyPouchGroupTestSite, claim.RecordID)
-			match, reason := app.resolveKeyPouchProfile(claim, id, "", keyPouchGroupTestLinks(t, device))
+			match, reason := app.resolveKeyPouchProfile(context.Background(), keyPouchGroupTestSite, claim, id, "", keyPouchGroupTestLinks(t, device))
 			if reason != "" || match.bound != "" || match.candidate != "" || match.template != template.ProfileId {
 				t.Fatalf("initial resolution: match=%+v reason=%q", match, reason)
 			}

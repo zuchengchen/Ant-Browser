@@ -15,6 +15,7 @@ import (
 type gptSessionCall = func(string, map[string]any) (map[string]any, error)
 
 var chromiumExtensionID = regexp.MustCompile("^[a-p]{32}$")
+var errGPTSessionWrite = errors.New("实例的内置扩展未能接收 GPT 登录凭据")
 
 // Use Chromium's actual unpacked extension path: the runtime ID depends on
 // the installation directory and is different from Ant's catalog ID.
@@ -137,7 +138,7 @@ func installGPTSession(ctx context.Context, port int, profileDir, extensionDir s
 	})
 	ret, _ := result["result"].(map[string]any)
 	if err != nil || ret["value"] != true {
-		return errors.New("实例的内置扩展未能接收 GPT 登录凭据")
+		return errGPTSessionWrite
 	}
 	return nil
 }

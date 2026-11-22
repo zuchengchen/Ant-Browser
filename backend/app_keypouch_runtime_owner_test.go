@@ -71,13 +71,15 @@ func TestGPTSharedProfileCannotReuseOrStopCredentialedRuntime(t *testing.T) {
 }
 
 type retainedGPTDebug struct {
-	port       int
-	tabs       atomic.Int32
-	closed     atomic.Int32
-	clears     atomic.Int32
-	writes     atomic.Int32
-	wrongDir   atomic.Bool
-	hasSession atomic.Bool
+	port           int
+	tabs           atomic.Int32
+	closed         atomic.Int32
+	clears         atomic.Int32
+	writes         atomic.Int32
+	wrongDir       atomic.Bool
+	loseClearReply atomic.Bool
+	hasSession     atomic.Bool
+	email          atomic.Value
 }
 
 func testRetainedGPTDebug(t *testing.T, profileDir, extension string) *retainedGPTDebug {
@@ -94,6 +96,9 @@ func testRetainedGPTDebug(t *testing.T, profileDir, extension string) *retainedG
 			return
 		case "/json/list":
 			_, _ = w.Write([]byte(`[{"id":"page","type":"page"}]`))
+			return
+		case "/json/activate/page":
+			w.WriteHeader(http.StatusOK)
 			return
 		}
 		c, err := upgrader.Upgrade(w, r, nil)
@@ -134,12 +139,20 @@ func testRetainedGPTDebug(t *testing.T, profileDir, extension string) *retainedG
 					t.Error("write to an unverified storage object")
 				case len(args) == 0 && strings.Contains(f, "remove('antLocalGPT')"):
 					probe.hasSession.Store(false)
+					probe.email.Store("")
 					probe.clears.Add(1)
+					if probe.loseClearReply.Swap(false) {
+						return
+					}
 				case len(args) == 1 && strings.Contains(f, "antLocalGPT"):
 					if previous, err := gptSessionExtension(profileDir); err != nil || previous != extension {
 						t.Error("extension delivery started before persisting the recovery marker")
 					}
 					probe.hasSession.Store(true)
+					arg, _ := args[0].(map[string]any)
+					record, _ := arg["value"].(map[string]any)
+					email, _ := record["email"].(string)
+					probe.email.Store(email)
 					probe.writes.Add(1)
 				default:
 					t.Error("unexpected storage operation")

@@ -132,6 +132,10 @@ func clearRecoveredGPTSession(ctx context.Context, port int, dir, extension stri
 	if err := installGPTSession(ctx, port, dir, extension, nil); err != nil {
 		return err
 	}
+	return forgetGPTSessionExtension(dir)
+}
+
+func forgetGPTSessionExtension(dir string) error {
 	err := os.Remove(filepath.Join(dir, gptSessionMarker))
 	if errors.Is(err, os.ErrNotExist) {
 		return nil
