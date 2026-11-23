@@ -77,6 +77,9 @@ func (a *App) startup(ctx context.Context) {
 		runtime.LogFatal(ctx, fmt.Sprintf("浏览器数据初始化失败: %v", err))
 		return
 	}
+	if err := a.startMofaToolbarBridge(); err != nil {
+		log.Error("启动 MOFA 工具栏服务失败", logger.F("error", err))
+	}
 	a.startupInitLaunchCode(log)
 	a.startupInitLaunchServer(log)
 	a.startupInitAutomation()

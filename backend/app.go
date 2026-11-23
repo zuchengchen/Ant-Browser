@@ -91,6 +91,8 @@ type App struct {
 	mofaSiteMu                    sync.Mutex
 	mofaImportMu                  sync.Mutex
 	mofaImportJobs                map[string]context.CancelFunc
+	mofaImportAccounts            map[string]struct{}
+	mofaToolbarBridge             *mofaToolbarBridge
 	backupLocalConfigPathOverride string
 	stopServicesOnce              sync.Once
 	finalizeOnce                  sync.Once

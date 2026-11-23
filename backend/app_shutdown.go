@@ -157,6 +157,7 @@ func (a *App) stopTrackedBrowserProcesses() {
 
 func (a *App) finalizeShutdown() {
 	a.finalizeOnce.Do(func() {
+		a.stopMofaToolbarBridge()
 		if a.launchServer != nil {
 			_ = a.launchServer.Stop()
 		}

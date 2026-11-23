@@ -42,7 +42,11 @@ type mofaHTTPError struct {
 
 func (e *mofaHTTPError) Error() string { return fmt.Sprintf("MOFA 返回 HTTP %d", e.status) }
 
-func (c *mofaClient) request(ctx context.Context, method, path string, input map[string]string, output any) error {
+func (c *mofaClient) request(ctx context.Context, method, path string, input, output any) error {
+	return c.requestWithHeaders(ctx, method, path, input, output, nil)
+}
+
+func (c *mofaClient) requestWithHeaders(ctx context.Context, method, path string, input, output any, headers http.Header) error {
 	var payload io.Reader
 	if input != nil {
 		data, err := json.Marshal(input)
@@ -54,6 +58,11 @@ func (c *mofaClient) request(ctx context.Context, method, path string, input map
 	req, err := http.NewRequestWithContext(ctx, method, c.site+"/api/v1"+path, payload)
 	if err != nil {
 		return errors.New("MOFA 后台地址无效")
+	}
+	for name, values := range headers {
+		for _, value := range values {
+			req.Header.Add(name, value)
+		}
 	}
 	if payload != nil {
 		req.Header.Set("Content-Type", "application/json")

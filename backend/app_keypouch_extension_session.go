@@ -83,18 +83,10 @@ func installGPTSession(ctx context.Context, port int, profileDir, extensionDir s
 	if listErr != nil {
 		// Older engines load unpacked extensions at launch and expose their
 		// verified paths through the built-in extensions manager.
-		if err := navigateGPTSession(page, "chrome://extensions/"); err != nil {
-			return err
-		}
-		list, err := waitGPTSessionValue(ctx, page, `(async () => {
-			if (location.href !== 'chrome://extensions/' || !chrome.developerPrivate) return null
-			const items = await chrome.developerPrivate.getExtensionsInfo({includeDisabled: false})
-			return items.map(({id, path}) => ({id, path}))
-		})()`, true)
+		extensionsList, err = readBrowserExtensionPaths(ctx, page)
 		if err != nil {
 			return err
 		}
-		extensionsList = list["value"]
 	}
 	if _, ok := extensionsList.([]any); !ok {
 		return errGPTCredentialTarget
@@ -144,6 +136,18 @@ func installGPTSession(ctx context.Context, port int, profileDir, extensionDir s
 		return errGPTSessionWrite
 	}
 	return nil
+}
+
+func readBrowserExtensionPaths(ctx context.Context, page gptSessionCall) (any, error) {
+	if err := navigateGPTSession(page, "chrome://extensions/"); err != nil {
+		return nil, err
+	}
+	list, err := waitGPTSessionValue(ctx, page, `(async () => {
+		if (location.href !== 'chrome://extensions/' || !chrome.developerPrivate) return null
+		const items = await chrome.developerPrivate.getExtensionsInfo({includeDisabled: false})
+		return items.map(({id, path}) => ({id, path}))
+	})()`, true)
+	return list["value"], err
 }
 
 func navigateGPTSession(page gptSessionCall, address string) error {

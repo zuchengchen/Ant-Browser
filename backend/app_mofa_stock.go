@@ -29,6 +29,7 @@ type mofaStockResult struct {
 	GroupID       int64
 	SearchHint    string
 	InTargetGroup bool
+	workspaceID   string
 }
 
 type mofaStockGroup struct {
@@ -46,11 +47,16 @@ type mofaStockAccount struct {
 	Status       string  `json:"status"`
 	ErrorMessage string  `json:"error_message"`
 	GroupIDs     []int64 `json:"group_ids"`
+	ProxyID      *int64  `json:"proxy_id"`
+	Schedulable  *bool   `json:"schedulable"`
 	Credentials  struct {
-		Email      string          `json:"email"`
-		AuthMode   string          `json:"auth_mode"`
-		LegacyMode string          `json:"openai_auth_mode"`
-		ExpiresAt  json.RawMessage `json:"expires_at"`
+		Email            string          `json:"email"`
+		AuthMode         string          `json:"auth_mode"`
+		LegacyMode       string          `json:"openai_auth_mode"`
+		ExpiresAt        json.RawMessage `json:"expires_at"`
+		ChatGPTAccountID string          `json:"chatgpt_account_id"`
+		ChatGPTUserID    string          `json:"chatgpt_user_id"`
+		OrganizationID   string          `json:"organization_id"`
 	} `json:"credentials"`
 	CredentialStatus *struct {
 		HasAccessToken  bool `json:"has_access_token"`
@@ -108,6 +114,7 @@ func (c *mofaClient) lookupStockAccount(ctx context.Context, email string) (mofa
 	result := mofaStockResult{
 		Action: "skipped", AccountID: account.ID, GroupID: groupID, SearchHint: strings.TrimSpace(account.Name),
 		InTargetGroup: slices.Contains(account.GroupIDs, groupID),
+		workspaceID:   account.Credentials.ChatGPTAccountID,
 	}
 	if reauthorize {
 		result.Action = "reauthorization_required"

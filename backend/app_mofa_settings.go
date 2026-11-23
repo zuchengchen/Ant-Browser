@@ -178,6 +178,10 @@ func (a *App) saveMofaSiteLocked(path, site string) error {
 func (a *App) syncSavedMofaExtensionSite() error {
 	a.mofaSiteMu.Lock()
 	defer a.mofaSiteMu.Unlock()
+	return a.syncSavedMofaExtensionSiteLocked()
+}
+
+func (a *App) syncSavedMofaExtensionSiteLocked() error {
 	path, err := a.mofaSettingsPath()
 	if err != nil {
 		return errors.Join(err, a.syncMofaExtensionSite(""))
@@ -198,7 +202,14 @@ func (a *App) syncMofaExtensionSite(site string) error {
 	if !info.IsDir() {
 		return errors.New("MOFA 内置插件目录无效")
 	}
-	data, err := json.Marshal(map[string]string{"site": site})
+	config := struct {
+		Site       string `json:"site"`
+		BridgePort int    `json:"bridgePort,omitempty"`
+	}{Site: site}
+	if a.mofaToolbarBridge != nil {
+		config.BridgePort = a.mofaToolbarBridge.port
+	}
+	data, err := json.Marshal(config)
 	if err != nil {
 		return err
 	}

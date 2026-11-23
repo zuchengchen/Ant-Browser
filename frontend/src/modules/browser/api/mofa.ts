@@ -1,37 +1,48 @@
+import { EventsOn } from '../../../wailsjs/runtime/runtime'
 import { getBindings, getGoApp } from './runtime'
 
-const importStatuses = ['skipped', 'reauthorization_required', 'creation_required', 'group_required'] as const
+const importStatuses = ['skipped', 'imported', 'reauthorized', 'group_added'] as const
+const importPhases = ['checking', 'waiting_for_oauth', 'saving'] as const
+
+export type MofaImportPhase = typeof importPhases[number]
 
 export interface MofaImportResult {
   status: typeof importStatuses[number]
   accountId: number
   groupId: number
-  searchHint: string
-  actionOpened: boolean
-  inTargetGroup: boolean
 }
 
-export async function prepareMofaImport(profileId: string): Promise<MofaImportResult> {
+function subscribeToImportProgress(profileId: string, onProgress: (phase: MofaImportPhase) => void) {
+  try {
+    const unsubscribe = EventsOn('browser:mofa-import:progress', (event: { profileId?: string; phase?: string } | undefined) => {
+      if (event?.profileId !== profileId) return
+      const phase = importPhases.find(candidate => candidate === event.phase)
+      if (phase) onProgress(phase)
+    })
+    if (typeof unsubscribe === 'function') return unsubscribe
+  } catch {
+    // Import stays available when the desktop event runtime is unavailable.
+  }
+}
+
+export async function importMofaAccount(profileId: string, onProgress: (phase: MofaImportPhase) => void): Promise<MofaImportResult> {
   const bindings = await getBindings()
   if (!bindings?.BrowserMofaImport || !getGoApp()?.BrowserMofaImport) {
     throw new Error('请在已更新的 Ant Browser 桌面应用中导入到 MOFA')
   }
-  const result = await bindings.BrowserMofaImport(profileId)
-  const status = importStatuses.find(candidate => candidate === result?.status)
-  const accountId = result?.accountId
-  const groupId = result?.groupId
-  if (!status || typeof accountId !== 'number' || !Number.isSafeInteger(accountId) ||
-      (status === 'creation_required' ? accountId !== 0 : accountId <= 0) ||
-      typeof groupId !== 'number' || !Number.isSafeInteger(groupId) || groupId <= 0) {
-    throw new Error('无法识别 MOFA 核对结果，请重试。')
-  }
-  return {
-    status,
-    accountId,
-    groupId,
-    searchHint: typeof result.searchHint === 'string' ? result.searchHint.trim() : '',
-    actionOpened: result.actionOpened === true,
-    inTargetGroup: result.inTargetGroup === true,
+  const unsubscribe = subscribeToImportProgress(profileId, onProgress)
+  try {
+    const result = await bindings.BrowserMofaImport(profileId)
+    const status = importStatuses.find(candidate => candidate === result?.status)
+    const accountId = result?.accountId
+    const groupId = result?.groupId
+    if (!status || typeof accountId !== 'number' || !Number.isSafeInteger(accountId) || accountId <= 0 ||
+        typeof groupId !== 'number' || !Number.isSafeInteger(groupId) || groupId <= 0) {
+      throw new Error('无法识别 MOFA 导入结果，请重试。')
+    }
+    return { status, accountId, groupId }
+  } finally {
+    unsubscribe?.()
   }
 }
 
