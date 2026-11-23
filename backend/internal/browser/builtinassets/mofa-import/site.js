@@ -10,8 +10,6 @@ export async function configuredSite() {
   return url.origin
 }
 
-export function importURL(site, email) {
-  const target = new URL('/admin/accounts', site)
-  target.hash = new URLSearchParams({ 'ant-import': email }).toString()
-  return target.href
+export function accountManagerURL(site) {
+  return new URL('/admin/accounts', site).href
 }

@@ -5,8 +5,6 @@ import (
 	"errors"
 	"strings"
 	"time"
-
-	"github.com/google/uuid"
 )
 
 func (a *App) BrowserMofaImport(profileID string) (map[string]interface{}, error) {
@@ -21,31 +19,31 @@ func (a *App) BrowserMofaImport(profileID string) (map[string]interface{}, error
 	defer finish()
 	result, err := a.importMofaProfile(ctx, profileID)
 	if err != nil {
-		if errors.Is(err, errMofaResultUnknown) {
-			return nil, err
-		}
 		switch ctx.Err() {
 		case context.Canceled:
 			return nil, errors.New("已取消 MOFA 导入")
 		case context.DeadlineExceeded:
-			return nil, errors.New("MOFA 导入已超时，请重新发起并在实例窗口完成 OpenAI 授权")
+			return nil, errors.New("检查 MOFA 账号超时，请重试")
 		}
 		return nil, err
 	}
-	return map[string]interface{}{"status": result.Action, "accountId": result.AccountID, "groupId": result.GroupID}, nil
+	return map[string]interface{}{
+		"status": result.Action, "accountId": result.AccountID, "groupId": result.GroupID,
+		"inTargetGroup": result.InTargetGroup, "searchHint": result.SearchHint, "actionOpened": result.actionOpened,
+	}, nil
 }
 
 func (a *App) beginMofaImport(profileID string) (context.Context, func(), error) {
 	a.mofaImportMu.Lock()
 	defer a.mofaImportMu.Unlock()
 	if a.mofaImportJobs[profileID] != nil {
-		return nil, nil, errors.New("该实例正在导入到 MOFA，请在实例窗口继续")
+		return nil, nil, errors.New("该实例正在核对 MOFA 账号，请稍候")
 	}
 	parent, done, err := a.beginBackgroundTask()
 	if err != nil {
 		return nil, nil, err
 	}
-	ctx, cancel := context.WithTimeout(parent, 8*time.Minute)
+	ctx, cancel := context.WithTimeout(parent, 2*time.Minute)
 	if a.mofaImportJobs == nil {
 		a.mofaImportJobs = make(map[string]context.CancelFunc)
 	}
@@ -67,33 +65,38 @@ func (a *App) BrowserMofaImportCancel(profileID string) {
 	}
 }
 
-func (a *App) importMofaProfile(ctx context.Context, profileID string) (mofaImportResult, error) {
+type mofaProfileResult struct {
+	mofaStockResult
+	actionOpened bool
+}
+
+func (a *App) importMofaProfile(ctx context.Context, profileID string) (mofaProfileResult, error) {
 	settings, err := a.readMofaImportSettings()
 	if err != nil {
-		return mofaImportResult{}, err
+		return mofaProfileResult{}, err
 	}
 	if settings.Site == "" || settings.Username == "" || settings.Password == "" {
-		return mofaImportResult{}, errors.New("请先在「系统设置 → 基础设置」保存 MOFA 地址、管理员用户名和密码")
+		return mofaProfileResult{}, errors.New("请先在「系统设置 → 基础设置」保存 MOFA 地址、管理员用户名和密码")
 	}
 	manager := a.browserMgr
 	manager.Mutex.Lock()
 	profile := manager.Profiles[profileID]
 	if profile == nil || !profile.Running || !profile.DebugReady || profile.DebugPort <= 0 {
 		manager.Mutex.Unlock()
-		return mofaImportResult{}, errors.New("实例未运行或浏览器尚未就绪，请打开实例后重试")
+		return mofaProfileResult{}, errors.New("实例未运行或浏览器尚未就绪，请打开实例后重试")
 	}
 	port, profileDir, expected := profile.DebugPort, manager.ResolveUserDataDir(profile), expectedChatGPTEmail(profile.ProfileName)
 	manager.Mutex.Unlock()
 	instance, err := connectMofaBrowser(ctx, port)
 	if err != nil {
-		return mofaImportResult{}, err
+		return mofaProfileResult{}, err
 	}
 	email, err := instance.signedInEmail(ctx, profileDir)
 	if err != nil {
-		return mofaImportResult{}, err
+		return mofaProfileResult{}, err
 	}
 	if expected != "" && !strings.EqualFold(expected, email) {
-		return mofaImportResult{}, errors.New("本实例已登录的 ChatGPT 邮箱与实例名称不同，请核对后重试")
+		return mofaProfileResult{}, errors.New("本实例已登录的 ChatGPT 邮箱与实例名称不同，请核对后重试")
 	}
 	checkOperation := func() error {
 		if err := ctx.Err(); err != nil {
@@ -117,65 +120,26 @@ func (a *App) importMofaProfile(ctx context.Context, profileID string) (mofaImpo
 		return nil
 	}
 	if err := checkOperation(); err != nil {
-		return mofaImportResult{}, err
+		return mofaProfileResult{}, err
 	}
 	client := mofaClient{site: settings.Site, http: mofaHTTPClient}
 	if err := client.login(ctx, settings); err != nil {
-		return mofaImportResult{}, err
+		return mofaProfileResult{}, err
+	}
+	result, err := client.lookupStockAccount(ctx, email)
+	if err != nil {
+		return mofaProfileResult{}, err
 	}
 	if err := checkOperation(); err != nil {
-		return mofaImportResult{}, err
+		return mofaProfileResult{}, err
 	}
-	var closeAuthTab func()
-	defer func() {
-		if closeAuthTab != nil {
-			closeAuthTab()
-		}
-	}()
-	return client.importAccount(ctx, email, func(ctx context.Context, authorization mofaAuthorization) (string, error) {
-		tab, closeTab, err := instance.openTab(ctx, false)
-		if err != nil {
-			return "", err
-		}
-		closeAuthTab = closeTab
-		code, err := waitMofaAuthorization(ctx, tab, authorization)
-		if err != nil {
-			return "", err
-		}
-		if err := checkOperation(); err != nil {
-			return "", err
-		}
-		return code, nil
-	})
-}
-
-func (c *mofaClient) importAccount(ctx context.Context, email string, authorize func(context.Context, mofaAuthorization) (string, error)) (mofaImportResult, error) {
-	job := "ant" + strings.ReplaceAll(uuid.NewString(), "-", "")
-	result, err := c.importRequest(ctx, job, "start", map[string]string{"email": email})
+	prepared := mofaProfileResult{mofaStockResult: result}
+	if result.Action == "skipped" {
+		return prepared, nil
+	}
+	prepared.actionOpened, err = instance.openAccountManager(ctx, settings.Site, result)
 	if err != nil {
-		return mofaImportResult{}, mofaImportError(err)
+		return mofaProfileResult{}, err
 	}
-	if result.Status == "authorization_required" {
-		authorization, err := parseMofaAuthorization(result.AuthorizationURL, c.site)
-		if err != nil {
-			return mofaImportResult{}, err
-		}
-		code, err := authorize(ctx, authorization)
-		if err != nil {
-			return mofaImportResult{}, err
-		}
-		result, err = c.importRequest(ctx, job, "complete", map[string]string{"email": email, "code": code, "state": authorization.state})
-		if err != nil {
-			return mofaImportResult{}, mofaImportError(err)
-		}
-	}
-	if result.Status != "member" || result.AccountID <= 0 || result.GroupID <= 0 {
-		return mofaImportResult{}, errors.New("MOFA 尚未确认导入结果，请在后台核对后重试")
-	}
-	switch result.Action {
-	case "skipped", "group_added", "imported", "reauthorized":
-		return result, nil
-	default:
-		return mofaImportResult{}, errors.New("MOFA 未返回账号授权状态，请升级 MOFA 的 Ant 导入功能后重试")
-	}
+	return prepared, nil
 }

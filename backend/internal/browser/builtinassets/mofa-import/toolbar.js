@@ -1,5 +1,5 @@
 import { verifyCurrentAccount } from './account.js'
-import { configuredSite, importURL } from './site.js'
+import { accountManagerURL, configuredSite } from './site.js'
 
 const pageURL = chrome.runtime.getURL('import.html')
 const opening = new Set()
@@ -37,10 +37,10 @@ async function openImport(sourceTab, displayedSite) {
     if (site !== await configuredSite()) return 'configuration_changed'
     await chrome.tabs.create({
       windowId: tab.windowId,
-      url: importURL(site, account.email),
+      url: accountManagerURL(site),
       active: !!(tab.active && view.focused),
     })
-    return 'opened'
+    return { email: account.email }
   })
 }
 

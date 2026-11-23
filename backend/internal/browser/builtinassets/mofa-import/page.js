@@ -6,7 +6,6 @@ const status = document.getElementById('status')
 let running = false
 const notConfigured = '请先在 Ant 的「系统设置 → 基础设置」配置 MOFA 后台地址。'
 const messages = {
-  opened: '已打开 MOFA 后台，请在后台确认导入。',
   unavailable: '未能确认当前实例的登录邮箱。请在这个实例中打开 ChatGPT，确认已登录后重试。',
   ambiguous: 'ChatGPT 账号设置页显示了多个不同的邮箱，请核对当前登录账号后重试。',
   cancelled: '账号核对已停止。请返回此页重新发起。',
@@ -31,7 +30,9 @@ button.addEventListener('click', async event => {
   status.textContent = '正在核对本实例登录的 ChatGPT 邮箱…'
   try {
     const result = await chrome.runtime.sendMessage({ type: 'open-mofa-import', site: siteLabel.textContent })
-    status.textContent = Object.hasOwn(messages, result) ? messages[result] : messages.unavailable
+    status.textContent = typeof result?.email === 'string'
+      ? `已核对 ${result.email}。请在 MOFA 搜索此邮箱，在「GPT-不降智」分组检查或添加账号。`
+      : Object.hasOwn(messages, result) ? messages[result] : messages.unavailable
   } catch {
     status.textContent = messages.unavailable
   } finally {

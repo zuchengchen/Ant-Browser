@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { configuredSite, importURL } from './builtinassets/mofa-import/site.js'
+import { accountManagerURL, configuredSite } from './builtinassets/mofa-import/site.js'
 
 test('the MOFA address comes only from this extension and resolves to an HTTPS origin', async t => {
   t.mock.method(globalThis, 'fetch', async (url, options) => {
@@ -29,11 +29,6 @@ test('the MOFA address comes only from this extension and resolves to an HTTPS o
   }
 })
 
-test('the import link sends its account hint in the fragment alone', () => {
-  const email = 'subject+qa&probe@example.test'
-  const target = new URL(importURL('https://mofa.example.test:8443', email))
-  assert.equal(target.origin, 'https://mofa.example.test:8443')
-  assert.equal(target.pathname, '/admin/accounts')
-  assert.equal(target.search, '')
-  assert.equal(new URLSearchParams(target.hash.slice(1)).get('ant-import'), email)
+test('the toolbar opens the standard MOFA account manager', () => {
+  assert.equal(accountManagerURL('https://mofa.example.test:8443'), 'https://mofa.example.test:8443/admin/accounts')
 })

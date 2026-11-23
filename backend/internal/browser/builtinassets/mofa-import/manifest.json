@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "minimum_chrome_version": "106",
   "name": "导入到 MOFA",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "核对当前 Ant 实例登录的 ChatGPT 邮箱，打开 MOFA 账号导入页。",
   "icons": { "32": "icon-32.png", "48": "icon-48.png" },
   "action": {
