@@ -149,10 +149,6 @@ func (d *profileDeleteAuditTestDAO) Restore(profileId string) error {
 	return nil
 }
 
-func (d *profileDeleteAuditTestDAO) ListExpiredDeleted(expiredBefore string) ([]*Profile, error) {
-	return nil, nil
-}
-
 type errProfileDeleteAuditTestNotFound string
 
 func (e errProfileDeleteAuditTestNotFound) Error() string { return "profile not found: " + string(e) }

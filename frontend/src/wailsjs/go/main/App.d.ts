@@ -264,8 +264,6 @@ export function BrowserProfileSetCode(arg1:string,arg2:string):Promise<string>;
 
 export function BrowserProfileSetKeywords(arg1:string,arg2:Array<string>):Promise<browser.Profile>;
 
-export function BrowserProfileTrashCleanup():Promise<void>;
-
 export function BrowserProfileTrashList():Promise<Array<browser.Profile>>;
 
 export function BrowserProfileUpdate(arg1:string,arg2:browser.ProfileInput):Promise<browser.Profile>;

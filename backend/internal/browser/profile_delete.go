@@ -11,8 +11,6 @@ import (
 	"time"
 )
 
-const profileTrashRetention = 72 * time.Hour
-
 var ErrProfileRunning = errors.New("实例正在运行或启动中，不能删除，请先停止实例")
 
 // Delete 将配置移入回收站
@@ -75,7 +73,6 @@ func (m *Manager) ListDeleted() []Profile {
 	m.InitData()
 	m.Mutex.Lock()
 	defer m.Mutex.Unlock()
-	m.cleanupExpiredTrashLocked(log)
 	if m.ProfileDAO == nil {
 		return []Profile{}
 	}
@@ -201,87 +198,6 @@ func (m *Manager) PermanentlyDelete(profileId string) error {
 		Success:              true,
 	})
 	log.Info("回收站实例已彻底删除", logger.F("profile_id", profileId))
-	return nil
-}
-
-// CleanupExpiredTrash 清理超过保留期的回收站实例
-func (m *Manager) CleanupExpiredTrash() error {
-	log := logger.New("Browser")
-	m.InitData()
-	m.Mutex.Lock()
-	defer m.Mutex.Unlock()
-	return m.cleanupExpiredTrashLocked(log)
-}
-
-func (m *Manager) cleanupExpiredTrashLocked(log *logger.Logger) error {
-	if m.ProfileDAO == nil {
-		return nil
-	}
-	expiredBefore := time.Now().Add(-profileTrashRetention).Format(time.RFC3339)
-	expired, err := m.ProfileDAO.ListExpiredDeleted(expiredBefore)
-	if err != nil {
-		log.Error("清理过期回收站实例失败", logger.F("error", err))
-		return err
-	}
-	cleaned := 0
-	for _, profile := range expired {
-		if profile == nil {
-			continue
-		}
-		if m.BrowserProcesses[profile.ProfileId] != nil || m.profileHasRuntime(profile) {
-			log.Warn("跳过清理仍在运行的回收站实例", logger.F("profile_id", profile.ProfileId))
-			continue
-		}
-		resolvedDir := m.ResolveUserDataDir(profile)
-		dataDirExistedBefore := pathExists(resolvedDir)
-		if err := m.deleteProfileRelatedDataLocked(log, profile); err != nil {
-			log.Error("清理过期回收站实例关联数据失败", logger.F("profile_id", profile.ProfileId), logger.F("error", err))
-			m.writeProfileDeleteAudit(log, profileDeleteAuditEntry{
-				Action:               "expired_cleanup",
-				ProfileID:            profile.ProfileId,
-				ProfileName:          profile.ProfileName,
-				UserDataDir:          profile.UserDataDir,
-				ResolvedDir:          resolvedDir,
-				DeletedAt:            profile.DeletedAt,
-				DataDirExistedBefore: dataDirExistedBefore,
-				DataDirExistsAfter:   pathExists(resolvedDir),
-				Success:              false,
-				Error:                err.Error(),
-			})
-			continue
-		}
-		if err := m.ProfileDAO.Delete(profile.ProfileId); err != nil {
-			log.Error("删除过期回收站实例记录失败", logger.F("profile_id", profile.ProfileId), logger.F("error", err))
-			m.writeProfileDeleteAudit(log, profileDeleteAuditEntry{
-				Action:               "expired_cleanup",
-				ProfileID:            profile.ProfileId,
-				ProfileName:          profile.ProfileName,
-				UserDataDir:          profile.UserDataDir,
-				ResolvedDir:          resolvedDir,
-				DeletedAt:            profile.DeletedAt,
-				DataDirExistedBefore: dataDirExistedBefore,
-				DataDirExistsAfter:   pathExists(resolvedDir),
-				Success:              false,
-				Error:                err.Error(),
-			})
-			continue
-		}
-		m.writeProfileDeleteAudit(log, profileDeleteAuditEntry{
-			Action:               "expired_cleanup",
-			ProfileID:            profile.ProfileId,
-			ProfileName:          profile.ProfileName,
-			UserDataDir:          profile.UserDataDir,
-			ResolvedDir:          resolvedDir,
-			DeletedAt:            profile.DeletedAt,
-			DataDirExistedBefore: dataDirExistedBefore,
-			DataDirExistsAfter:   pathExists(resolvedDir),
-			Success:              true,
-		})
-		cleaned++
-	}
-	if cleaned > 0 {
-		log.Info("过期回收站实例已清理", logger.F("count", cleaned))
-	}
 	return nil
 }
 

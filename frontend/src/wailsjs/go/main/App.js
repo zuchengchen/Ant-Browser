@@ -510,10 +510,6 @@ export function BrowserProfileSetKeywords(arg1, arg2) {
   return window['go']['main']['App']['BrowserProfileSetKeywords'](arg1, arg2);
 }
 
-export function BrowserProfileTrashCleanup() {
-  return window['go']['main']['App']['BrowserProfileTrashCleanup']();
-}
-
 export function BrowserProfileTrashList() {
   return window['go']['main']['App']['BrowserProfileTrashList']();
 }

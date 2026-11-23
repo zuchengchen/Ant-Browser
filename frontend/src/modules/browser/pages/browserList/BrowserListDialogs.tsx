@@ -95,14 +95,6 @@ export function BrowserListDialogs({
     return Number.isNaN(date.getTime()) ? '-' : date.toLocaleString('zh-CN')
   }
 
-  const formatExpireTime = (value?: string) => {
-    if (!value) return '-'
-    const date = new Date(value)
-    if (Number.isNaN(date.getTime())) return '-'
-    date.setDate(date.getDate() + 3)
-    return date.toLocaleString('zh-CN')
-  }
-
   return (
     <>
       <Modal
@@ -183,8 +175,9 @@ export function BrowserListDialogs({
       >
         <div className="text-sm text-[var(--color-text-secondary)]">
           {deleteConfirm.mode === 'batch'
-            ? `确定将选中的 ${deleteConfirm.count} 个实例移入回收站？3 天内可恢复。`
-            : `确定将实例「${deleteConfirm.profileName || '未命名实例'}」移入回收站？3 天内可恢复。`}
+            ? `确定将选中的 ${deleteConfirm.count} 个实例移入回收站？`
+            : `确定将实例「${deleteConfirm.profileName || '未命名实例'}」移入回收站？`}
+          彻底删除前可随时恢复。
         </div>
       </Modal>
 
@@ -206,7 +199,6 @@ export function BrowserListDialogs({
                 <tr className="border-b border-[var(--color-border-default)] text-left text-xs text-[var(--color-text-muted)]">
                   <th className="py-2 pr-3 font-medium">实例</th>
                   <th className="py-2 pr-3 font-medium">删除时间</th>
-                  <th className="py-2 pr-3 font-medium">自动清理</th>
                   <th className="py-2 text-right font-medium">操作</th>
                 </tr>
               </thead>
@@ -215,7 +207,6 @@ export function BrowserListDialogs({
                   <tr key={profile.profileId} className="border-b border-[var(--color-border-muted)] last:border-0">
                     <td className="py-3 pr-3 text-[var(--color-text-primary)]">{profile.profileName || '未命名实例'}</td>
                     <td className="py-3 pr-3 text-[var(--color-text-secondary)]">{formatTime(profile.deletedAt)}</td>
-                    <td className="py-3 pr-3 text-[var(--color-text-secondary)]">{formatExpireTime(profile.deletedAt)}</td>
                     <td className="py-3 text-right">
                       <div className="flex justify-end gap-2">
                         <Button

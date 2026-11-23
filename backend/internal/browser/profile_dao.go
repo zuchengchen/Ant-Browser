@@ -18,7 +18,6 @@ type ProfileDAO interface {
 	Delete(profileId string) error
 	SoftDelete(profileId string, deletedAt string) error
 	Restore(profileId string) error
-	ListExpiredDeleted(expiredBefore string) ([]*Profile, error)
 }
 
 // ProfileGroupCounter is optional so alternate ProfileDAO implementations keep
@@ -268,11 +267,6 @@ func (d *SQLiteProfileDAO) Restore(profileId string) error {
 		return fmt.Errorf("实例不存在: %s", profileId)
 	}
 	return nil
-}
-
-// ListExpiredDeleted reads the same canonical memberships as normal queries.
-func (d *SQLiteProfileDAO) ListExpiredDeleted(expiredBefore string) ([]*Profile, error) {
-	return d.queryProfiles("WHERE COALESCE(deleted_at, '')!='' AND deleted_at<=?", expiredBefore)
 }
 
 // Delete 删除实例配置

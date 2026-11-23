@@ -304,22 +304,6 @@ export async function permanentlyDeleteBrowserProfile(profileId: string): Promis
   return true
 }
 
-export async function cleanupBrowserProfileTrash(): Promise<boolean> {
-  const bindings: any = await getBindings()
-  if (bindings?.BrowserProfileTrashCleanup) {
-    await bindings.BrowserProfileTrashCleanup()
-    return true
-  }
-
-  const expiredBefore = Date.now() - 3 * 24 * 60 * 60 * 1000
-  setMockProfiles(getMockProfiles().filter((item) => {
-    if (!item.deletedAt) return true
-    const deletedAt = new Date(item.deletedAt).getTime()
-    return Number.isNaN(deletedAt) || deletedAt > expiredBefore
-  }))
-  return true
-}
-
 export async function copyBrowserProfile(
   profileId: string,
   newName: string,

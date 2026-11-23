@@ -226,9 +226,6 @@ func (a *App) startupInitManagers(cfg *config.Config, db *database.DB) error {
 	if err := a.browserMgr.MigrateLegacyExternalExtensionRegistry(); err != nil {
 		logger.New("Browser").Error("启动迁移旧版插件外部注册失败", logger.F("error", err))
 	}
-	if err := a.browserMgr.CleanupExpiredTrash(); err != nil {
-		logger.New("Browser").Error("启动清理回收站失败", logger.F("error", err))
-	}
 	a.autoDetectCores()
 	if err := a.loadProxies(); err != nil {
 		return err
