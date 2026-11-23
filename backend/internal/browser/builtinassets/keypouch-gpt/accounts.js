@@ -205,20 +205,18 @@ async function startLogin(record, vault) {
       }
       const tab = await chrome.tabs.getCurrent()
       if (signal.aborted) return
-      const target = await chrome.tabs.create({ windowId: tab.windowId, url: 'https://chatgpt.com/', active: true })
+      const target = await chrome.tabs.create({ windowId: tab.windowId, url: 'https://chatgpt.com/', active: false })
       targetTabId = target.id
       if (signal.aborted) return
       el('show-gpt').hidden = false
-      showSection('login', '正在 ChatGPT 标签页登录…')
+      showSection('login', '正在后台登录 ChatGPT…')
       const getCurrentCode = vault?.totp && record.hasTOTP ? async codeSignal => {
         if (await configuredSite(codeSignal) !== site) throw new VaultError('grant_required')
         const { code, expires } = await vault.totp(record, codeSignal)
         if (await configuredSite(codeSignal) !== site) throw new VaultError('grant_required')
         return { value: code, expires }
       } : undefined
-      const result = await loginToChatGPT(target.id, account, signal, getCurrentCode, message => {
-        if (!signal.aborted) showSection('login', message)
-      })
+      const result = await loginToChatGPT(target.id, account, signal, getCurrentCode)
       if (signal.aborted) return
       const needsAttention = result.status === 'failed' || result.status === 'mismatch'
       let message = result.message
@@ -235,11 +233,6 @@ async function startLogin(record, vault) {
         message += reported ? ' 已回填到 KeyPouch。' : ' 本次结果未能回填到 KeyPouch。'
       }
       showSection('login', message, needsAttention)
-      if (needsAttention) {
-        const [active] = await chrome.tabs.query({ windowId: tab.windowId, active: true })
-        const view = await chrome.windows.get(tab.windowId).catch(() => null)
-        if (view?.focused && active?.id === target.id && !signal.aborted) await chrome.tabs.update(tab.id, { active: true })
-      }
     })
   } catch (error) {
     if (!signal.aborted) {

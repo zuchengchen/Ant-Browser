@@ -23,7 +23,7 @@ import (
 
 const (
 	mofaToolbarPath    = "/mofa/import"
-	mofaToolbarVersion = "1.0.4"
+	mofaToolbarVersion = "1.0.5"
 )
 
 type mofaToolbarSource struct {
@@ -278,7 +278,7 @@ func (b *mofaToolbarBridge) claimDocument(ctx context.Context, instance mofaBrow
 	paths := extensions["extensions"]
 	if err != nil {
 		// Older engines expose unpacked paths through the built-in manager.
-		tab, closeTab, err := instance.openTab(ctx, true)
+		tab, closeTab, err := instance.openBackgroundTab(ctx)
 		if err != nil {
 			return false
 		}

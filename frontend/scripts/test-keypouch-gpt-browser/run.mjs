@@ -57,11 +57,12 @@ function form(label, action, input) {
     <script>
       const form = document.currentScript.previousElementSibling;
       const field = form.querySelector('input:not([readonly]):not([type="hidden"])');
-      const trace = { steps: 0, incremental: true, pasted: false, gaps: [] };
+      const trace = { steps: 0, incremental: true, pasted: false, background: true, gaps: [] };
       let previous = '', lastInput;
       field.addEventListener('paste', () => { trace.pasted = true; });
       field.addEventListener('input', () => {
         const now = performance.now();
+        trace.background &&= document.hidden && !document.hasFocus();
         trace.incremental &&= field.value.startsWith(previous) && Array.from(field.value.slice(previous.length)).length === 1;
         if (lastInput !== undefined) trace.gaps.push(Math.round(now - lastInput));
         previous = field.value;
@@ -69,6 +70,7 @@ function form(label, action, input) {
         trace.steps++;
       });
       form.addEventListener('submit', () => {
+        trace.background &&= document.hidden && !document.hasFocus();
         trace.beforeSubmit = Math.round(performance.now() - lastInput);
         form.elements.typing.value = JSON.stringify(trace);
       });
@@ -79,6 +81,7 @@ function checkTyping(values, fieldName, expected) {
   assert(values.get(fieldName) === expected, '测试字段的最终值不匹配')
   const trace = JSON.parse(values.get('typing'))
   assert(trace?.incremental && !trace.pasted, '应逐字符输入')
+  assert(trace.background, '自动输入与提交时 ChatGPT 标签页应保持在后台')
   assert.equal(trace.steps, Array.from(expected).length)
   assert(trace.gaps.every(ms => ms > 0) && trace.beforeSubmit > 0, '输入和提交之间需要停顿')
   if (trace.gaps.length >= 5) {
@@ -224,22 +227,16 @@ async function intercept({ requestId, request }) {
     }
     if (url.origin === auth && url.pathname === '/log-in/password' && request.method === 'GET') {
       assert(checkedHandoffs.has(auth), '须先经过已渲染的 OAuth 授权中转页')
-      // Switch tabs before the new password document can receive its first edit.
+      // Leave the extension's progress tab before the password receives its first edit.
       const loginTabs = context.pages().filter(tab => !initialPages.has(tab)
         && [auth, chat].includes(new URL(tab.url()).origin))
       assert.equal(loginTabs.length, 1, '应有本次登录发起的唯一官方标签页')
-      const [loginTab] = loginTabs
       await stub.bringToFront()
       await html(page(form('Enter your password', mfaPath, `
         <label id="email-label" for="display-email">Email address</label>
         <input id="display-email" type="text" readonly aria-labelledby="email-label" value="${fixture.email}">
         <input type="hidden" name="username" form="login-form" value="">
         <input type="password" name="password" autocomplete="current-password webauthn" required>`)))
-      const picker = context.pages().find(tab => pickerURL.test(tab.url()))
-      await picker.locator('#status').filter({ hasText: /前台/ }).waitFor({ state: 'attached', timeout: 12000 })
-      assert(await loginTab.locator('input[type=password]').evaluate(field =>
-        document.hidden && !document.hasFocus() && field.validity.valueMissing), '等待前台期间密码框应当保持为空')
-      await loginTab.bringToFront()
       return
     }
     if (url.origin === auth && url.pathname === mfaPath && request.method === 'POST' && values.has('password')) {
@@ -308,6 +305,7 @@ try {
   }
   if (failure) throw failure
   assert(status === success, '扩展未确认登录成功')
+  assert(await stub.evaluate(() => !document.hidden && document.hasFocus()), '完成登录后活动标签页应保持在原处')
   assert.deepEqual(counts, { home: 1, logIn: 1, email: 1, loginWith: 1, authorize: 1, password: 1, totp: 1, verified: 1, keyRequests: 0 })
   console.log(JSON.stringify({ nativeToolbarClicks: 1, ...counts, selectedAccountMatched: true }))
 } finally {

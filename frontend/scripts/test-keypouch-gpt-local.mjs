@@ -101,6 +101,31 @@ test('toolbar clicks can be consumed once, only by their own extension top-level
   assert.equal(await take(23), false)
 })
 
+test('only the extension in a top-level login tab can schedule a bounded typing delay', async () => {
+  const runtime = { id: 'fixture', getURL: () => pickerURL, onMessage: event() }
+  const chrome = { runtime, tabs: { onRemoved: event() }, action: { onClicked: event() } }
+  const scheduled = []
+  const script = await readFile(new URL('toolbar.js', assets), 'utf8')
+  vm.runInNewContext(script, { chrome, setTimeout: (callback, delay) => scheduled.push({ callback, delay }) })
+  const message = { type: 'keypouch-login-delay', delay: 129 }
+  const sender = { id: runtime.id, tab: { id: 3 }, frameId: 0, origin: 'https://auth.openai.com' }
+  const responses = []
+  for (const change of [{ id: 'another' }, { origin: 'https://example.test' }, { frameId: 1 }, { tab: undefined }]) {
+    await runtime.onMessage.emit(message, { ...sender, ...change }, reply => responses.push(reply))
+  }
+  for (const delay of [undefined, '129', -1, 501, 0.5, Infinity]) {
+    await runtime.onMessage.emit({ ...message, delay }, sender, reply => responses.push(reply))
+  }
+  assert.deepEqual(scheduled, [])
+  assert.deepEqual(responses, [])
+  const results = await runtime.onMessage.emit(message, sender, reply => responses.push(reply))
+  assert(results.includes(true))
+  assert.equal(scheduled.length, 1)
+  assert.equal(scheduled[0].delay, 129)
+  scheduled[0].callback()
+  assert.deepEqual(responses, [true])
+})
+
 function uiElement() {
   return { children: [], events: {}, dataset: {}, hidden: true, value: '',
     append(...nodes) { this.children.push(...nodes) },
@@ -120,7 +145,7 @@ async function picker(t, options = {}) {
   }
   const state = {
     entry: options.entry, clicked: options.clicked === true, keyReads: 0, permissionChecks: 0,
-    targets: [], injections: [], storageEvents: event(), runtime,
+    targets: [], tabUpdates: [], injections: [], storageEvents: event(), runtime,
   }
   replaceGlobal(t, 'chrome', {
     runtime,
@@ -129,12 +154,13 @@ async function picker(t, options = {}) {
     tabs: { getCurrent: async () => ({ id: 23, windowId: 2 }),
       get: async () => ({ id: 38, url: 'https://chatgpt.com/' }),
       create: async args => { state.targets.push(args); return { id: 38 } },
+      update: async (...args) => state.tabUpdates.push(args),
     },
     scripting: { executeScript: async ({ args }) => {
       const [action] = args
       state.injections.push(action)
       if (!action.stage && !action.end && options.hold) await options.hold
-      return [{ frameId: 0, documentId: 'fixture-document', result: action.end ? 'ended' : 'success' }]
+      return [{ frameId: 0, documentId: 'fixture-document', result: action.end ? 'ended' : (options.outcome || 'success') }]
     } },
   })
   replaceGlobal(t, 'document', { getElementById: element, createElement: uiElement, addEventListener() {} })
@@ -162,13 +188,22 @@ test('restoring or reloading the accounts page just shows local metadata. A tool
   await state.runtime.onMessage.emit({ type: 'toolbar-click', tabId: 23 }, { id: 'fixture' })
   await nextTurn()
   assert.equal(state.targets.length, 1)
-  assert.equal(state.targets[0].url, 'https://chatgpt.com/')
+  assert.deepEqual(state.targets[0], { windowId: 2, url: 'https://chatgpt.com/', active: false })
   assert.equal(state.keyReads, 0)
   assert.equal(state.permissionChecks, 0)
   assert.equal(element('status').textContent, '已确认此实例登录的是所选 ChatGPT 账号。')
+  assert.deepEqual(state.tabUpdates, [])
   await state.runtime.onMessage.emit({ type: 'toolbar-click', tabId: 23 }, { id: 'fixture' })
   await nextTurn()
   assert.equal(state.targets.length, 1)
+})
+
+test('a background login result leaves the current tab selected until the user opens ChatGPT', async t => {
+  const { state, element } = await picker(t, { clicked: true, entry: source, outcome: 'mismatch' })
+  assert.match(element('status').textContent, /邮箱与所选账号不同/)
+  assert.deepEqual(state.tabUpdates, [])
+  await element('show-gpt').events.click()
+  assert.deepEqual(state.tabUpdates, [[38, { active: true }]])
 })
 
 test('an unsynced toolbar action keeps the existing KeyPouch connection flow', async t => {

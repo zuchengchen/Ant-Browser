@@ -33,7 +33,7 @@ chrome.action.onClicked.addListener(async ({ windowId, incognito }) => {
     const { id } = await chrome.tabs.create({ windowId, url: 'about:blank', active: false })
     permits.set(id, { windowId, deadline: Date.now() + 20_000 })
     try {
-      await chrome.tabs.update(id, { url: pageURL, active: true })
+      await chrome.tabs.update(id, { url: pageURL })
     } catch {
       permits.delete(id)
     }

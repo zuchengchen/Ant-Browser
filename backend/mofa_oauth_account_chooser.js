@@ -24,7 +24,7 @@ async ([address, email]) => {
             !label.childElementCount && label.textContent.trim().toLowerCase() === email && rendered(label)))
         if (matches.length > 1) return false
         const button = matches[0]
-        if (document.visibilityState === 'visible' && button && button === previous && !button.matches(':disabled') &&
+        if (button && button === previous && !button.matches(':disabled') &&
             !button.closest('[aria-disabled="true"]')) {
           const {x, y, width, height} = button.getBoundingClientRect()
           const hit = document.elementFromPoint(x + width / 2, y + height / 2)

@@ -42,7 +42,7 @@ type mofaOAuthCDPEvent struct {
 func (b mofaBrowser) waitMofaOAuth(ctx context.Context, flow mofaStockOAuth, email string, opened func()) (code, state string, err error) {
 	ctx, cancel := context.WithTimeout(ctx, 6*time.Minute)
 	defer cancel()
-	tab, closeTab, err := b.openTab(ctx, false)
+	tab, closeTab, err := b.openBackgroundTab(ctx)
 	if err != nil {
 		return "", "", err
 	}

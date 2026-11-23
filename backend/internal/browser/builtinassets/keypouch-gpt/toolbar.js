@@ -1,6 +1,16 @@
 const pickerURL = chrome.runtime.getURL('accounts.html')
+const loginOrigins = new Set(['https://chatgpt.com', 'https://auth.openai.com'])
 const opening = new Set()
 const clicks = new Map()
+
+// Schedule input pauses outside the hidden login document's timer budget.
+chrome.runtime.onMessage.addListener((message, sender, reply) => {
+  if (message?.type !== 'keypouch-login-delay' || sender.id !== chrome.runtime.id ||
+      !loginOrigins.has(sender.origin) || sender.frameId !== 0 || !sender.tab ||
+      !Number.isInteger(message.delay) || message.delay < 0 || message.delay > 500) return
+  setTimeout(() => reply(true), message.delay)
+  return true
+})
 
 // Only an action click may start a local login. An accounts tab opened or
 // restored by Chromium can show its record, but cannot reuse an earlier click.

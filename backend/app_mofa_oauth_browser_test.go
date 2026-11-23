@@ -88,6 +88,9 @@ func TestMofaOAuthBrowserUsesOnlyItsMainFrame(t *testing.T) {
 			}
 			switch call.Method {
 			case "Target.createTarget":
+				if call.Params["background"] != true {
+					t.Error("the authorization tab was not opened in the background")
+				}
 				respond(call, map[string]any{"targetId": targetID})
 			case "Target.closeTarget":
 				if call.Params["targetId"] != targetID {

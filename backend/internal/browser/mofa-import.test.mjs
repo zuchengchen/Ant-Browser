@@ -70,7 +70,7 @@ test('the import only contacts the local bridge and accepts confirmed results', 
   await assert.rejects(requestMofaImport({site, bridgePort}, proof), /未收到 Ant 的导入结果/)
 })
 
-test('one browser action grants a short-lived permit to only the new extension tab', async t => {
+test('one browser action grants a short-lived permit to only the new background extension tab', async t => {
   const events = {}
   const listen = name => ({addListener: listener => { events[name] = listener }})
   const launch = {windowId: 4, incognito: false}
@@ -91,7 +91,7 @@ test('one browser action grants a short-lived permit to only the new extension t
       },
       async update(id, options) {
         assert.ok(created.includes(id))
-        assert.deepEqual(options, {url: importPage, active: true})
+        assert.deepEqual(options, {url: importPage})
         navigated.push(id)
       },
     },
@@ -146,7 +146,8 @@ function mockImportPage(t, {href = importPage, incognito = false, child = false,
   })
   const clock = {now: 100}
   mockGlobals(t, {
-    window: view, document: {getElementById: id => labels[id]}, location, performance: {now: () => clock.now},
+    window: view, document: {visibilityState: 'hidden', getElementById: id => labels[id]}, location,
+    performance: {now: () => clock.now},
     history: {replaceState: (_, __, value) => { location.href = value }},
     chrome: {extension: {inIncognitoContext: incognito}, runtime: {getURL: path => base + path, sendMessage}},
   })
@@ -172,7 +173,7 @@ for (const [name, options, messageCount] of [
 }
 
 for (const expired of [false, true]) {
-  test(`the permitted page starts immediately with an ${expired ? 'expired' : 'unclaimed'} proof`, async t => {
+  test(`the permitted background page starts immediately with an ${expired ? 'expired' : 'unclaimed'} proof`, async t => {
     const {view, labels, location, sendMessage, clock} = mockImportPage(t, {permit: true})
     let settle
     const observed = new Promise(resolve => { settle = resolve })

@@ -51,6 +51,12 @@ test('clicks only the unique session button showing the verified address', async
   assert.equal(other.clicks(), 0)
 })
 
+test('selects the verified account in a background tab', async () => {
+  const match = account(email)
+  assert.equal(await select([match], {hidden: true}), true)
+  assert.equal(match.clicks(), 1)
+})
+
 test('leaves ambiguous, hidden, similar and disabled account choices alone', async () => {
   for (const accounts of [
     [account(email), account(email, { disabled: true })],
@@ -68,7 +74,6 @@ test('ignores unrelated documents and yields to the user', async () => {
     { url: 'https://auth.openai.com/consent' },
     { url: 'https://other.example.test/choose-an-account' },
     { subframe: true },
-    { hidden: true },
     { hit: {} },
     { userAction: { isTrusted: true } },
   ]) {

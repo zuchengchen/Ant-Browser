@@ -75,7 +75,7 @@ class TestInputEvent extends Event {
 // Chrome creates a fresh isolated world on navigation, rejects dead document
 // IDs and serializes the injected function without the extension's closures.
 function browser(t, spec) {
-  const calls = [], clicks = [], edits = [], delays = [], pageDelays = [], urls = [], listeners = new Set()
+  const calls = [], clicks = [], edits = [], delays = [], workerDelays = [], urls = [], listeners = new Set()
   let serial = 0, page, now = 1_800_000_010_000
   const controller = new AbortController()
   t.mock.method(Date, 'now', () => now)
@@ -87,7 +87,16 @@ function browser(t, spec) {
   const endpoint = {
     runtime: {
       onMessage: { addListener: listener => listeners.add(listener), removeListener: listener => listeners.delete(listener) },
-      sendMessage: async message => { for (const listener of listeners) listener(message, { tab: { id: tabId }, frameId: 0, documentId: page.id }) },
+      sendMessage: async message => {
+        const sender = page
+        if (message.type === 'keypouch-login-delay') {
+          assert.deepEqual(Object.keys(message).sort(), ['delay', 'type'])
+          workerDelays.push(message.delay)
+          now += message.delay
+          return new Promise(resolve => setImmediate(() => { if (sender.onInputWait?.(sender) !== false) resolve(true) }))
+        }
+        for (const listener of listeners) listener(message, { tab: { id: tabId }, frameId: 0, documentId: sender.id })
+      },
     },
     tabs: { get: async id => {
       assert.equal(id, tabId)
@@ -101,8 +110,7 @@ function browser(t, spec) {
       assert.ok(!JSON.stringify(payload).includes(totpSecret), 'TOTP seed entered the target document')
       assert.ok(payload.value !== password || payload.stage === 'password', 'password entered a different stage')
       if (payload.delay) assert.deepEqual(Object.keys(payload).sort(), ['delay', 'id'])
-      if (payload.focusCheck) assert.deepEqual(Object.keys(payload).sort(), ['focusCheck', 'id'])
-      if (payload.stage || payload.end || payload.delay || payload.focusCheck) assert.deepEqual(Object.keys(target).sort(), ['documentIds', 'tabId'])
+      if (payload.stage || payload.end || payload.delay) assert.deepEqual(Object.keys(target).sort(), ['documentIds', 'tabId'])
       else assert.deepEqual(target.frameIds, [0])
       const current = page
       if (target.documentIds && target.documentIds[0] !== current.id) throw Error('Document replaced')
@@ -132,16 +140,11 @@ function browser(t, spec) {
     const win = { addEventListener: (event, cb) => { callbacks[event] = cb } }
     win.top = win
     document.addEventListener = win.addEventListener
-    const pageTimer = (fn, milliseconds) => {
-      pageDelays.push(milliseconds)
-      now += milliseconds
-      return setImmediate(() => { if (options.onPageWait?.(page) !== false) fn() })
-    }
     const location = { href: url, assign: dst => { if (dst !== 'https://chatgpt.com/') navigate({ kind: 'settings', text: 'Email\n' + email }); else urls.push(dst) } }
     page = {
       url, id: 'doc-' + (++serial), main, callbacks, ...options,
       world: vm.createContext({ window: win, document, location, chrome: endpoint, HTMLInputElement: Input, Node: { ELEMENT_NODE: 1, TEXT_NODE: 3 }, Date, URL, Event, InputEvent: TestInputEvent, AbortController,
-        setTimeout: pageTimer, clearTimeout: clearImmediate, getComputedStyle: () => ({}) }),
+        getComputedStyle: () => ({}) }),
     }
     const sources = {
       email: { type: 'email', name: 'username' },
@@ -166,8 +169,8 @@ function browser(t, spec) {
   }
   navigate(spec)
   return {
-    get page() { return page }, urls, clicks, edits, delays, pageDelays, calls, controller, navigate,
-    run: (selected = account, getCurrentCode, onProgress) => loginToChatGPT(tabId, selected, controller.signal, getCurrentCode, onProgress),
+    get page() { return page }, urls, clicks, edits, delays, workerDelays, calls, controller, navigate,
+    run: (selected = account, getCurrentCode) => loginToChatGPT(tabId, selected, controller.signal, getCurrentCode),
   }
 }
 
@@ -342,15 +345,18 @@ test('the guest homepage waits for a visible sign-in control, then the returning
   assert.deepEqual(b.urls, ['https://chatgpt.com/', auth + '/log-in-or-create-account', auth + '/log-in/password', settings, 'https://chatgpt.com/'])
 })
 
-test('each visible input edit inserts one character, preserving Unicode, whitespace and variable bounded pauses', async t => {
+test('background input inserts one character at a time with Unicode, whitespace and variable bounded pauses', async t => {
   const samples = [0, 0.49, 0.999]
   let index = 0
   t.mock.method(Math, 'random', () => samples[index++ % samples.length])
   const selected = { ...account, password: ' päss🌿 word ' }
-  const b = browser(t, { kind: 'email', next: { kind: 'password', text: email, next: {
-    kind: 'totp', url: auth + '/mfa/totp', text: 'Authenticator app', next: verified,
+  const inactive = { hidden: true, background: true, tabActive: false }
+  const b = browser(t, { kind: 'email', ...inactive, next: { kind: 'password', ...inactive, text: email, next: {
+    kind: 'totp', ...inactive, url: auth + '/mfa/totp', text: 'Authenticator app', next: { ...verified, ...inactive },
   } } })
   assert.equal((await b.run(selected)).status, 'success')
+  assert.equal(b.urls.at(-1), 'https://chatgpt.com/')
+  assert.ok(b.calls.every(call => !call.foreground))
   for (const { kind, value, at } of b.clicks) {
     const entries = b.edits.filter(edit => edit.kind === kind)
     assert.deepEqual(entries.map(edit => edit.data), [...value])
@@ -362,124 +368,45 @@ test('each visible input edit inserts one character, preserving Unicode, whitesp
     assert.ok(at - entries.at(-1).at >= 350 && at - entries.at(-1).at <= 500)
   }
   assert.ok(b.delays.every(ms => ms === 400), 'the background picker must never time a character or pre-submit pause')
-  assert.ok(b.pageDelays.some(ms => ms <= 140) && b.pageDelays.some(ms => ms >= 350))
+  assert.ok(b.workerDelays.some(ms => ms <= 140) && b.workerDelays.some(ms => ms >= 350))
 })
 
-function returnToLoginTab(page) {
-  page.tabActive = true
-  page.world.document.visibilityState = 'visible'
-  page.world.document.hasFocus = () => true
-}
-
-test('new password and authenticator stages wait for the original tab before sending or editing credentials', async t => {
-  const b = browser(t, {})
-  for (const [kind, focus] of [
-    ['password', { hidden: true, background: true }],
-    ['password', { background: true }],
-    ['password', { tabActive: false }],
-    ['totp', { hidden: true, background: true }],
-  ]) {
-    const progress = [], requestedInForeground = []
-    const start = Date.now(), clickCount = b.clicks.length, editCount = b.edits.length
-    let restored = false
-    b.navigate({
-      kind, text: kind === 'password' ? email : email + '\nAuthenticator app', ...focus, next: verified,
-      onTabPoll(page) {
-        if (restored || Date.now() - start < 4000) return
-        assert.equal(b.edits.length, editCount)
-        assert.equal(b.clicks.length, clickCount)
-        assert.equal(page.field.value, '')
-        returnToLoginTab(page)
-        restored = true
-      },
-    })
-    const code = async () => {
-      requestedInForeground.push(restored)
-      return { value: '042831', expires: Date.now() + 30000 }
-    }
-    const result = await b.run(account, code, message => progress.push(message))
-    assert.equal(result.status, 'success', kind)
-    assert.equal(restored, true)
-    assert.deepEqual(b.clicks.slice(clickCount).map(item => [item.kind, item.value]), [[kind, kind === 'password' ? password : '042831']])
-    assert.deepEqual(requestedInForeground, kind === 'totp' ? [true] : [])
-    assert.equal(progress.filter(message => /切回/.test(message)).length, 1, 'show one foreground prompt per wait')
-    assert.match(progress.at(-1), /正在.*登录/, 'clear the waiting message when the login resumes')
-  }
-  assert.ok(!b.calls.some(call => !call.foreground && call.value !== undefined))
-})
-
-test('a code obtained while the window loses focus never enters the tab and is refreshed if it expires before return', async t => {
+test('an expiring authenticator code is refreshed while other windows have focus', async t => {
   const b = browser(t, { kind: 'totp', text: email + '\nAuthenticator app', next: verified })
-  let requestedAt, requests = 0, restored = false
-  b.page.onTabPoll = page => {
-    if (restored || requestedAt === undefined || Date.now() - requestedAt < 12000) return
-    assert.equal(page.field.value, '')
-    returnToLoginTab(page)
-    restored = true
-  }
+  let requests = 0
   const code = async () => {
     requests++
     if (requests === 1) {
-      requestedAt = Date.now()
       b.page.world.document.hasFocus = () => false
-      return { value: '042831', expires: Date.now() + 10000 }
+      return { value: '042831', expires: Date.now() + 6000 }
     }
-    assert.equal(restored, true)
+    assert.equal(b.page.field.value, '')
     return { value: '639271', expires: Date.now() + 30000 }
   }
   assert.equal((await b.run(account, code)).status, 'success')
   assert.equal(requests, 2)
-  assert.ok(!b.calls.some(call => call.value === '042831' || !call.foreground && call.value !== undefined))
+  assert.ok(b.calls.filter(call => call.value !== undefined).every(call => !call.foreground && call.value === '639271'))
   assert.deepEqual(b.clicks.map(item => item.value), ['639271'])
   assert.equal(b.edits.map(item => item.data).join(''), '639271')
 })
 
-test('losing focus after password inspection and before the first action keeps its value out of the background document', async t => {
-  const b = browser(t, { kind: 'password', text: email, next: verified })
-  let lostAt, restored = false
-  b.page.onInject = (answer, request) => {
-    if (lostAt === undefined && !request.stage && answer === 'password') {
-      lostAt = Date.now()
-      b.page.world.document.hasFocus = () => false
-    }
-  }
-  b.page.onTabPoll = page => {
-    if (lostAt === undefined || restored || Date.now() - lostAt < 2000) return
-    assert.equal(page.field.value, '')
-    returnToLoginTab(page)
-    restored = true
-  }
-  assert.equal((await b.run()).status, 'success')
-  assert.equal(restored, true)
-  assert.deepEqual(b.clicks.map(item => item.kind), ['password'])
-  assert.ok(!b.calls.some(call => !call.foreground && call.value !== undefined))
-})
-
-test('a focus wait rechecks manual input, the account, challenges and the top-level origin before entering a password', async t => {
+test('an asynchronous authenticator code is checked against the current background page before use', async t => {
   const b = browser(t, {})
   for (const [change, expectedStatus, expectedMessage] of [
     [page => {
       page.field.value = 'entered by the user'
       page.callbacks.input({ isTrusted: true })
     }, 'manual', /停止/],
-    [page => { page.main.innerText = 'other@example.test' }, 'mismatch', /不同/],
+    [page => { page.main.innerText = 'other@example.test\nAuthenticator app' }, 'mismatch', /不同/],
     [page => { page.main.append('iframe', { src: 'https://challenges.cloudflare.com/turnstile/test' }) }, 'manual', /人机验证/],
     [page => { page.world.window.top = {} }, 'manual', /身份验证/],
-    [() => { b.navigate({ kind: 'password', url: 'https://other.example.test/login', text: email }) }, 'manual', /身份验证/],
+    [() => { b.navigate({ kind: 'totp', url: 'https://other.example.test/login', text: email }) }, 'manual', /身份验证/],
   ]) {
-    const start = Date.now()
-    let changed = false
-    const page = b.navigate({
-      kind: 'password', text: email, hidden: true, background: true, next: verified,
-      onTabPoll(target) {
-        if (changed || Date.now() - start < 3000) return
-        change(target)
-        changed = true
-        returnToLoginTab(target)
-      },
+    const page = b.navigate({ kind: 'totp', text: email + '\nAuthenticator app', hidden: true, background: true, next: verified })
+    const result = await b.run(account, async () => {
+      change(page)
+      return { value: '042831', expires: Date.now() + 30000 }
     })
-    const result = await b.run()
-    assert.equal(changed, true)
     assert.equal(result.status, expectedStatus)
     assert.match(result.message, expectedMessage)
     assert.equal(result.verdict, undefined)
@@ -490,31 +417,22 @@ test('a focus wait rechecks manual input, the account, challenges and the top-le
   assert.ok(!b.calls.some(call => call.value !== undefined))
 })
 
-test('a password focus wait uses the remaining overall login time and tells the user to return to the tab', async t => {
-  const b = browser(t, { url: 'https://chatgpt.com/' })
-  const start = Date.now()
-  let passwordOpened = false
-  b.page.onTabPoll = () => {
-    if (Date.now() - start < 70000) return
-    b.navigate({ kind: 'password', text: email, background: true })
-    passwordOpened = true
-  }
-  const result = await b.run()
-  assert.equal(passwordOpened, true)
-  assert.equal(result.status, 'manual')
-  assert.match(result.message, /超时/)
-  assert.match(result.message, /切回|前台/)
-  assert.equal(Date.now() - start, 90000)
-  assert.equal(result.verdict, undefined)
-  assert.deepEqual(b.edits, [])
-  assert.deepEqual(b.clicks, [])
-  assert.ok(!b.calls.some(call => call.value !== undefined))
+test('switching tabs while a password is being typed lets the same document finish in the background', async t => {
+  const b = browser(t, { kind: 'password', text: email, next: verified, onInputWait: page => {
+    page.tabActive = false
+    page.world.document.hasFocus = () => false
+    page.world.document.visibilityState = 'hidden'
+  } })
+  assert.equal((await b.run()).status, 'success')
+  const actions = b.calls.filter(call => call.stage === 'password')
+  assert.equal(actions[0].foreground, true)
+  assert.ok(actions.slice(1).every(call => !call.foreground))
+  assert.deepEqual(b.clicks.map(item => item.value), [password])
 })
 
-test('switching tabs during the visible-document timer leaves the next character untouched', async t => {
-  const b = browser(t, { kind: 'password', text: email, onPageWait: page => {
-    page.world.document.visibilityState = 'hidden'
-    page.callbacks.visibilitychange()
+test('leaving the pinned document stops its edit even while the worker wait is pending', async t => {
+  const b = browser(t, { kind: 'password', text: email, hidden: true, onInputWait: page => {
+    page.callbacks.pagehide()
     return false
   } })
   const result = await b.run()
@@ -526,7 +444,7 @@ test('switching tabs during the visible-document timer leaves the next character
 })
 
 test('cancelling the background picker wakes a pinned document wait without another edit', async t => {
-  const b = browser(t, { kind: 'password', text: email, onPageWait: () => {
+  const b = browser(t, { kind: 'password', text: email, onInputWait: () => {
     b.controller.abort()
     return false
   } })
@@ -607,7 +525,7 @@ test('a late password submit receipt cannot complete the authenticator step in t
   let lateReceipt, nativeCodeSubmits = 0, codeInputs = 0, codeRequests = 0
   runtime.sendMessage = async message => {
     if (message.type === 'keypouch-login-submitted' && message.stage === 'password') lateReceipt = message
-    else await deliver(message)
+    else return deliver(message)
   }
   page.form.querySelector('button').onClick = () => {
     page.callbacks.submit({ target: page.form })
@@ -888,7 +806,7 @@ test('a matching settings email must not come from a conversation', async t => {
   assert.equal(b.urls.at(-1), settings)
   b.navigate({ ...verified, background: true })
   assert.equal((await b.run()).status, 'success')
-  assert.equal(b.urls.at(-1), settings)
+  assert.equal(b.urls.at(-1), 'https://chatgpt.com/')
 })
 
 function staticAccountEmailRow(parent, address, description = 'The email address linked to your account') {

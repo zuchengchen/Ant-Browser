@@ -37,7 +37,7 @@ func connectMofaBrowser(ctx context.Context, port int) (mofaBrowser, error) {
 	return mofaBrowser{address: addr, socket: u.String()}, nil
 }
 
-func (b mofaBrowser) openTab(ctx context.Context, background bool) (chatGPTPageTarget, func(), error) {
+func (b mofaBrowser) openBackgroundTab(ctx context.Context) (chatGPTPageTarget, func(), error) {
 	if err := ctx.Err(); err != nil {
 		return chatGPTPageTarget{}, nil, err
 	}
@@ -50,7 +50,7 @@ func (b mofaBrowser) openTab(ctx context.Context, background bool) (chatGPTPageT
 		return chatGPTPageTarget{}, nil, errMofaBrowser
 	}
 	defer closeCDP()
-	result, err := call("Target.createTarget", map[string]any{"url": "about:blank", "background": background})
+	result, err := call("Target.createTarget", map[string]any{"url": "about:blank", "background": true})
 	id, _ := result["targetId"].(string)
 	if err != nil || !mofaTargetID.MatchString(id) {
 		return chatGPTPageTarget{}, nil, errMofaBrowser
@@ -73,7 +73,7 @@ func (b mofaBrowser) openTab(ctx context.Context, background bool) (chatGPTPageT
 func (b mofaBrowser) signedInEmail(ctx context.Context, profileDir string) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, 25*time.Second)
 	defer cancel()
-	tab, closeTab, err := b.openTab(ctx, true)
+	tab, closeTab, err := b.openBackgroundTab(ctx)
 	if err != nil {
 		return "", err
 	}
