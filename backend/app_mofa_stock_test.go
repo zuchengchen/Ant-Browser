@@ -147,6 +147,17 @@ func TestMofaStockLookup(t *testing.T) {
 	}
 }
 
+func TestMofaStockLookupSkipsHealthyAccountWithSchedulingDisabled(t *testing.T) {
+	email := mofaStockFixtureEmail
+	account := mofaStockFixtureAccount(31, "Fixture ChatGPT", email, "active", 7)
+	account["schedulable"] = false
+	client, _ := mofaStockFixture(t, mofaStockFixtureGroups(), []map[string]any{account})
+	result, err := client.lookupStockAccount(context.Background(), email)
+	if err != nil || result.Action != "skipped" || !result.InTargetGroup || result.Schedulable == nil || *result.Schedulable {
+		t.Fatalf("lookup confirmation = %+v, err = %v", result, err)
+	}
+}
+
 func TestMofaStockLookupPaginatesForIdentity(t *testing.T) {
 	accounts := make([]map[string]any, 101)
 	for i := range accounts {

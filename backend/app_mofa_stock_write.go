@@ -19,18 +19,19 @@ import (
 const mofaOAuthRedirectURI = "http://localhost:1455/auth/callback"
 
 var (
-	errMofaStockOAuthLink      = errors.New("MOFA 未能生成有效的 OpenAI 授权链接")
-	errMofaStockOAuthCallback  = errors.New("OpenAI 授权回调与本次请求不匹配，请重新发起")
-	errMofaStockOAuthExchange  = errors.New("MOFA 未能完成 OpenAI 授权兑换，请重新发起")
-	errMofaStockOAuthIdentity  = errors.New("OpenAI 授权邮箱与本实例不一致或未得到确认，请核对后重试")
-	errMofaStockOAuthWorkspace = errors.New("OpenAI 授权与原账号的工作空间不一致或未得到确认，请核对后重试")
-	errMofaStockLegacyGroup    = errors.New("MOFA 原账号缺少可核对的授权邮箱，请在后台确认账号后加入分组")
-	errMofaStockLegacyOAuth    = errors.New("MOFA 原账号缺少可核对的授权邮箱和工作空间，请在后台确认后重新授权")
-	errMofaStockTargetChanged  = errors.New("MOFA 账号、授权状态或代理已变化，请重新发起")
-	errMofaStockOAuthInactive  = errors.New("MOFA 账号已停用，请在后台核对账号状态并重新授权")
-	errMofaStockCreate         = errors.New("MOFA 未确认账号已创建，请重新核对")
-	errMofaStockReauthorize    = errors.New("MOFA 未确认原账号的授权已更新，请重新核对")
-	errMofaStockGroupWrite     = errors.New("MOFA 未确认账号已加入目标分组，请重新核对")
+	errMofaStockOAuthLink       = errors.New("MOFA 未能生成有效的 OpenAI 授权链接")
+	errMofaStockOAuthCallback   = errors.New("OpenAI 授权回调与本次请求不匹配，请重新发起")
+	errMofaStockOAuthExchange   = errors.New("MOFA 未能完成 OpenAI 授权兑换，请重新发起")
+	errMofaStockOAuthIdentity   = errors.New("OpenAI 授权邮箱与本实例不一致或未得到确认，请核对后重试")
+	errMofaStockOAuthWorkspace  = errors.New("OpenAI 授权与原账号的工作空间不一致或未得到确认，请核对后重试")
+	errMofaStockLegacyGroup     = errors.New("MOFA 原账号缺少可核对的授权邮箱，请在后台确认账号后加入分组")
+	errMofaStockLegacyOAuth     = errors.New("MOFA 原账号缺少可核对的授权邮箱和工作空间，请在后台确认后重新授权")
+	errMofaStockTargetChanged   = errors.New("MOFA 账号、授权状态或代理已变化，请重新发起")
+	errMofaStockOAuthInactive   = errors.New("MOFA 账号已停用，请在后台核对账号状态并重新授权")
+	errMofaStockCreate          = errors.New("MOFA 未确认账号已创建，请重新核对")
+	errMofaStockReauthorize     = errors.New("MOFA 未确认原账号的授权已更新，请重新核对")
+	errMofaStockRenewalSettings = errors.New("MOFA 已更新原账号授权。请在后台核对原有分组、代理和调度设置")
+	errMofaStockGroupWrite      = errors.New("MOFA 未确认账号已加入目标分组，请重新核对")
 )
 
 type mofaStockOAuth struct {
@@ -259,7 +260,7 @@ func (c *mofaClient) createStockOAuthAccount(ctx context.Context, groupID int64,
 	if err != nil || !saved.matchesStockGrant(grant) || !slices.Contains(saved.GroupIDs, groupID) || !mofaStockEqualPointer(saved.ProxyID, flow.proxyID) {
 		return mofaStockResult{}, errMofaStockCreate
 	}
-	return saved.stockWriteResult("imported", groupID), nil
+	return saved.stockResult("imported", groupID), nil
 }
 
 func (c *mofaClient) reauthorizeStockOAuthAccount(ctx context.Context, email string, target mofaStockResult, flow mofaStockOAuth, grant mofaStockOAuthGrant) (mofaStockResult, error) {
@@ -287,8 +288,15 @@ func (c *mofaClient) reauthorizeStockOAuthAccount(ctx context.Context, email str
 		return mofaStockResult{}, err
 	}
 	saved, err := c.stockWriteAccount(ctx, account.ID, email)
-	if err != nil || !saved.matchesStockGrant(grant) || !saved.preservesStockAccount(account) {
+	if err != nil || !saved.matchesStockGrant(grant) {
 		return mofaStockResult{}, errMofaStockReauthorize
+	}
+	// MOFA disables scheduling when saving an errored account, then clears the error.
+	pausedOnRenewal := account.Status == "error" && saved.Status == "active" &&
+		account.Schedulable != nil && *account.Schedulable && saved.Schedulable != nil && !*saved.Schedulable
+	if !saved.preservesStockGroupsAndProxy(account) ||
+		(!mofaStockEqualPointer(saved.Schedulable, account.Schedulable) && !pausedOnRenewal) {
+		return mofaStockResult{}, errMofaStockRenewalSettings
 	}
 	result, err := c.addStockGroup(ctx, email, target.GroupID, saved)
 	if err != nil {
@@ -324,7 +332,7 @@ func (c *mofaClient) addStockGroup(ctx context.Context, email string, groupID in
 		return mofaStockResult{}, errMofaStockHealth
 	}
 	if slices.Contains(account.GroupIDs, groupID) {
-		return account.stockWriteResult("skipped", groupID), nil
+		return account.stockResult("skipped", groupID), nil
 	}
 	groups := append(slices.Clone(account.GroupIDs), groupID)
 	input := map[string]any{"group_ids": groups}
@@ -332,12 +340,13 @@ func (c *mofaClient) addStockGroup(ctx context.Context, email string, groupID in
 		return mofaStockResult{}, err
 	}
 	saved, err := c.stockWriteAccount(ctx, account.ID, email)
-	if err != nil || !slices.Contains(saved.GroupIDs, groupID) || !saved.preservesStockAccount(account) || saved.Status != account.Status ||
+	if err != nil || !slices.Contains(saved.GroupIDs, groupID) || !saved.preservesStockGroupsAndProxy(account) ||
+		!mofaStockEqualPointer(saved.Schedulable, account.Schedulable) || saved.Status != account.Status ||
 		mofaStockEmail(saved.Credentials.Email) != mofaStockEmail(email) ||
 		!mofaStockIdentityFieldMatches(account.Credentials.ChatGPTAccountID, saved.Credentials.ChatGPTAccountID) {
 		return mofaStockResult{}, errMofaStockGroupWrite
 	}
-	return saved.stockWriteResult("group_added", groupID), nil
+	return saved.stockResult("group_added", groupID), nil
 }
 
 func (c *mofaClient) verifyStockTargetGroup(ctx context.Context, groupID int64) error {
@@ -408,13 +417,13 @@ func mofaStockIdentityFieldMatches(expected, actual string) bool {
 	return strings.TrimSpace(expected) == "" || strings.TrimSpace(expected) == strings.TrimSpace(actual)
 }
 
-func (a mofaStockAccount) preservesStockAccount(before mofaStockAccount) bool {
+func (a mofaStockAccount) preservesStockGroupsAndProxy(before mofaStockAccount) bool {
 	for _, groupID := range before.GroupIDs {
 		if !slices.Contains(a.GroupIDs, groupID) {
 			return false
 		}
 	}
-	return mofaStockEqualPointer(a.ProxyID, before.ProxyID) && mofaStockEqualPointer(a.Schedulable, before.Schedulable)
+	return mofaStockEqualPointer(a.ProxyID, before.ProxyID)
 }
 
 func mofaStockEqualPointer[T comparable](lhs, rhs *T) bool {
@@ -422,11 +431,6 @@ func mofaStockEqualPointer[T comparable](lhs, rhs *T) bool {
 		return lhs == nil && rhs == nil
 	}
 	return *lhs == *rhs
-}
-
-func (a mofaStockAccount) stockWriteResult(action string, groupID int64) mofaStockResult {
-	return mofaStockResult{Action: action, AccountID: a.ID, GroupID: groupID, SearchHint: strings.TrimSpace(a.Name),
-		InTargetGroup: slices.Contains(a.GroupIDs, groupID), workspaceID: a.Credentials.ChatGPTAccountID}
 }
 
 func mofaStockAdminRequest[T any](ctx context.Context, c *mofaClient, method, path string, input any, headers http.Header, failure error) (T, error) {

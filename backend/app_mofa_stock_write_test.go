@@ -163,7 +163,9 @@ func TestMofaStockOAuthCreatesAfterVerification(t *testing.T) {
 func TestMofaStockOAuthRenewsOriginalAccountAndAddsGroup(t *testing.T) {
 	email := mofaStockFixtureEmail
 	old := mofaWriteAccountFixture("error", mofaWriteLabel, email, mofaWriteWorkspace, mofaWriteProxyID, 34)
+	old["schedulable"] = true
 	latest := mofaWriteAccountFixture("error", mofaWriteLabel, email, mofaWriteWorkspace, mofaWriteProxyID, 34, 52)
+	latest["schedulable"] = true
 	renewed := mofaWriteAccountFixture("active", mofaWriteLabel, email, mofaWriteWorkspace, mofaWriteProxyID, 34, 52)
 	saved := mofaWriteAccountFixture("active", mofaWriteLabel, email, mofaWriteWorkspace, mofaWriteProxyID, 34, 52, mofaWriteGroupID)
 	client := mofaWriteFixture(t, mofaWriteStep{method: http.MethodGet, path: mofaWriteAccountURL, data: old},
@@ -195,8 +197,54 @@ func TestMofaStockOAuthRenewsOriginalAccountAndAddsGroup(t *testing.T) {
 	}
 	*proxyID = 14 // The flow retains the proxy used to generate its link.
 	result, err := client.completeStockOAuth(context.Background(), flow, "fixture-code", flow.State, email, target)
-	if err != nil || result.Action != "reauthorized" || result.AccountID != mofaWriteAccountID || !result.InTargetGroup || result.SearchHint != mofaWriteLabel {
+	if err != nil || result.Action != "reauthorized" || result.AccountID != mofaWriteAccountID || !result.InTargetGroup ||
+		result.SearchHint != mofaWriteLabel || result.Schedulable == nil || *result.Schedulable {
 		t.Fatalf("renewed account confirmation = %+v, err = %v", result, err)
+	}
+}
+
+func TestMofaStockOAuthRenewalReadback(t *testing.T) {
+	email := mofaStockFixtureEmail
+	account := func(status string, proxyID int, groupIDs ...int64) map[string]any {
+		return mofaWriteAccountFixture(status, mofaWriteLabel, email, mofaWriteWorkspace, proxyID, groupIDs...)
+	}
+	previous := account("error", mofaWriteProxyID, 34, mofaWriteGroupID)
+	previous["schedulable"] = true
+	previouslyPaused := account("error", mofaWriteProxyID, 34, mofaWriteGroupID)
+	renewed := account("active", mofaWriteProxyID, 34, mofaWriteGroupID)
+	enabled := account("active", mofaWriteProxyID, 34, mofaWriteGroupID)
+	enabled["schedulable"] = true
+	stale := account("active", mofaWriteProxyID, 34, mofaWriteGroupID)
+	stale["credentials"].(map[string]any)["expires_at"] = mofaWriteExpiry - 3600
+
+	for _, tt := range []struct {
+		name          string
+		before, after map[string]any
+		want          error
+	}{
+		{"scheduling disabled when error clears", previous, renewed, nil},
+		{"unexpectedly enabled scheduling", previouslyPaused, enabled, errMofaStockRenewalSettings},
+		{"changed proxy", previous, account("active", mofaWriteProxyID+1, 34, mofaWriteGroupID), errMofaStockRenewalSettings},
+		{"lost original group", previous, account("active", mofaWriteProxyID, mofaWriteGroupID), errMofaStockRenewalSettings},
+		{"stale credentials", previous, stale, errMofaStockReauthorize},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			client := mofaWriteFixture(t,
+				mofaWriteStep{method: http.MethodGet, path: mofaWriteAccountURL, data: tt.before},
+				mofaWriteStep{method: http.MethodPost, path: mofaWriteAccountURL + "/apply-oauth-credentials", data: map[string]int64{"id": mofaWriteAccountID}},
+				mofaWriteStep{method: http.MethodGet, path: mofaWriteAccountURL, data: tt.after},
+			)
+			target := mofaStockResult{AccountID: mofaWriteAccountID, GroupID: mofaWriteGroupID, workspaceID: mofaWriteWorkspace}
+			proxyID := int64(mofaWriteProxyID)
+			flow := mofaStockOAuth{proxyID: &proxyID}
+			result, err := client.reauthorizeStockOAuthAccount(context.Background(), email, target, flow, mofaWriteGrantFixture(email, mofaWriteWorkspace))
+			if !errors.Is(err, tt.want) {
+				t.Fatalf("renewal readback yielded %v, expected %v", err, tt.want)
+			}
+			if tt.want == nil && (result.Action != "reauthorized" || !result.InTargetGroup || result.Schedulable == nil || *result.Schedulable) {
+				t.Fatalf("renewal confirmation = %+v", result)
+			}
+		})
 	}
 }
 

@@ -23,7 +23,7 @@ import (
 
 const (
 	mofaToolbarPath    = "/mofa/import"
-	mofaToolbarVersion = "1.0.5"
+	mofaToolbarVersion = "1.0.6"
 )
 
 type mofaToolbarSource struct {
@@ -153,10 +153,14 @@ func (b *mofaToolbarBridge) handle(a *App, w http.ResponseWriter, r *http.Reques
 		writeMofaToolbarReply(w, http.StatusConflict, mofaToolbarReply{Error: err.Error()})
 		return
 	}
-	writeMofaToolbarReply(w, http.StatusOK, mofaToolbarReply{Result: map[string]interface{}{
+	response := map[string]interface{}{
 		"status": result["status"], "accountId": result["accountId"], "groupId": result["groupId"],
 		"inTargetGroup": result["inTargetGroup"],
-	}})
+	}
+	if schedulable, ok := result["schedulable"].(bool); ok {
+		response["schedulable"] = schedulable
+	}
+	writeMofaToolbarReply(w, http.StatusOK, mofaToolbarReply{Result: response})
 }
 
 type mofaToolbarRequest struct {

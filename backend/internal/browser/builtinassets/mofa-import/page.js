@@ -46,7 +46,8 @@ async function startImport() {
     history.replaceState(null, '', `${pageURL}#ant-mofa-${digest}`)
     status.textContent = '正在核对本实例登录的 ChatGPT 账号。如需手动授权，请在本实例切换到 OpenAI 授权标签页。'
     const result = await requestMofaImport(config, hex(proof))
-    status.textContent = outcomes[result.status]
+    const scheduling = result.schedulable === false ? '该账号的 MOFA 调度当前已关闭。' : ''
+    status.textContent = outcomes[result.status] + scheduling
   } catch (error) {
     status.textContent = error?.message || missingBridge
   } finally {

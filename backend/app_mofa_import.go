@@ -37,10 +37,14 @@ func (a *App) browserMofaImport(profileID string, source *mofaToolbarSource) (ma
 		}
 		return nil, err
 	}
-	return map[string]interface{}{
+	response := map[string]interface{}{
 		"status": result.Action, "accountId": result.AccountID, "groupId": result.GroupID,
 		"inTargetGroup": result.InTargetGroup,
-	}, nil
+	}
+	if result.Schedulable != nil {
+		response["schedulable"] = *result.Schedulable
+	}
+	return response, nil
 }
 
 func (a *App) beginMofaImport(profileID string) (context.Context, func(), error) {

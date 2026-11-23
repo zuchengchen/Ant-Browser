@@ -10,6 +10,7 @@ export interface MofaImportResult {
   status: typeof importStatuses[number]
   accountId: number
   groupId: number
+  schedulable: boolean | null
 }
 
 function subscribeToImportProgress(profileId: string, onProgress: (phase: MofaImportPhase) => void) {
@@ -40,7 +41,8 @@ export async function importMofaAccount(profileId: string, onProgress: (phase: M
         typeof groupId !== 'number' || !Number.isSafeInteger(groupId) || groupId <= 0) {
       throw new Error('无法识别 MOFA 导入结果，请重试。')
     }
-    return { status, accountId, groupId }
+    const schedulable = typeof result.schedulable === 'boolean' ? result.schedulable : null
+    return { status, accountId, groupId, schedulable }
   } finally {
     unsubscribe?.()
   }

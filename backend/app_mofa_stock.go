@@ -29,6 +29,7 @@ type mofaStockResult struct {
 	GroupID       int64
 	SearchHint    string
 	InTargetGroup bool
+	Schedulable   *bool
 	workspaceID   string
 }
 
@@ -73,6 +74,18 @@ type mofaStockAccountPage struct {
 	Pages    int                `json:"pages"`
 }
 
+func (a mofaStockAccount) stockResult(action string, groupID int64) mofaStockResult {
+	return mofaStockResult{
+		Action:        action,
+		AccountID:     a.ID,
+		GroupID:       groupID,
+		SearchHint:    strings.TrimSpace(a.Name),
+		InTargetGroup: slices.Contains(a.GroupIDs, groupID),
+		Schedulable:   a.Schedulable,
+		workspaceID:   a.Credentials.ChatGPTAccountID,
+	}
+}
+
 func (c *mofaClient) lookupStockAccount(ctx context.Context, email string) (mofaStockResult, error) {
 	email = strings.TrimSpace(email)
 	normalizedEmail := mofaStockEmail(email)
@@ -111,11 +124,7 @@ func (c *mofaClient) lookupStockAccount(ctx context.Context, email string) (mofa
 	if err != nil {
 		return mofaStockResult{}, err
 	}
-	result := mofaStockResult{
-		Action: "skipped", AccountID: account.ID, GroupID: groupID, SearchHint: strings.TrimSpace(account.Name),
-		InTargetGroup: slices.Contains(account.GroupIDs, groupID),
-		workspaceID:   account.Credentials.ChatGPTAccountID,
-	}
+	result := account.stockResult("skipped", groupID)
 	if reauthorize {
 		result.Action = "reauthorization_required"
 	} else if !result.InTargetGroup {

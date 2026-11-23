@@ -18,7 +18,7 @@ const progressLabels: Record<MofaImportPhase, string> = {
   saving: '正在保存到 MOFA',
 }
 
-function showImportResult(profileName: string, { status, accountId }: MofaImportResult) {
+function showImportResult(profileName: string, { status, accountId, schedulable }: MofaImportResult) {
   const group = '「GPT-不降智」'
   const outcomes = {
     skipped: ['已跳过', `MOFA 账号 #${accountId} 已在${group}，授权有效。`],
@@ -27,7 +27,8 @@ function showImportResult(profileName: string, { status, accountId }: MofaImport
     group_added: ['已加入分组', `已将账号 #${accountId} 加入${group}。`],
   }
   const [title, message] = outcomes[status]
-  toast.success(message, undefined, { title: `「${profileName}」${title}` })
+  const scheduling = schedulable === false ? '该账号的 MOFA 调度当前已关闭。' : ''
+  toast.success(message + scheduling, undefined, { title: `「${profileName}」${title}` })
 }
 
 function setPendingImport(profileId: string, job?: PendingImport) {

@@ -203,6 +203,29 @@ for (const expired of [false, true]) {
   })
 }
 
+for (const [status, schedulable, message] of [
+  ['reauthorized', false, '已重新授权原账号，并确认账号在「GPT-不降智」。该账号的 MOFA 调度当前已关闭。'],
+  ['skipped', false, '已核对。账号授权有效且已在「GPT-不降智」，本次跳过。该账号的 MOFA 调度当前已关闭。'],
+  ['reauthorized', true, '已重新授权原账号，并确认账号在「GPT-不降智」。'],
+  ['skipped', null, '已核对。账号授权有效且已在「GPT-不降智」，本次跳过。'],
+]) {
+  test(`the toolbar reports ${status} with schedulable=${schedulable}`, async t => {
+    const {labels} = mockImportPage(t, {permit: true})
+    let acceptImport
+    const requested = new Promise(resolve => { acceptImport = resolve })
+    t.mock.method(globalThis, 'fetch', async url => {
+      if (url === base + 'site.json') return Response.json({site, bridgePort})
+      assert.equal(url, `http://127.0.0.1:${bridgePort}/mofa/import`)
+      acceptImport()
+      return Response.json({result: {...healthy, status, schedulable}})
+    })
+    await import(`./builtinassets/mofa-import/page.js?status=${status}&schedulable=${schedulable}`)
+    await requested
+    await setImmediate()
+    assert.equal(labels.status.textContent, message)
+  })
+}
+
 test('the shared account reader verifies one visible email within official account settings', t => {
   const view = {}
   view.top = view
