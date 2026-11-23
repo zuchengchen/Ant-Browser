@@ -210,6 +210,10 @@ export function BrowserInstanceStatus(arg1:string):Promise<browser.Profile>;
 
 export function BrowserInstanceStop(arg1:string):Promise<browser.Profile>;
 
+export function BrowserMofaImport(arg1:string):Promise<Record<string, any>>;
+
+export function BrowserMofaImportCancel(arg1:string):Promise<void>;
+
 export function BrowserProfileBatchRemoveTags(arg1:Array<string>,arg2:Array<string>):Promise<void>;
 
 export function BrowserProfileBatchSetTags(arg1:Array<string>,arg2:Array<string>,arg3:boolean):Promise<void>;
@@ -374,6 +378,8 @@ export function GetLogLevel():Promise<string>;
 
 export function GetMemoryStats():Promise<Record<string, any>>;
 
+export function GetMofaSettings():Promise<Record<string, string>>;
+
 export function GetMofaSite():Promise<string>;
 
 export function GetProxyCheckSettings():Promise<config.ProxyCheckConfig>;
@@ -421,6 +427,8 @@ export function SaveBrowserSettings(arg1:browser.Settings):Promise<void>;
 export function SaveKeyPouchSettings(arg1:string):Promise<Record<string, string>>;
 
 export function SaveLaunchServerSettings(arg1:number):Promise<Record<string, any>>;
+
+export function SaveMofaSettings(arg1:Record<string, string>):Promise<Record<string, string>>;
 
 export function SaveMofaSite(arg1:string):Promise<string>;
 

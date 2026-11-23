@@ -212,7 +212,7 @@ func TestGPTRecoveryClearsMarkedSessionBeforeRegisteringProcess(t *testing.T) {
 	if err := rememberGPTSessionExtension(dir, ext); err != nil {
 		t.Fatal(err)
 	}
-	if excluded, err := isGPTVaultArchiveEntry(dir, filepath.Join(dir, gptSessionMarker), nil); err != nil || !excluded {
+	if excluded, err := isLocalCredentialArchiveEntry(dir, filepath.Join(dir, gptSessionMarker), nil); err != nil || !excluded {
 		t.Fatal("live process marker would enter an ordinary profile package")
 	}
 	probe := testRetainedGPTDebug(t, dir, ext)

@@ -11,7 +11,7 @@ import {
   fetchAutomationState,
   fetchKeyPouchSettings,
   fetchLaunchServerSettings,
-  fetchMofaSite,
+  fetchMofaSettings,
   fetchSettings,
   installAutomationRuntime,
   resetSettings,
@@ -20,11 +20,12 @@ import {
   saveAutomationSettings,
   saveKeyPouchSettings,
   saveLaunchServerSettings,
-  saveMofaSite,
+  saveMofaSettings,
   saveSettings,
 } from './api'
-import type { AutomationNodeSource, AutomationRuntimeCheck, AutomationState, AutomationSystemNodeProbe, KeyPouchSettings } from './api'
+import type { AutomationNodeSource, AutomationRuntimeCheck, AutomationState, AutomationSystemNodeProbe, KeyPouchSettings, MofaSettings } from './api'
 import { AutomationSettingsCard } from './components/AutomationSettingsCard'
+import type { MofaSettingsDraft } from './components/MofaSettingsFields'
 import { useSettingsProgressEffects } from './hooks/useSettingsProgressEffects'
 import { SettingsAdvancedCard, SettingsBasicFeatureCards } from './components/SettingsGeneralCards'
 import { defaultSettings } from './types'
@@ -33,6 +34,24 @@ import type { AutomationRuntimeProgress } from './progress'
 
 type AutomationBusyState = 'none' | 'toggle' | 'probe' | 'runtime' | 'package' | 'install' | 'check'
 
+function mofaSettingsDraft(settings: MofaSettings | null): MofaSettingsDraft {
+  return {
+    siteUrl: settings?.siteUrl ?? '',
+    username: settings?.username ?? '',
+    password: '',
+    totpSecret: '',
+    clearCredentials: false,
+  }
+}
+
+function mofaOrigin(siteUrl: string) {
+  try {
+    return new URL(siteUrl.trim()).origin
+  } catch {
+    return ''
+  }
+}
+
 export function SettingsPage() {
   const { setTheme } = useTheme()
   const [settings, setSettings] = useState<AppSettings>(defaultSettings)
@@ -40,9 +59,9 @@ export function SettingsPage() {
   const [keyPouch, setKeyPouch] = useState<KeyPouchSettings | null | undefined>(undefined)
   const [siteUrlDraft, setSiteUrlDraft] = useState('')
   const [siteError, setSiteError] = useState('')
-  const [mofaSite, setMofaSite] = useState<string | null | undefined>(undefined)
-  const [mofaSiteDraft, setMofaSiteDraft] = useState('')
-  const [mofaSiteError, setMofaSiteError] = useState('')
+  const [mofaSettings, setMofaSettings] = useState<MofaSettings | null | undefined>(undefined)
+  const [mofaDraft, setMofaDraft] = useState(() => mofaSettingsDraft(null))
+  const [mofaError, setMofaError] = useState('')
   const [automationState, setAutomationState] = useState<AutomationState>(defaultAutomationState)
   const [automationProgress, setAutomationProgress] = useState<AutomationRuntimeProgress | null>(null)
   const [automationBusy, setAutomationBusy] = useState<AutomationBusyState>('none')
@@ -59,7 +78,13 @@ export function SettingsPage() {
   const [saving, setSaving] = useState(false)
   const generalChanged = settings !== savedSettings
   const siteChanged = keyPouch !== undefined && siteUrlDraft.trim() !== (keyPouch?.siteUrl ?? '')
-  const mofaSiteChanged = mofaSite !== undefined && mofaSiteDraft.trim() !== (mofaSite ?? '')
+  const canReuseMofaCredentials = !!mofaSettings?.siteUrl && mofaOrigin(mofaDraft.siteUrl) === mofaSettings.siteUrl &&
+    mofaDraft.username.trim() === mofaSettings.username
+  const mofaChanged = mofaSettings !== undefined && (
+    mofaDraft.siteUrl.trim() !== (mofaSettings?.siteUrl ?? '') ||
+    mofaDraft.username.trim() !== (mofaSettings?.username ?? '') ||
+    Boolean(mofaDraft.password || mofaDraft.totpSecret || mofaDraft.clearCredentials)
+  )
 
   useEffect(() => {
     void loadSettings()
@@ -91,17 +116,17 @@ export function SettingsPage() {
     }
   }
 
-  const loadMofaSite = async () => {
-    setMofaSite(undefined)
+  const loadMofaSettings = async () => {
+    setMofaSettings(undefined)
     try {
-      const result = await fetchMofaSite()
-      setMofaSiteDraft(result)
-      setMofaSite(result)
-      setMofaSiteError('')
+      const result = await fetchMofaSettings()
+      setMofaDraft(mofaSettingsDraft(result))
+      setMofaSettings(result)
+      setMofaError('')
     } catch (error) {
-      setMofaSite(null)
-      setMofaSiteDraft('')
-      setMofaSiteError(errorMessage(error, '读取 MOFA 后台地址失败'))
+      setMofaSettings(null)
+      setMofaDraft(mofaSettingsDraft(null))
+      setMofaError(errorMessage(error, '读取 MOFA 设置失败'))
     }
   }
 
@@ -113,7 +138,7 @@ export function SettingsPage() {
         fetchAutomationState(),
         fetchLaunchServerSettings(),
         loadKeyPouch(),
-        loadMofaSite(),
+        loadMofaSettings(),
       ])
       setSettings(data)
       setSavedSettings(data)
@@ -132,7 +157,36 @@ export function SettingsPage() {
     setSettings(prev => ({ ...prev, [key]: value }))
   }
 
+  const handleMofaChange = (update: Partial<MofaSettingsDraft>) => {
+    setMofaDraft(previous => {
+      const next = { ...previous, ...update }
+      if (next.clearCredentials || mofaOrigin(next.siteUrl) !== mofaOrigin(previous.siteUrl) || next.username.trim() !== previous.username.trim()) {
+        next.password = ''
+        next.totpSecret = ''
+      }
+      return next
+    })
+    setMofaError('')
+  }
+
   const handleSave = async () => {
+    const mofaSiteUrl = mofaDraft.siteUrl.trim()
+    const mofaUsername = mofaDraft.username.trim()
+    const clearMofaCredentials = !mofaSiteUrl || mofaDraft.clearCredentials
+    if (mofaChanged && !clearMofaCredentials) {
+      let error = ''
+      if (!mofaUsername && (mofaSettings?.username || mofaDraft.password || mofaDraft.totpSecret.trim())) {
+        error = '请输入 MOFA 管理员用户名，或选择清除管理员凭据。'
+      } else if (mofaUsername && !mofaDraft.password && !(canReuseMofaCredentials && mofaSettings?.passwordConfigured)) {
+        error = '请输入当前 MOFA 管理员的密码。'
+      }
+      if (error) {
+        setMofaError(error)
+        toast.error(error)
+        return
+      }
+    }
+
     setSaving(true)
     try {
       if (siteChanged) {
@@ -148,15 +202,21 @@ export function SettingsPage() {
           return
         }
       }
-      if (mofaSiteChanged) {
+      if (mofaChanged) {
         try {
-          const result = await saveMofaSite(mofaSiteDraft)
-          setMofaSite(result)
-          setMofaSiteDraft(result)
-          setMofaSiteError('')
+          const input: Record<string, string> = { siteUrl: mofaSiteUrl, username: clearMofaCredentials ? '' : mofaUsername }
+          if (clearMofaCredentials) input.clearCredentials = 'true'
+          else {
+            if (mofaDraft.password) input.password = mofaDraft.password
+            if (mofaDraft.totpSecret.trim()) input.totpSecret = mofaDraft.totpSecret.trim()
+          }
+          const result = await saveMofaSettings(input)
+          setMofaSettings(result)
+          setMofaDraft(mofaSettingsDraft(result))
+          setMofaError('')
         } catch (error) {
-          const message = errorMessage(error, 'MOFA 后台地址保存失败')
-          setMofaSiteError(message)
+          const message = errorMessage(error, 'MOFA 设置保存失败')
+          setMofaError(message)
           toast.error(message)
           return
         }
@@ -174,7 +234,7 @@ export function SettingsPage() {
   }
 
   const handleReset = async () => {
-    if (!confirm('确定要重置所有设置吗？将重置通用设置、KeyPouch 和 MOFA 地址、自动化、备份渠道和 Launch Server。浏览器实例、代理和内核数据会保留。')) return
+    if (!confirm('确定要重置所有设置吗？将重置通用设置、KeyPouch 地址、MOFA 地址及管理员凭据、自动化、备份渠道和 Launch Server。浏览器实例、代理和内核数据会保留。')) return
 
     setLoading(true)
     try {
@@ -185,7 +245,7 @@ export function SettingsPage() {
         fetchAutomationState(),
         fetchLaunchServerSettings(),
         loadKeyPouch(),
-        loadMofaSite(),
+        loadMofaSettings(),
       ])
       setTheme('light')
       setAutomationState(automation)
@@ -361,7 +421,7 @@ export function SettingsPage() {
               <RotateCcw className="h-4 w-4" />
               重置
             </Button>
-            <Button variant="danger" size="sm" onClick={handleSave} loading={saving} disabled={!generalChanged && !siteChanged && !mofaSiteChanged}>
+            <Button variant="danger" size="sm" onClick={handleSave} loading={saving} disabled={!generalChanged && !siteChanged && !mofaChanged}>
               <Save className="h-4 w-4" />
               保存
             </Button>
@@ -383,12 +443,13 @@ export function SettingsPage() {
           setSiteUrlDraft(value)
           setSiteError('')
         }}
-        mofaSiteUrl={mofaSiteDraft}
-        mofaSiteDisabled={mofaSite === undefined || saving}
-        mofaSiteError={mofaSiteError}
-        onMofaSiteUrlChange={value => {
-          setMofaSiteDraft(value)
-          setMofaSiteError('')
+        mofa={{
+          draft: mofaDraft,
+          saved: mofaSettings,
+          canReuseCredentials: canReuseMofaCredentials,
+          disabled: mofaSettings === undefined || saving,
+          error: mofaError,
+          onChange: handleMofaChange,
         }}
       />
       <AutomationSettingsCard

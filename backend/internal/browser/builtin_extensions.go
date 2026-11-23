@@ -30,6 +30,18 @@ const KeyPouchGPTExtensionID = "bhejekdbkkhikmkocgglbbaiakpdcife"
 // MofaImportExtensionID identifies the bundled MOFA account import extension.
 const MofaImportExtensionID = "ahgeagcnemihfgepigpindnndfbckbbg"
 
+// MofaAccountEmailExpression uses the same visible settings reader as the
+// toolbar extension. The caller evaluates it in an isolated page world.
+func MofaAccountEmailExpression() string {
+	source, _ := builtinExtensionFS.ReadFile("builtinassets/mofa-import/account-email.js")
+	const directive = "export default "
+	_, function, found := strings.Cut(string(source), directive)
+	if !found {
+		return "null"
+	}
+	return "(" + strings.TrimSpace(function) + ")()"
+}
+
 // VerifyKeyPouchGPTFiles checks the installation before handing a credential
 // to its extension origin. Backups from older installations may also contain
 // unpacked extension directories with the same path and version.

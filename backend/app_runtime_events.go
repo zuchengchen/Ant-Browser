@@ -43,32 +43,37 @@ func (a *App) startBackgroundTask(task func(context.Context)) error {
 	if task == nil {
 		return fmt.Errorf("后台任务不能为空")
 	}
+	ctx, done, err := a.beginBackgroundTask()
+	if err != nil {
+		return err
+	}
+	go func() {
+		defer done()
+		task(ctx)
+	}()
+	return nil
+}
 
+func (a *App) beginBackgroundTask() (context.Context, func(), error) {
+	if a == nil {
+		return nil, nil, fmt.Errorf("应用未初始化")
+	}
 	a.runtimeMu.Lock()
+	defer a.runtimeMu.Unlock()
 	if a.ctx == nil {
-		a.runtimeMu.Unlock()
-		return fmt.Errorf("应用上下文未初始化")
+		return nil, nil, fmt.Errorf("应用上下文未初始化")
 	}
 	if a.runtimeStopped {
-		a.runtimeMu.Unlock()
-		return fmt.Errorf("应用正在关闭")
+		return nil, nil, fmt.Errorf("应用正在关闭")
 	}
 	if a.backgroundTasksBlocked {
-		a.runtimeMu.Unlock()
-		return fmt.Errorf("应用正在维护")
+		return nil, nil, fmt.Errorf("应用正在维护")
 	}
 	if a.backgroundTaskCtx == nil || a.backgroundTaskCancel == nil {
 		a.backgroundTaskCtx, a.backgroundTaskCancel = context.WithCancel(a.ctx)
 	}
-	taskCtx := a.backgroundTaskCtx
 	a.backgroundTasks.Add(1)
-	a.runtimeMu.Unlock()
-
-	go func() {
-		defer a.backgroundTasks.Done()
-		task(taskCtx)
-	}()
-	return nil
+	return a.backgroundTaskCtx, a.backgroundTasks.Done, nil
 }
 
 func (a *App) cancelBackgroundTasksAndWait() {

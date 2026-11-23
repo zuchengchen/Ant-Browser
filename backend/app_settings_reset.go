@@ -106,13 +106,23 @@ func (a *App) resetLocalManagedSettingsLocked() error {
 	if err != nil {
 		return err
 	}
-	if mofa != "" {
-		if err := a.saveMofaSiteLocked(mofaPath, ""); err != nil {
+	credentials, err := readMofaCredentialFile(mofaPath)
+	if err != nil {
+		return err
+	}
+	if mofa != "" || credentials != nil {
+		if err := a.saveMofaImportSettingsLocked(mofaPath, credentials, mofaImportSettings{}); err != nil {
 			return err
 		}
 	}
 	err = a.resetKeyPouchAndBackupSettingsLocked()
-	if err != nil && mofa != "" {
+	if err == nil {
+		return nil
+	}
+	if credentials != nil {
+		err = errors.Join(err, restoreMofaCredentials(mofaPath, credentials))
+	}
+	if mofa != "" {
 		err = errors.Join(err, a.saveMofaSiteLocked(mofaPath, mofa))
 	}
 	return err

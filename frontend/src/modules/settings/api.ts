@@ -88,16 +88,36 @@ export async function saveKeyPouchSettings(siteUrl: string): Promise<KeyPouchSet
   return bindings.SaveKeyPouchSettings(siteUrl)
 }
 
-export async function fetchMofaSite(): Promise<string> {
-  const bindings = await getBindings()
-  if (!bindings?.GetMofaSite) throw new Error('当前环境不支持 MOFA 地址设置')
-  return bindings.GetMofaSite()
+export interface MofaSettings {
+  siteUrl: string
+  username: string
+  passwordConfigured: boolean
+  totpConfigured: boolean
 }
 
-export async function saveMofaSite(siteUrl: string): Promise<string> {
+function parseMofaSettings(value: Record<string, string>): MofaSettings {
+  return {
+    siteUrl: value.siteUrl || '',
+    username: value.username || '',
+    passwordConfigured: value.passwordConfigured === 'true',
+    totpConfigured: value.totpConfigured === 'true',
+  }
+}
+
+export async function fetchMofaSettings(): Promise<MofaSettings> {
   const bindings = await getBindings()
-  if (!bindings?.SaveMofaSite) throw new Error('当前环境不支持 MOFA 地址设置')
-  return bindings.SaveMofaSite(siteUrl)
+  if (!bindings?.GetMofaSettings || !(globalThis as any).go?.main?.App?.GetMofaSettings) {
+    throw new Error('请在已更新的 Ant Browser 桌面应用中配置 MOFA 导入')
+  }
+  return parseMofaSettings(await bindings.GetMofaSettings())
+}
+
+export async function saveMofaSettings(input: Record<string, string>): Promise<MofaSettings> {
+  const bindings = await getBindings()
+  if (!bindings?.SaveMofaSettings || !(globalThis as any).go?.main?.App?.SaveMofaSettings) {
+    throw new Error('请在已更新的 Ant Browser 桌面应用中配置 MOFA 导入')
+  }
+  return parseMofaSettings(await bindings.SaveMofaSettings(input))
 }
 
 export const defaultAutomationState: AutomationState = {

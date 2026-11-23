@@ -402,6 +402,14 @@ export function BrowserInstanceStop(arg1) {
   return window['go']['main']['App']['BrowserInstanceStop'](arg1);
 }
 
+export function BrowserMofaImport(arg1) {
+  return window['go']['main']['App']['BrowserMofaImport'](arg1);
+}
+
+export function BrowserMofaImportCancel(arg1) {
+  return window['go']['main']['App']['BrowserMofaImportCancel'](arg1);
+}
+
 export function BrowserProfileBatchRemoveTags(arg1, arg2) {
   return window['go']['main']['App']['BrowserProfileBatchRemoveTags'](arg1, arg2);
 }
@@ -730,6 +738,10 @@ export function GetMemoryStats() {
   return window['go']['main']['App']['GetMemoryStats']();
 }
 
+export function GetMofaSettings() {
+  return window['go']['main']['App']['GetMofaSettings']();
+}
+
 export function GetMofaSite() {
   return window['go']['main']['App']['GetMofaSite']();
 }
@@ -824,6 +836,10 @@ export function SaveKeyPouchSettings(arg1) {
 
 export function SaveLaunchServerSettings(arg1) {
   return window['go']['main']['App']['SaveLaunchServerSettings'](arg1);
+}
+
+export function SaveMofaSettings(arg1) {
+  return window['go']['main']['App']['SaveMofaSettings'](arg1);
 }
 
 export function SaveMofaSite(arg1) {

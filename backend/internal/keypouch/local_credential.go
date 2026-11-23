@@ -89,7 +89,7 @@ func privateCredentialDir(dir string, create bool) error {
 		return err
 	}
 	if !info.IsDir() || runtime.GOOS != "windows" && info.Mode().Perm()&0077 != 0 {
-		return errors.New("GPT 本机凭据目录必须仅对当前用户开放")
+		return errors.New("本机凭据目录必须仅对当前用户开放")
 	}
 	return nil
 }
@@ -100,13 +100,13 @@ func readCredentialFile(path string) ([]byte, error) {
 		return nil, err
 	}
 	if !info.Mode().IsRegular() || runtime.GOOS != "windows" && info.Mode().Perm()&0077 != 0 {
-		return nil, errors.New("GPT 本机凭据文件或权限无效")
+		return nil, errors.New("本机凭据文件或权限无效")
 	}
 	return os.ReadFile(path)
 }
 
 func publishCredentialFile(path string, data []byte, replace bool) error {
-	f, err := os.CreateTemp(filepath.Dir(path), ".gpt-*")
+	f, err := os.CreateTemp(filepath.Dir(path), ".credential-*")
 	if err != nil {
 		return err
 	}
@@ -138,7 +138,7 @@ func localCredentialCipher(dir string, create bool) (cipher.AEAD, error) {
 		}
 		for _, entry := range entries {
 			if strings.HasSuffix(entry.Name(), ".cred") {
-				return nil, errors.New("已有 GPT 凭据的本机密钥缺失")
+				return nil, errors.New("已有凭据的本机密钥缺失")
 			}
 		}
 		key := make([]byte, 32)
@@ -160,7 +160,7 @@ func localCredentialCipher(dir string, create bool) (cipher.AEAD, error) {
 	}
 	key, err := unprotectDeviceSeed(blob)
 	if err != nil || len(key) != 32 {
-		return nil, errors.New("GPT 本机凭据密钥不可用")
+		return nil, errors.New("本机凭据密钥不可用")
 	}
 	block, err := aes.NewCipher(key)
 	if err != nil {
@@ -169,35 +169,61 @@ func localCredentialCipher(dir string, create bool) (cipher.AEAD, error) {
 	return cipher.NewGCM(block)
 }
 
-const localCredentialAAD = "ant-gpt-credential-v1\x00"
-
-func readLocalCredential(path, profileID string) (*LocalGPTCredential, error) {
-	dir := filepath.Dir(path)
-	err := privateCredentialDir(dir, false)
-	if errors.Is(err, os.ErrNotExist) {
-		return nil, nil
-	}
-	if err != nil {
+// ReadProtectedCredentialFile returns an encrypted credential snapshot for a
+// caller that may need to roll back a local settings change.
+func ReadProtectedCredentialFile(path string) ([]byte, error) {
+	if err := privateCredentialDir(filepath.Dir(path), false); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, nil
+		}
 		return nil, err
 	}
 	blob, err := readCredentialFile(path)
 	if errors.Is(err, os.ErrNotExist) {
 		return nil, nil
 	}
-	if err != nil {
-		return nil, err
-	}
-	box, err := localCredentialCipher(dir, false)
+	return blob, err
+}
+
+func OpenProtectedCredential(path, binding string, blob []byte) ([]byte, error) {
+	box, err := localCredentialCipher(filepath.Dir(path), false)
 	if err != nil {
 		return nil, err
 	}
 	n := box.NonceSize()
 	if len(blob) < n+box.Overhead() {
-		return nil, errors.New("GPT 本机凭据不完整")
+		return nil, errors.New("本机凭据不完整")
 	}
-	plain, err := box.Open(nil, blob[:n], blob[n:], []byte(localCredentialAAD+profileID))
+	return box.Open(nil, blob[:n], blob[n:], []byte(binding))
+}
+
+func WriteProtectedCredential(path, binding string, plain []byte, replace bool) error {
+	dir := filepath.Dir(path)
+	if err := privateCredentialDir(dir, true); err != nil {
+		return err
+	}
+	box, err := localCredentialCipher(dir, true)
 	if err != nil {
-		return nil, errors.New("GPT 本机凭据无法解密或与实例不匹配")
+		return err
+	}
+	nonce := make([]byte, box.NonceSize())
+	if _, err := rand.Read(nonce); err != nil {
+		return err
+	}
+	sealed := box.Seal(nonce, nonce, plain, []byte(binding))
+	return publishCredentialFile(path, sealed, replace)
+}
+
+const localCredentialAAD = "ant-gpt-credential-v1\x00"
+
+func readLocalCredential(path, profileID string) (*LocalGPTCredential, error) {
+	blob, err := ReadProtectedCredentialFile(path)
+	if err != nil || blob == nil {
+		return nil, err
+	}
+	plain, err := OpenProtectedCredential(path, localCredentialAAD+profileID, blob)
+	if err != nil {
+		return nil, fmt.Errorf("无法读取 GPT 本机凭据：%w", err)
 	}
 	var c LocalGPTCredential
 	if err := json.Unmarshal(plain, &c); err != nil {
@@ -239,24 +265,11 @@ func SaveLocalGPTCredential(installation, profileID string, c LocalGPTCredential
 			return nil
 		}
 	}
-	dir := filepath.Dir(path)
-	if err := privateCredentialDir(dir, true); err != nil {
-		return err
-	}
-	box, err := localCredentialCipher(dir, true)
-	if err != nil {
-		return err
-	}
 	plain, err := json.Marshal(c)
 	if err != nil {
 		return err
 	}
-	nonce := make([]byte, box.NonceSize())
-	if _, err := rand.Read(nonce); err != nil {
-		return err
-	}
-	sealed := box.Seal(nonce, nonce, plain, []byte(localCredentialAAD+profileID))
-	return publishCredentialFile(path, sealed, old != nil)
+	return WriteProtectedCredential(path, localCredentialAAD+profileID, plain, old != nil)
 }
 
 func RemoveLocalGPTCredential(installation, profileID string) error {

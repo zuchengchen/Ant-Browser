@@ -80,7 +80,7 @@ func backupWritePackageZip(zipPath string, scope backup.Scope, manifest backup.M
 				fileCount += entryStats.fileCount
 				entryAddedFiles = entryStats.fileCount
 			} else {
-				private, err := isGPTVaultArchiveEntry(entry.SourcePath, entry.SourcePath, nil)
+				private, err := isLocalCredentialArchiveEntry(entry.SourcePath, entry.SourcePath, nil)
 				if err != nil {
 					return err
 				}
@@ -176,7 +176,7 @@ func backupZipAddDir(w *zip.Writer, srcDir, archiveBase, outputZipPath, outputMe
 		if d.Type()&os.ModeSymlink != 0 {
 			return nil
 		}
-		private, err := isGPTVaultArchiveEntry(srcDir, path, d)
+		private, err := isLocalCredentialArchiveEntry(srcDir, path, d)
 		if err != nil {
 			return err
 		}

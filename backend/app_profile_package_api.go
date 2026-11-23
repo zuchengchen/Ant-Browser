@@ -1492,7 +1492,7 @@ func writeProfilePackageDir(zipWriter *zip.Writer, srcDir string, destPrefix str
 		if walkErr != nil {
 			return walkErr
 		}
-		private, err := isGPTVaultArchiveEntry(srcDir, path, entry)
+		private, err := isLocalCredentialArchiveEntry(srcDir, path, entry)
 		if err != nil {
 			return err
 		}
@@ -1538,12 +1538,12 @@ func writeProfilePackageDir(zipWriter *zip.Writer, srcDir string, destPrefix str
 }
 
 func writeProfilePackageFile(zipWriter *zip.Writer, srcPath string, destPath string) error {
-	private, err := isGPTVaultArchiveEntry(srcPath, srcPath, nil)
+	private, err := isLocalCredentialArchiveEntry(srcPath, srcPath, nil)
 	if err != nil {
 		return err
 	}
 	if private {
-		return fmt.Errorf("不能将本机 GPT 凭据目录的文件用作实例包附件")
+		return fmt.Errorf("不能将本机凭据目录的文件用作实例包附件")
 	}
 	file, err := os.Open(srcPath)
 	if err != nil {

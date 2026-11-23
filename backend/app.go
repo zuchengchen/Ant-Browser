@@ -89,6 +89,8 @@ type App struct {
 	keyPouchRuntimeCancel         context.CancelFunc
 	keyPouchRuntimeActive         bool
 	mofaSiteMu                    sync.Mutex
+	mofaImportMu                  sync.Mutex
+	mofaImportJobs                map[string]context.CancelFunc
 	backupLocalConfigPathOverride string
 	stopServicesOnce              sync.Once
 	finalizeOnce                  sync.Once

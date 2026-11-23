@@ -1,5 +1,6 @@
 ﻿import { Card, FormItem, Input, Select, Switch } from '../../../shared/components'
 import type { AppSettings } from '../types'
+import { MofaSettingsFields, type MofaSettingsFieldsProps } from './MofaSettingsFields'
 
 type SettingsChangeHandler = <K extends keyof AppSettings>(key: K, value: AppSettings[K]) => void
 
@@ -14,15 +15,11 @@ interface BasicSettingsCardsProps extends SettingsCardsProps {
   siteDisabled: boolean
   siteError: string
   onSiteUrlChange: (value: string) => void
-  mofaSiteUrl: string
-  mofaSiteDisabled: boolean
-  mofaSiteError: string
-  onMofaSiteUrlChange: (value: string) => void
+  mofa: MofaSettingsFieldsProps
 }
 
 export function SettingsBasicFeatureCards({
-  settings, onChange, siteUrl, fallbackUrl, siteDisabled, siteError, onSiteUrlChange,
-  mofaSiteUrl, mofaSiteDisabled, mofaSiteError, onMofaSiteUrlChange,
+  settings, onChange, siteUrl, fallbackUrl, siteDisabled, siteError, onSiteUrlChange, mofa,
 }: BasicSettingsCardsProps) {
   return (
     <>
@@ -60,23 +57,7 @@ export function SettingsBasicFeatureCards({
               onChange={e => onSiteUrlChange(e.target.value)}
             />
           </FormItem>
-          <FormItem
-            label={<label htmlFor="mofa-site-url">MOFA 后台地址</label>}
-            hint="支持 HTTPS 站点地址或 /admin/accounts 完整地址。清空后关闭后台入口。"
-            error={mofaSiteError}
-          >
-            <Input
-              id="mofa-site-url"
-              type="url"
-              value={mofaSiteUrl}
-              placeholder="https://mofa.example.com/admin/accounts"
-              disabled={mofaSiteDisabled}
-              error={!!mofaSiteError}
-              aria-invalid={!!mofaSiteError}
-              spellCheck={false}
-              onChange={e => onMofaSiteUrlChange(e.target.value)}
-            />
-          </FormItem>
+          <MofaSettingsFields {...mofa} />
         </div>
       </Card>
 

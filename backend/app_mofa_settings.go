@@ -19,6 +19,7 @@ import (
 )
 
 const mofaExtensionDirectory = "extensions/" + browser.MofaImportExtensionID
+const mofaSettingsDirectoryName = "MOFA"
 
 var errMofaSite = errors.New("请输入 MOFA 的 HTTPS 站点地址或 /admin/accounts 地址，地址不能包含登录信息、查询参数或片段")
 
@@ -94,13 +95,21 @@ func validMofaDomain(ascii string) bool {
 	return !numeric && !hex && len(domain) <= 253
 }
 
-func (a *App) mofaSettingsPath() (string, error) {
+func mofaSettingsDirectory() (string, error) {
 	dir, err := os.UserConfigDir()
 	if err != nil {
 		return "", errors.New("无法定位 MOFA 本机设置目录")
 	}
+	return filepath.Join(dir, "Ant Browser", mofaSettingsDirectoryName), nil
+}
+
+func (a *App) mofaSettingsPath() (string, error) {
+	dir, err := mofaSettingsDirectory()
+	if err != nil {
+		return "", err
+	}
 	installation := sha256.Sum256([]byte(a.appRoot))
-	return filepath.Join(dir, "Ant Browser", "MOFA", "site-"+hex.EncodeToString(installation[:16])+".url"), nil
+	return filepath.Join(dir, "site-"+hex.EncodeToString(installation[:16])+".url"), nil
 }
 
 func readMofaSite(path string) (string, error) {
@@ -139,7 +148,17 @@ func (a *App) SaveMofaSite(input string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if err := a.saveMofaSiteLocked(path, site); err != nil {
+	before, _ := readMofaSite(path)
+	if site != "" && site == before {
+		err = a.saveMofaSiteLocked(path, site)
+	} else {
+		var blob []byte
+		blob, err = readMofaCredentialFile(path)
+		if err == nil {
+			err = a.saveMofaImportSettingsLocked(path, blob, mofaImportSettings{Site: site})
+		}
+	}
+	if err != nil {
 		return "", err
 	}
 	return site, nil

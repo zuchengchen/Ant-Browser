@@ -17,6 +17,7 @@ import { ensureProxySpeedListener, recordProxySpeedResult, testProxySpeedOnce } 
 import { EventsOn } from '../../../wailsjs/runtime/runtime'
 import type { BrowserViewMode } from './BrowserListLayout'
 import { KeywordInlineRow, LaunchCodeCell } from './BrowserListWidgets'
+import { MofaImportAction } from './MofaImportAction'
 
 type ProfileStatusVariant = 'default' | 'success' | 'error' | 'warning' | 'info'
 
@@ -551,6 +552,7 @@ function BrowserProfileCard({
           <span className="w-px h-4 bg-[var(--color-border-muted)] mx-1"></span>
           <Button size="sm" variant="ghost" onClick={() => onRestart(profile.profileId)} title="重启" className="px-3" disabled={isBusy}><RotateCcw className="w-4 h-4 mr-1.5" />重启</Button>
           <Button size="sm" variant="ghost" onClick={() => onOpenChatGPT(profile, true)} className="px-3" disabled={isBusy}><Download className="w-4 h-4 mr-1.5" />获取 GPT 账户信息</Button>
+          {profile.running && <MofaImportAction profile={profile} disabled={isBusy} />}
           <Button size="sm" variant="ghost" onClick={() => onOpenChatGPT(profile)} className="px-3"><MessageSquare className="w-4 h-4 mr-1.5" />查看 GPT 账户信息</Button>
           <Button size="sm" variant="ghost" onClick={() => onOpenKeywords(profile)} title="关键字管理" className="px-3" disabled={isBusy}><Key className="w-4 h-4 mr-1.5" />关键字</Button>
           <Button size="sm" variant="ghost" onClick={() => onOpenExtensions(profile)} title="插件配置" className="px-3" disabled={isBusy}><Puzzle className="w-4 h-4 mr-1.5" />插件</Button>
@@ -773,7 +775,7 @@ export function BrowserProfilesPanel({
         const isMoreOpen = openMoreProfileId === record.profileId
 
         return (
-          <div className="flex justify-end gap-1.5 whitespace-nowrap">
+          <div className="flex flex-wrap items-start justify-end gap-1.5 whitespace-nowrap">
             {record.running ? (
               <Button size="sm" variant="secondary" onClick={() => onStop(record.profileId)} title="停止" loading={isStopping}>
                 {!isStopping && <Square className="w-3.5 h-3.5" />}
@@ -784,6 +786,7 @@ export function BrowserProfilesPanel({
               </Button>
             )}
             <Button size="sm" variant="ghost" onClick={() => onOpenChatGPT(record, true)} disabled={isBusy}><Download className="w-3.5 h-3.5" />获取 GPT 账户信息</Button>
+            {record.running && <MofaImportAction profile={record} disabled={isBusy} />}
             <Link to={`/browser/edit/${record.profileId}`}><Button size="sm" variant="ghost" title="配置" disabled={isBusy}><Settings className="w-3.5 h-3.5" /></Button></Link>
             <Button size="sm" variant="ghost" onClick={() => onOpenCopy(record)} title="克隆" disabled={isBusy}><Copy className="w-3.5 h-3.5" /></Button>
             <ProfileMoreActions

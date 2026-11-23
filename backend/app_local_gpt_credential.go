@@ -27,27 +27,36 @@ func (a *App) BrowserProfileHasLocalGPTCredential(profileID string) (bool, error
 }
 
 // A custom browser data or core directory can encompass the OS configuration
-// tree. Check traversal roots, the vault directory, and any file symlink before
-// archiving them. Ordinary files in unrelated directories require no lookup.
-func isGPTVaultArchiveEntry(sourceRoot, path string, entry fs.DirEntry) (bool, error) {
+// tree. Check traversal roots, vault directories, and symlinks before archiving
+// them. Ordinary files in unrelated directories require no lookup.
+func isLocalCredentialArchiveEntry(sourceRoot, path string, entry fs.DirEntry) (bool, error) {
 	if base := filepath.Base(path); base == gptSessionMarker || strings.HasPrefix(base, gptSessionMarker+"-") {
 		return true, nil
 	}
 	if entry != nil && sourceRoot != path && entry.Type()&os.ModeSymlink == 0 &&
-		(!entry.IsDir() || !strings.EqualFold(entry.Name(), keypouch.LocalGPTVaultName)) {
+		(!entry.IsDir() || !strings.EqualFold(entry.Name(), keypouch.LocalGPTVaultName) && !strings.EqualFold(entry.Name(), mofaSettingsDirectoryName)) {
 		return false, nil
 	}
-	root, err := keypouch.LocalGPTVaultDirectory()
-	if err != nil {
-		return false, err
+	for _, directory := range []func() (string, error){keypouch.LocalGPTVaultDirectory, mofaSettingsDirectory} {
+		root, err := directory()
+		if err != nil {
+			return false, err
+		}
+		root, err = filepath.EvalSymlinks(root)
+		if errors.Is(err, os.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			return false, err
+		}
+		if inside, err := localCredentialPathInDirectory(root, path); inside || err != nil {
+			return inside, err
+		}
 	}
-	root, err = filepath.EvalSymlinks(root)
-	if errors.Is(err, os.ErrNotExist) {
-		return false, nil
-	}
-	if err != nil {
-		return false, err
-	}
+	return false, nil
+}
+
+func localCredentialPathInDirectory(root, path string) (bool, error) {
 	absolute, err := filepath.Abs(path)
 	if err != nil {
 		return false, err
