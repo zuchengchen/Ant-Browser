@@ -25,14 +25,21 @@ type mofaOAuthCDPEvent struct {
 		RequestID    string `json:"requestId"`
 		FrameID      string `json:"frameId"`
 		ResourceType string `json:"resourceType"`
-		Request      struct {
+		URL          string `json:"url"`
+		Frame        struct {
+			ID       string `json:"id"`
+			LoaderID string `json:"loaderId"`
+			ParentID string `json:"parentId"`
+			URL      string `json:"url"`
+		} `json:"frame"`
+		Request struct {
 			URL    string `json:"url"`
 			Method string `json:"method"`
 		} `json:"request"`
 	} `json:"params"`
 }
 
-func (b mofaBrowser) waitMofaOAuth(ctx context.Context, flow mofaStockOAuth, opened func()) (code, state string, err error) {
+func (b mofaBrowser) waitMofaOAuth(ctx context.Context, flow mofaStockOAuth, email string, opened func()) (code, state string, err error) {
 	ctx, cancel := context.WithTimeout(ctx, 6*time.Minute)
 	defer cancel()
 	tab, closeTab, err := b.openTab(ctx, false)
@@ -94,6 +101,15 @@ func (b mofaBrowser) waitMofaOAuth(ctx context.Context, flow mofaStockOAuth, ope
 	if _, err := readResult(enable); err != nil {
 		return "", "", errMofaOAuthPage
 	}
+	chooser := mofaOAuthChooser{frameID: frameID, email: mofaStockEmail(email), state: flow.State}
+	if chooser.email != "" {
+		observe, err := send("Page.enable", nil)
+		if err != nil {
+			return "", "", errMofaOAuthPage
+		}
+		_, err = readResult(observe)
+		chooser.observing = err == nil
+	}
 	navigate, err := send("Page.navigate", map[string]any{"url": flow.AuthURL})
 	if err != nil {
 		return "", "", errMofaOAuthPage
@@ -111,6 +127,9 @@ func (b mofaBrowser) waitMofaOAuth(ctx context.Context, flow mofaStockOAuth, ope
 			return "", "", errMofaOAuthPage
 		}
 		if msg.Method != "Fetch.requestPaused" || msg.Params.RequestID == "" {
+			if err := chooser.handle(msg, send); err != nil {
+				return "", "", errMofaOAuthClosed
+			}
 			continue
 		}
 		if msg.Params.FrameID != frameID || msg.Params.ResourceType != "Document" || msg.Params.Request.Method != http.MethodGet {

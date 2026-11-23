@@ -23,7 +23,7 @@ import (
 
 const (
 	mofaToolbarPath    = "/mofa/import"
-	mofaToolbarVersion = "1.0.3"
+	mofaToolbarVersion = "1.0.4"
 )
 
 type mofaToolbarSource struct {
@@ -226,7 +226,7 @@ func (b *mofaToolbarBridge) claim(parent context.Context, a *App, site, digest s
 		return "", mofaToolbarSource{}
 	}
 	// Only the digest is visible in the tab URL. The random preimage travels
-	// over loopback and authorization consumes the extension's own click.
+	// over loopback and authorization consumes the toolbar-issued challenge.
 	tabURL := b.origin + "/import.html#ant-mofa-" + digest
 	var workers errgroup.Group
 	workers.SetLimit(8)

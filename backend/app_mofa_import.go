@@ -195,7 +195,7 @@ func runMofaOAuth(ctx context.Context, client *mofaClient, instance mofaBrowser,
 	if err := checkOperation(); err != nil {
 		return mofaStockResult{}, err
 	}
-	code, state, err := instance.waitMofaOAuth(ctx, flow, func() { progress("waiting_for_oauth") })
+	code, state, err := instance.waitMofaOAuth(ctx, flow, email, func() { progress("waiting_for_oauth") })
 	if err != nil {
 		return mofaStockResult{}, err
 	}

@@ -42,24 +42,3 @@ p {
 #status:empty {
   margin: 0;
 }
-
-button {
-  appearance: none;
-  border: 1px solid transparent;
-  border-radius: 0.4rem;
-  background: #1b5a91;
-  color: white;
-  padding: 0.6rem 0.95rem;
-  font: inherit;
-  cursor: pointer;
-}
-
-button:focus-visible {
-  outline: 2px solid LinkText;
-  outline-offset: 3px;
-}
-
-button:disabled {
-  opacity: 0.65;
-  cursor: default;
-}

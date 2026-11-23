@@ -104,6 +104,14 @@ func TestMofaToolbarBridgePublishesOnlyLocalAddressAndSite(t *testing.T) {
 	if bridge == nil || !strings.HasPrefix(bridge.host, "127.0.0.1:") || bridge.port <= 0 {
 		t.Fatal("toolbar bridge did not use an ephemeral loopback port")
 	}
+	manifest, err := os.ReadFile(filepath.Join(bridge.extensionDir, "manifest.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var version struct{ Version string }
+	if err := json.Unmarshal(manifest, &version); err != nil || version.Version != mofaToolbarVersion {
+		t.Fatal("toolbar manifest did not match the version verified by the bridge")
+	}
 	path := filepath.Join(bridge.extensionDir, "site.json")
 	data, err := os.ReadFile(path)
 	if err != nil {
