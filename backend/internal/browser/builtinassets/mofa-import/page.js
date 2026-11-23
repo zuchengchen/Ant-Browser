@@ -1,10 +1,12 @@
 import { requestMofaImport } from './account.js'
+import { takeToolbarPermit } from './permit.js'
 import { configuredMofa } from './site.js'
 
 const siteLabel = document.getElementById('site')
 const status = document.getElementById('status')
 const pageURL = chrome.runtime.getURL('import.html')
 const fromToolbar = '请点击浏览器工具栏中的「导入到 MOFA」图标发起导入。'
+const permitUnavailable = '无法确认本次 MOFA 导入的启动许可，请重新点击浏览器工具栏中的「导入到 MOFA」。'
 const notConfigured = '请先在 Ant 的「系统设置 → 基础设置」配置 MOFA 后台地址、管理员用户名和密码。'
 const missingBridge = '无法连接 Ant 的 MOFA 导入服务。请确认 Ant 正在运行，再重开工具栏。'
 const outcomes = {
@@ -17,10 +19,14 @@ const outcomes = {
 const hex = bytes => Array.from(new Uint8Array(bytes), byte => byte.toString(16).padStart(2, '0')).join('')
 
 async function startImport() {
-  const eligible = window === window.top && location.href === pageURL && chrome.extension.inIncognitoContext === false
-  const permitted = eligible && await chrome.runtime.sendMessage({type: 'take-mofa-toolbar-click'}).catch(() => false)
-  if (permitted !== true) {
-    status.textContent = fromToolbar
+  try {
+    const permitted = await takeToolbarPermit()
+    if (!permitted) {
+      status.textContent = fromToolbar
+      return
+    }
+  } catch {
+    status.textContent = permitUnavailable
     return
   }
   status.textContent = '正在启动 MOFA 导入。'

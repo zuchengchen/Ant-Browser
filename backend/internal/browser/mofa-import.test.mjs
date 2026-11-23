@@ -3,6 +3,7 @@ import test from 'node:test'
 import { setImmediate } from 'node:timers/promises'
 import { requestMofaImport } from './builtinassets/mofa-import/account.js'
 import readAccountEmail from './builtinassets/mofa-import/account-email.js'
+import { takeToolbarPermit } from './builtinassets/mofa-import/permit.js'
 import { configuredMofa } from './builtinassets/mofa-import/site.js'
 
 const base = 'chrome-extension://abcdef/'
@@ -10,6 +11,8 @@ const importPage = base + 'import.html'
 const site = 'https://mofa.example.test'
 const bridgePort = 19441
 const healthy = {status: 'skipped', accountId: 42, groupId: 7, inTargetGroup: true}
+const permitKey = 'mofa-toolbar-permit'
+const importTab = {id: 50, windowId: 4, incognito: false}
 
 function mockGlobals(t, values) {
   for (const [key, value] of Object.entries(values)) {
@@ -20,6 +23,32 @@ function mockGlobals(t, values) {
       else delete globalThis[key]
     })
   }
+}
+
+function mockPermitStorage(t, permit) {
+  const stored = new Map(permit ? [[permitKey, permit]] : [])
+  const session = {
+    async get(key) {
+      assert.equal(key, permitKey)
+      return stored.has(key) ? {[key]: stored.get(key)} : {}
+    },
+    async set(values) {
+      assert.deepEqual(Object.keys(values), [permitKey])
+      stored.set(permitKey, values[permitKey])
+    },
+    async remove(key) {
+      assert.equal(key, permitKey)
+      stored.delete(key)
+    },
+  }
+  let pending = Promise.resolve()
+  mockGlobals(t, {navigator: {locks: {request(name, callback) {
+    assert.equal(name, permitKey)
+    const result = pending.then(callback)
+    pending = result.catch(() => {})
+    return result
+  }}}})
+  return {session, stored}
 }
 
 test('the MOFA site and ephemeral port come from installation config', async t => {
@@ -70,69 +99,70 @@ test('the import only contacts the local bridge and accepts confirmed results', 
   await assert.rejects(requestMofaImport({site, bridgePort}, proof), /未收到 Ant 的导入结果/)
 })
 
-test('one browser action grants a short-lived permit to only the new background extension tab', async t => {
+test('only the authorized background tab can claim its permit after the worker restarts', async t => {
   const events = {}
   const listen = name => ({addListener: listener => { events[name] = listener }})
   const launch = {windowId: 4, incognito: false}
   const created = []
   const navigated = []
+  const removed = []
+  const {session, stored} = mockPermitStorage(t)
+  const view = {}
+  view.top = view
+  let currentTab = importTab
   let clock = 100
+  let failNavigation = false
   t.mock.method(Date, 'now', () => clock)
-  mockGlobals(t, {chrome: {
+  mockGlobals(t, {window: view, location: {href: importPage}, chrome: {
     action: {onClicked: listen('action')},
-    runtime: {id: 'abcdef', getURL: path => base + path, onMessage: listen('message')},
+    extension: {inIncognitoContext: false},
+    runtime: {getURL: path => base + path},
+    storage: {session},
     tabs: {
       onRemoved: listen('remove'),
+      async getCurrent() { return currentTab },
       async create(options) {
         assert.deepEqual(options, {windowId: launch.windowId, url: 'about:blank', active: false})
         const id = created.length + 50
         created.push(id)
-        return {id}
+        return {...launch, id}
       },
       async update(id, options) {
         assert.ok(created.includes(id))
         assert.deepEqual(options, {url: importPage})
+        assert.deepEqual(stored.get(permitKey), {tabId: id, windowId: launch.windowId, deadline: clock + 20_000})
+        if (failNavigation) throw new Error('Lost tab navigation')
         navigated.push(id)
       },
+      async remove(id) { removed.push(id) },
     },
   }})
   await import('./builtinassets/mofa-import/toolbar.js')
-  const take = (id, overrides = {}, type = 'take-mofa-toolbar-click') => {
-    const sender = {id: 'abcdef', origin: base.slice(0, -1), url: importPage, frameId: 0,
-      documentLifecycle: 'active', tab: {...launch, id}, ...overrides}
-    let reply
-    events.message({type}, sender, value => { reply = value })
-    return reply
-  }
   await events.action({...launch, incognito: true})
   assert.equal(created.length, 0)
   await Promise.all([events.action(launch), events.action(launch)])
-  assert.deepEqual(navigated, [50])
+  await import('./builtinassets/mofa-import/toolbar.js?restarted')
   await events.action(launch)
   assert.deepEqual(navigated, [50])
-  for (const invalid of [
-    {id: 'different-extension'},
-    {origin: 'https://example.test'},
-    {url: importPage + '#forged'},
-    {frameId: 1},
-    {documentLifecycle: 'cached'},
-    {tab: {...launch, id: 50, incognito: true}},
-    {tab: undefined},
-  ]) {
-    assert.equal(take(50, invalid), undefined)
+  for (const tab of [undefined, {...importTab, id: 51}, {...importTab, windowId: 9}, {...importTab, incognito: true}]) {
+    currentTab = tab
+    assert.equal(await takeToolbarPermit(), false)
   }
-  assert.equal(take(50, {}, 'unrelated'), undefined)
-  assert.equal(take(51), false)
-  assert.equal(take(50, {tab: {...launch, windowId: 9, id: 50}}), false)
-  assert.equal(take(50), true)
-  assert.equal(take(50), false)
+  currentTab = importTab
+  assert.deepEqual(await Promise.all([takeToolbarPermit(), takeToolbarPermit()]), [true, false])
   await events.action(launch)
+  currentTab = {...importTab, id: 51}
   clock += 20_001
-  assert.equal(take(51), false)
+  assert.equal(await takeToolbarPermit(), false)
   await events.action(launch)
   events.remove(52)
-  assert.equal(take(52), false)
+  currentTab = {...importTab, id: 52}
+  assert.equal(await takeToolbarPermit(), false)
   assert.deepEqual(navigated, [50, 51, 52])
+  failNavigation = true
+  await events.action(launch)
+  assert.deepEqual(removed, [53])
+  assert.equal(stored.has(permitKey), false)
 })
 
 function mockImportPage(t, {href = importPage, incognito = false, child = false, permit = false} = {}) {
@@ -140,21 +170,19 @@ function mockImportPage(t, {href = importPage, incognito = false, child = false,
   const view = {}
   view.top = child ? {} : view
   const location = {href}
-  const sendMessage = t.mock.fn(async message => {
-    assert.deepEqual(message, {type: 'take-mofa-toolbar-click'})
-    return permit
-  })
+  const {session} = mockPermitStorage(t, permit && {tabId: importTab.id, windowId: importTab.windowId, deadline: Date.now() + 20_000})
+  const getCurrent = t.mock.fn(async () => importTab)
   const clock = {now: 100}
   mockGlobals(t, {
     window: view, document: {visibilityState: 'hidden', getElementById: id => labels[id]}, location,
     performance: {now: () => clock.now},
     history: {replaceState: (_, __, value) => { location.href = value }},
-    chrome: {extension: {inIncognitoContext: incognito}, runtime: {getURL: path => base + path, sendMessage}},
+    chrome: {extension: {inIncognitoContext: incognito}, runtime: {getURL: path => base + path}, storage: {session}, tabs: {getCurrent}},
   })
-  return {view, labels, location, sendMessage, clock}
+  return {view, labels, location, getCurrent, session, clock}
 }
 
-for (const [name, options, messageCount] of [
+for (const [name, options, tabReads] of [
   ['direct page or reload', {}, 1],
   ['forged marker', {href: importPage + '#ant-mofa-' + '0'.repeat(64)}, 0],
   ['incognito', {incognito: true}, 0],
@@ -165,16 +193,26 @@ for (const [name, options, messageCount] of [
     const fetch = t.mock.method(globalThis, 'fetch', () => { assert.fail('unapproved page sent a fetch') })
     await import('./builtinassets/mofa-import/page.js?' + name)
     await setImmediate()
-    assert.equal(page.sendMessage.mock.callCount(), messageCount)
+    assert.equal(page.getCurrent.mock.callCount(), tabReads)
     assert.equal(fetch.mock.callCount(), 0)
     assert.equal(page.view.antMofaClaimBridge, undefined)
     assert.match(page.labels.status.textContent, /请点击浏览器工具栏/)
   })
 }
 
+test('an unavailable permit store is reported and no import starts', async t => {
+  const {labels, session} = mockImportPage(t, {permit: true})
+  t.mock.method(session, 'remove', async () => { throw new Error('Storage unavailable') })
+  const fetch = t.mock.method(globalThis, 'fetch', () => { assert.fail('unclaimed page sent a fetch') })
+  await import('./builtinassets/mofa-import/page.js?permit-storage-unavailable')
+  await setImmediate()
+  assert.match(labels.status.textContent, /无法确认本次 MOFA 导入的启动许可/)
+  assert.equal(fetch.mock.callCount(), 0)
+})
+
 for (const expired of [false, true]) {
   test(`the permitted background page starts immediately with an ${expired ? 'expired' : 'unclaimed'} proof`, async t => {
-    const {view, labels, location, sendMessage, clock} = mockImportPage(t, {permit: true})
+    const {view, labels, location, getCurrent, clock} = mockImportPage(t, {permit: true})
     let settle
     const observed = new Promise(resolve => { settle = resolve })
     const fetch = t.mock.method(globalThis, 'fetch', async (url, options) => {
@@ -190,7 +228,7 @@ for (const expired of [false, true]) {
     assert.ok(!location.href.includes(proof))
     assert.equal(labels.site.textContent, site)
     assert.match(labels.status.textContent, /正在核对/)
-    assert.equal(sendMessage.mock.callCount(), 1)
+    assert.equal(getCurrent.mock.callCount(), 1)
     assert.equal(fetch.mock.callCount(), 2)
     assert.ok(!view.antMofaClaimBridge('0'.repeat(64)))
     if (expired) clock.now += 20_001
