@@ -23,7 +23,7 @@ import (
 
 const (
 	mofaToolbarPath    = "/mofa/import"
-	mofaToolbarVersion = "1.0.7"
+	mofaToolbarVersion = "1.0.8"
 )
 
 type mofaToolbarSource struct {

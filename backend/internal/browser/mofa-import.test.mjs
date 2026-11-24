@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { readFile } from 'node:fs/promises'
 import test from 'node:test'
 import { setImmediate } from 'node:timers/promises'
 import { requestMofaImport } from './builtinassets/mofa-import/account.js'
@@ -137,7 +138,11 @@ test('only the authorized background tab can claim its permit after the worker r
       async remove(id) { removed.push(id) },
     },
   }})
-  await import('./builtinassets/mofa-import/toolbar.js')
+  const extensionDir = new URL('./builtinassets/mofa-import/', import.meta.url)
+  const manifest = JSON.parse(await readFile(new URL('manifest.json', extensionDir), 'utf8'))
+  const worker = manifest.background.service_worker
+  assert.notEqual(worker, 'toolbar.js')
+  await import(new URL(worker, extensionDir).href)
   await events.action({...launch, incognito: true})
   assert.equal(created.length, 0)
   await Promise.all([events.action(launch), events.action(launch)])

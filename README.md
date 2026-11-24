@@ -8,7 +8,7 @@
 
 本仓库是 [black-ant/Ant-Browser](https://github.com/black-ant/Ant-Browser) 的独立维护分支，在自己的 `master` 上开发并通过本地 merge 同步上游，不需要同步 PR。更新源与发行包使用本仓库，自有发布标签为 `czc-vX.Y.Z`。操作说明见 [Fork 开发与上游同步](docs/upstream-sync.md)。
 
-本项目版本：`1.9.4-24` · 已集成上游 `v1.9.4`（`15afd113`）
+本项目版本：`1.9.4-25` · 已集成上游 `v1.9.4`（`15afd113`）
 
 ## 推荐内核项目
 
