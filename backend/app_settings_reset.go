@@ -3,6 +3,7 @@ package backend
 import (
 	"ant-chrome/backend/internal/config"
 	"ant-chrome/backend/internal/launchcode"
+	"ant-chrome/backend/internal/logger"
 	"errors"
 	"fmt"
 	"os"
@@ -51,6 +52,7 @@ func (a *App) resetManagedSettings() error {
 	next.Automation = defaults.Automation
 	next.Backup = defaults.Backup
 	next.LaunchServer = defaults.LaunchServer
+	next.Logging.Level = defaults.Logging.Level
 	*a.config = next
 
 	configPath := a.resolveAppPath("config.yaml")
@@ -92,6 +94,7 @@ func (a *App) resetManagedSettings() error {
 	if scheduler != nil {
 		scheduler.applyResetSettings(defaults.Backup)
 	}
+	logger.SetGlobalLevelString(next.Logging.Level)
 	return nil
 }
 

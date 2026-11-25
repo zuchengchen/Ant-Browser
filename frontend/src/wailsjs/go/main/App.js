@@ -550,6 +550,10 @@ export function BrowserProxyCheckIPHealth(arg1) {
   return window['go']['main']['App']['BrowserProxyCheckIPHealth'](arg1);
 }
 
+export function BrowserProxyApplyChanges(arg1, arg2, arg3) {
+  return window['go']['main']['App']['BrowserProxyApplyChanges'](arg1, arg2, arg3);
+}
+
 export function BrowserProxyCleanupMissing(arg1, arg2) {
   return window['go']['main']['App']['BrowserProxyCleanupMissing'](arg1, arg2);
 }
@@ -718,6 +722,10 @@ export function GetDashboardStats() {
   return window['go']['main']['App']['GetDashboardStats']();
 }
 
+export function GetDatabaseRecoveryNotice() {
+  return window['go']['main']['App']['GetDatabaseRecoveryNotice']();
+}
+
 export function GetInterceptor() {
   return window['go']['main']['App']['GetInterceptor']();
 }
@@ -836,6 +844,10 @@ export function SaveKeyPouchSettings(arg1) {
 
 export function SaveLaunchServerSettings(arg1) {
   return window['go']['main']['App']['SaveLaunchServerSettings'](arg1);
+}
+
+export function SaveLogLevel(arg1) {
+  return window['go']['main']['App']['SaveLogLevel'](arg1);
 }
 
 export function SaveMofaSettings(arg1) {

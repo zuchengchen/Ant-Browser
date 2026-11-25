@@ -2,11 +2,222 @@ package backend
 
 import (
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 )
+
+func TestProxySourceRefreshRetainsConcurrentPoolChanges(t *testing.T) {
+	app := newVirtualGroupHealthTestApp(t)
+	server, started, finish := newBlockedProxySubscription(t)
+	source := BrowserProxy{
+		ProxyId: "sub-proxy", ProxyName: "subscription node", ProxyConfig: "http://old.example:80",
+		SourceID: "sub", SourceURL: server.URL,
+	}
+	removed := BrowserProxy{ProxyId: "removed", ProxyName: "removed", ProxyConfig: "http://removed.example:80"}
+	newProxy := BrowserProxy{ProxyId: "new", ProxyName: "new", ProxyConfig: "http://new.example:80"}
+	if err := app.SaveBrowserProxies([]BrowserProxy{source, removed}); err != nil {
+		t.Fatal(err)
+	}
+
+	refreshed := make(chan error, 1)
+	go func() {
+		_, err := app.BrowserProxyRefreshSource("sub", "")
+		refreshed <- err
+	}()
+	waitForProxyRefreshChannel(t, started)
+	saved := make(chan error, 1)
+	go func() {
+		saved <- app.SaveBrowserProxies([]BrowserProxy{source, newProxy})
+	}()
+	if err := waitForProxyRefreshChannel(t, saved); err != nil {
+		t.Fatal(err)
+	}
+	if err := app.BrowserProxyUpdateSourceConfig("sub", true, 20, ""); err != nil {
+		t.Fatal(err)
+	}
+	finish()
+	if err := waitForProxyRefreshChannel(t, refreshed); err != nil {
+		t.Fatal(err)
+	}
+
+	pool, err := app.BrowserProxyList()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, exists := findRowByID(pool, newProxy.ProxyId); !exists {
+		t.Fatal("missing concurrently added proxy")
+	}
+	if _, exists := findRowByID(pool, removed.ProxyId); exists {
+		t.Fatal("refresh restored a deleted proxy")
+	}
+	row, exists := findRowByID(pool, source.ProxyId)
+	if !exists || !strings.Contains(row.ProxyConfig, "refreshed.example") || !row.SourceAutoRefresh || row.SourceRefreshIntervalM != 20 {
+		t.Fatalf("refreshed node = %+v", row)
+	}
+}
+
+func TestProxySourceRefreshDoesNotRecreateDeletedSubscription(t *testing.T) {
+	app := newVirtualGroupHealthTestApp(t)
+	server, started, finish := newBlockedProxySubscription(t)
+	source := BrowserProxy{
+		ProxyId: "sub-proxy", ProxyName: "subscription node", ProxyConfig: "http://old.example:80",
+		SourceID: "sub", SourceURL: server.URL,
+	}
+	if err := app.SaveBrowserProxies([]BrowserProxy{source}); err != nil {
+		t.Fatal(err)
+	}
+	refreshed := make(chan error, 1)
+	go func() {
+		_, err := app.BrowserProxyRefreshSource("sub", "")
+		refreshed <- err
+	}()
+	waitForProxyRefreshChannel(t, started)
+	if err := app.BrowserProxyApplyChanges([]BrowserProxy{source}, nil, ""); err != nil {
+		t.Fatal(err)
+	}
+	finish()
+	if err := waitForProxyRefreshChannel(t, refreshed); err == nil {
+		t.Fatal("refresh succeeded after source deletion")
+	}
+	if pool := app.getLatestProxies(); len(pool) != 1 || pool[0].ProxyId != "__direct__" {
+		t.Fatalf("pool after deleting subscription = %+v", pool)
+	}
+}
+
+func TestBrowserProxyApplyChangesKeepsRefreshDataAndExplicitEdits(t *testing.T) {
+	app := newVirtualGroupHealthTestApp(t)
+	base := []BrowserProxy{
+		{
+			ProxyId: "sub-proxy", ProxyName: "old name", ProxyConfig: "http://old.example:80",
+			SourceID: "sub", SourceURL: "https://subscription.example", SourceRefreshIntervalM: 20, SourceAutoRefresh: true,
+			SourceMissing: true, SourceLastRefreshAt: "2026-01-01T08:00:00Z",
+		},
+		{ProxyId: "deleted", ProxyName: "deleted", ProxyConfig: "http://deleted.example:80"},
+	}
+	if err := app.SaveBrowserProxies(base); err != nil {
+		t.Fatal(err)
+	}
+	latest := base[0]
+	latest.ProxyName = "refreshed name"
+	latest.ProxyConfig = "http://refreshed.example:80"
+	latest.SourceLastRefreshAt = "2026-01-01T09:00:00Z"
+	latest.SourceMissing = false
+	added := BrowserProxy{ProxyId: "new", ProxyName: "new", ProxyConfig: "http://new.example:80"}
+	if err := app.SaveBrowserProxies([]BrowserProxy{latest, added}); err != nil {
+		t.Fatal(err)
+	}
+	edited := append([]BrowserProxy(nil), base...)
+	edited[0].GroupName = "edited group"
+	if err := app.BrowserProxyApplyChanges(base, edited, ""); err != nil {
+		t.Fatal(err)
+	}
+	pool := app.getLatestProxies()
+	got, exists := findRowByID(pool, latest.ProxyId)
+	if !exists || got.GroupName != "edited group" || got.ProxyName != latest.ProxyName || got.ProxyConfig != latest.ProxyConfig ||
+		got.SourceLastRefreshAt != latest.SourceLastRefreshAt || got.SourceMissing {
+		t.Fatalf("merged proxy = %+v", got)
+	}
+	if _, exists := findRowByID(pool, added.ProxyId); !exists {
+		t.Fatal("stale save removed a new node")
+	}
+	if _, exists := findRowByID(pool, base[1].ProxyId); exists {
+		t.Fatal("stale save restored a deleted node")
+	}
+	edited[1].ProxyName = "changed after deletion"
+	if err := app.BrowserProxyApplyChanges(base, edited, ""); err == nil {
+		t.Fatal("edit of a deleted node succeeded")
+	}
+	if err := app.BrowserProxyApplyChanges(base[:1], nil, ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, exists := findRowByID(app.getLatestProxies(), latest.ProxyId); exists {
+		t.Fatal("explicit deletion did not remove a refreshed node")
+	}
+}
+
+func TestBrowserProxyApplyChangesSourcePreviewConflict(t *testing.T) {
+	app := newVirtualGroupHealthTestApp(t)
+	server, started, finish := newBlockedProxySubscription(t)
+	refreshSource := BrowserProxy{
+		ProxyId: "sub-proxy", ProxyName: "subscription node", ProxyConfig: "http://old.example:80",
+		SourceID: "sub", SourceURL: server.URL,
+	}
+	previewSource := BrowserProxy{
+		ProxyId: "preview-proxy", ProxyName: "preview node", ProxyConfig: "http://preview.example:80",
+		SourceID: "preview", SourceURL: "https://preview.example",
+	}
+	if err := app.SaveBrowserProxies([]BrowserProxy{refreshSource, previewSource}); err != nil {
+		t.Fatal(err)
+	}
+	if err := app.browserMgr.ProxyDAO.UpdateSpeedResult(previewSource.ProxyId, true, 47, "2026-01-01T09:00:00Z"); err != nil {
+		t.Fatal(err)
+	}
+	refreshed := make(chan error, 1)
+	go func() {
+		_, err := app.BrowserProxyRefreshSource("sub", "")
+		refreshed <- err
+	}()
+	waitForProxyRefreshChannel(t, started)
+
+	editedPreview := previewSource
+	editedPreview.ProxyName = "aligned unrelated preview"
+	editedPreview.SourceLastRefreshAt = "2026-01-01T10:00:00Z"
+	if err := app.BrowserProxyApplyChanges([]BrowserProxy{previewSource}, []BrowserProxy{editedPreview}, "preview"); err != nil {
+		t.Fatalf("unrelated refresh or speed test blocked source preview: %v", err)
+	}
+	finish()
+	if err := waitForProxyRefreshChannel(t, refreshed); err != nil {
+		t.Fatal(err)
+	}
+
+	stale := refreshSource
+	stale.ProxyId = "stale-added"
+	err := app.BrowserProxyApplyChanges([]BrowserProxy{refreshSource}, []BrowserProxy{refreshSource, stale}, "sub")
+	if err == nil || !strings.Contains(err.Error(), "订阅源已有更新") {
+		t.Fatalf("stale source preview error = %v", err)
+	}
+	pool := app.getLatestProxies()
+	if _, exists := findRowByID(pool, stale.ProxyId); exists {
+		t.Fatal("stale submission added a duplicate subscription node")
+	}
+	row, ok := findRowByID(pool, previewSource.ProxyId)
+	if !ok || row.ProxyName != editedPreview.ProxyName || row.SourceLastRefreshAt != editedPreview.SourceLastRefreshAt || !row.LastTestOk || row.LastLatencyMs != 47 {
+		t.Fatalf("aligned row = %+v", row)
+	}
+}
+
+func newBlockedProxySubscription(t *testing.T) (*httptest.Server, <-chan struct{}, func()) {
+	t.Helper()
+	started, mayFinish := make(chan struct{}), make(chan struct{})
+	var startedOnce, finishOnce sync.Once
+	finish := func() { finishOnce.Do(func() { close(mayFinish) }) }
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		startedOnce.Do(func() { close(started) })
+		<-mayFinish
+		fmt.Fprint(w, "proxies:\n  - {name: subscription node, type: http, server: refreshed.example, port: 80}\n")
+	}))
+	t.Cleanup(func() {
+		finish()
+		server.Close()
+	})
+	return server, started, finish
+}
+
+func waitForProxyRefreshChannel[T any](t *testing.T, ch <-chan T) T {
+	t.Helper()
+	select {
+	case result := <-ch:
+		return result
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for proxy refresh or save")
+		var empty T
+		return empty
+	}
+}
 
 func newTestIDGenerator() func() string {
 	counter := 0

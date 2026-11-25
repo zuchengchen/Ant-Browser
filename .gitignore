@@ -64,6 +64,7 @@ docs/*
 !docs/instance-groups.md
 !docs/chatgpt-account.md
 !docs/browser-password-autosave.md
+!docs/proxy-connector-stacks.md
 # Release notes: one file per version, used by publish-all workflow
 !docs/changelogs/
 !docs/changelogs/*.md

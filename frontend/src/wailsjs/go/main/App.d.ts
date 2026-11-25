@@ -284,6 +284,8 @@ export function BrowserProxyBuildDiagnostic(arg1:string,arg2:string):Promise<pro
 
 export function BrowserProxyCheckIPHealth(arg1:string):Promise<backend.ProxyIPHealthResult>;
 
+export function BrowserProxyApplyChanges(arg1:Array<config.BrowserProxy>,arg2:Array<config.BrowserProxy>,arg3:string):Promise<void>;
+
 export function BrowserProxyCleanupMissing(arg1:string,arg2:boolean):Promise<backend.ProxyMissingCleanupResult>;
 
 export function BrowserProxyCoreDownload(arg1:backend.ProxyCoreDownloadRequest):Promise<void>;
@@ -368,6 +370,8 @@ export function GetBrowserSettings():Promise<browser.Settings>;
 
 export function GetDashboardStats():Promise<Record<string, any>>;
 
+export function GetDatabaseRecoveryNotice():Promise<Record<string, string> | null>;
+
 export function GetInterceptor():Promise<logger.MethodInterceptor>;
 
 export function GetKeyPouchSettings():Promise<Record<string, string>>;
@@ -427,6 +431,8 @@ export function SaveBrowserSettings(arg1:browser.Settings):Promise<void>;
 export function SaveKeyPouchSettings(arg1:string):Promise<Record<string, string>>;
 
 export function SaveLaunchServerSettings(arg1:number):Promise<Record<string, any>>;
+
+export function SaveLogLevel(arg1:string):Promise<void>;
 
 export function SaveMofaSettings(arg1:Record<string, string>):Promise<Record<string, string>>;
 

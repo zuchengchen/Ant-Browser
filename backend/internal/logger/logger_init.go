@@ -43,11 +43,11 @@ func InitWithConfig(ctx context.Context, config LoggerConfig) {
 	consoleWriter := NewConsoleWriter(formatter)
 
 	logger := &Logger{
-		level:         level,
 		ctx:           ctx,
 		writers:       []Writer{consoleWriter, globalMemoryWriter},
 		consoleWriter: consoleWriter,
 	}
+	logger.SetLevel(level)
 
 	// 如果启用文件日志，创建文件写入器
 	if config.FileEnabled && config.FilePath != "" {
@@ -182,22 +182,17 @@ func New(component string) *Logger {
 	if globalLogger == nil {
 		// 如果全局日志未初始化，创建一个默认的
 		consoleWriter := NewConsoleWriter(NewTextFormatter())
-		return &Logger{
-			level:         INFO,
+		logger := &Logger{
 			component:     component,
 			writers:       []Writer{consoleWriter},
 			consoleWriter: consoleWriter,
 		}
+		logger.SetLevel(INFO)
+		return logger
 	}
 
-	return &Logger{
-		level:           globalLogger.level,
-		component:       component,
-		ctx:             globalLogger.ctx,
-		writers:         globalLogger.writers,
-		consoleWriter:   globalLogger.consoleWriter,
-		fileWriter:      globalLogger.fileWriter,
-		rotationManager: globalLogger.rotationManager,
-		fileWriteFailed: globalLogger.fileWriteFailed,
-	}
+	logger := globalLogger.WithComponent(component)
+	logger.root = globalLogger
+	logger.SetLevel(inheritLevel)
+	return logger
 }

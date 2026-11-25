@@ -107,7 +107,11 @@ require_cmd() {
 require_cmd python3
 require_cmd tar
 require_cmd dpkg-deb
-require_cmd wails
+require_cmd readelf
+if [[ "$SKIP_BUILD" -ne 1 ]]; then
+  require_cmd wails
+  require_cmd pkg-config
+fi
 
 if [[ -z "$VERSION" ]]; then
   VERSION="$(python3 - "$ROOT_DIR/wails.json" <<'PY'
@@ -208,6 +212,17 @@ if [[ ! -f "$APP_BIN" ]]; then
   echo "[ERROR] app binary not found: $APP_BIN" >&2
   exit 1
 fi
+
+WEBKIT_SONAME="$(LC_ALL=C readelf --dynamic --wide "$APP_BIN" \
+  | sed -n 's/.*(NEEDED).*Shared library: \[\(libwebkit2gtk-[^]]*\)\]$/\1/p')"
+case "$WEBKIT_SONAME" in
+  libwebkit2gtk-4.0.so.37) WEBKIT_DEPENDENCY="libwebkit2gtk-4.0-37" ;;
+  libwebkit2gtk-4.1.so.0) WEBKIT_DEPENDENCY="libwebkit2gtk-4.1-0" ;;
+  *)
+    echo "[ERROR] unsupported or missing WebKitGTK runtime dependency in $APP_BIN" >&2
+    exit 1
+    ;;
+esac
 
 echo "[4/5] Assembling staging files..."
 APP_STAGE="$STAGING_ROOT/$TARGET/app"
@@ -328,7 +343,7 @@ Architecture: ${ARCH}
 Maintainer: ${APP_MAINTAINER} <${APP_MAINTAINER_EMAIL}>
 Homepage: ${APP_HOMEPAGE}
 Installed-Size: ${INSTALLED_SIZE_KB}
-Depends: libc6 (>= 2.31), libgtk-3-0, libglib2.0-0, libxcb1, libwebkit2gtk-4.1-0 | libwebkit2gtk-4.0-37
+Depends: libc6 (>= 2.31), libgtk-3-0, libglib2.0-0, libxcb1, ${WEBKIT_DEPENDENCY}
 Description: ${APP_NAME} desktop app
  Multi-profile browser launcher with proxy-pool management.
  Ant Browser manages isolated browser profiles, proxy binding, and

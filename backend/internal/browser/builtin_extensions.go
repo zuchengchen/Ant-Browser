@@ -272,8 +272,14 @@ func (m *Manager) SyncBuiltinExtensions() error {
 		}
 
 		targetDir := filepath.Clean(m.ResolveRelativePath(filepath.Join("data", "extensions", spec.ID)))
-		if m.builtinExtensionNeedsWrite(targetDir, manifest.Version) {
-			if err := writeBuiltinExtensionFiles(sourceDir, targetDir); err != nil {
+		needsWrite := m.builtinExtensionNeedsWrite(targetDir, manifest.Version)
+		writeFiles := writeBuiltinExtensionFiles
+		if spec.ID == MofaImportExtensionID {
+			needsWrite = VerifyMofaImportFiles(targetDir) != nil
+			writeFiles = installMofaImportFiles
+		}
+		if needsWrite {
+			if err := writeFiles(sourceDir, targetDir); err != nil {
 				log.Error("内置插件解包失败", logger.F("dir", targetDir), logger.F("error", err))
 				continue
 			}
@@ -333,6 +339,58 @@ func (m *Manager) builtinExtensionNeedsWrite(targetDir string, version string) b
 		return true
 	}
 	return strings.TrimSpace(manifest.Version) != strings.TrimSpace(version)
+}
+
+func installMofaImportFiles(sourceDir, targetDir string) error {
+	parent := filepath.Dir(targetDir)
+	if err := os.MkdirAll(parent, 0o755); err != nil {
+		return err
+	}
+	staging, err := os.MkdirTemp(parent, ".mofa-extension-*")
+	if err != nil {
+		return err
+	}
+	cleanup := true
+	defer func() {
+		if cleanup {
+			_ = os.RemoveAll(staging)
+		}
+	}()
+	prepared := filepath.Join(staging, "extension")
+	if err := writeBuiltinExtensionFiles(sourceDir, prepared); err != nil {
+		return err
+	}
+	info, err := os.Lstat(targetDir)
+	if os.IsNotExist(err) {
+		return os.Rename(prepared, targetDir)
+	}
+	if err != nil {
+		return err
+	}
+	if info.IsDir() {
+		siteFile := filepath.Join(targetDir, "site.json")
+		if site, err := os.Lstat(siteFile); err == nil && site.Mode().IsRegular() && site.Size() <= 4096 {
+			data, err := os.ReadFile(siteFile)
+			if err != nil {
+				return err
+			}
+			if err := os.WriteFile(filepath.Join(prepared, "site.json"), data, site.Mode().Perm()); err != nil {
+				return err
+			}
+		}
+	}
+	previous := filepath.Join(staging, "previous")
+	if err := os.Rename(targetDir, previous); err != nil {
+		return err
+	}
+	if err := os.Rename(prepared, targetDir); err != nil {
+		if restoreErr := os.Rename(previous, targetDir); restoreErr != nil {
+			cleanup = false
+			return errors.Join(err, fmt.Errorf("原 MOFA 扩展已保留在 %s: %w", previous, restoreErr))
+		}
+		return err
+	}
+	return nil
 }
 
 func writeBuiltinExtensionFiles(sourceDir string, targetDir string) error {

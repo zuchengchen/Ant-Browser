@@ -37,6 +37,10 @@ if [[ $draft != true ]]; then
     cat "docs/changelogs/$tag.md" > "$notes_file"
     notes_args=()
   fi
+  if [[ -f VERSION ]]; then
+    full_version=$(<VERSION)
+    printf '\n本地版本 `%s`\n' "${full_version%$'\r'}" >> "$notes_file"
+  fi
   baseline=$(git log -1 --first-parent --merges --grep='^Upstream-Commit: ' \
     --format='%(trailers:key=Upstream-Ref,key=Upstream-Commit)')
   if [[ -n "$baseline" ]]; then

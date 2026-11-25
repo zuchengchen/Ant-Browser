@@ -24,7 +24,7 @@ interface ProxySourceAbnormalModalProps {
   /** 全量代理池（应用合并用） */
   proxies: BrowserProxy[]
   onClose: () => void
-  onApplied: () => void | Promise<void>
+  onApplied: () => Promise<void>
 }
 
 // 异常节点详情与对齐（独立弹窗）：
@@ -45,6 +45,7 @@ export function ProxySourceAbnormalModal({
   const abnormalRows = useMemo(() => sourceRows.filter(row => row.sourceMissing), [sourceRows])
 
   const [subNodes, setSubNodes] = useState<AlignSubNode[]>([])
+  const [subscriptionSnapshot, setSubscriptionSnapshot] = useState<BrowserProxy[]>([])
   const [fetching, setFetching] = useState(false)
   const [fetchError, setFetchError] = useState('')
   const [retryTick, setRetryTick] = useState(0)
@@ -67,6 +68,7 @@ export function ProxySourceAbnormalModal({
 
   useEffect(() => {
     setSubNodes([])
+    setSubscriptionSnapshot([])
     setPairs({})
     setFetchError('')
     setAutoRecords([])
@@ -88,6 +90,7 @@ export function ProxySourceAbnormalModal({
         })
         if (nodes.length === 0) throw new Error('订阅内容未解析到可用节点')
         setSubNodes(nodes)
+        setSubscriptionSnapshot(sourceRows)
       } catch (e: any) {
         if (!cancelled) setFetchError(e?.message || '订阅拉取失败')
       } finally {
@@ -178,8 +181,8 @@ export function ProxySourceAbnormalModal({
       })
       const nowISO = new Date().toISOString()
       const alignmentFull = buildSourceAlignment(sourceRows, subNodes)
-      const next = applySourceAlignment(proxies, source, alignmentFull, manualPairs, nowISO, nextProxyID)
-      await saveBrowserProxies(next)
+      const next = applySourceAlignment(sourceRows, source, alignmentFull, manualPairs, nowISO, nextProxyID)
+      await saveBrowserProxies(subscriptionSnapshot, next, source.sourceId)
       const nameOf = (proxyId: string) => sourceRows.find(row => row.proxyId === proxyId)?.proxyName || proxyId
       writeSourceAlignRecord(source.sourceId, {
         at: nowISO,
@@ -191,7 +194,7 @@ export function ProxySourceAbnormalModal({
       await onApplied()
       onClose()
     } catch (e: any) {
-      toast.error(e?.message || '应用对齐失败')
+      setFetchError(e?.message || '应用对齐失败')
     } finally {
       setApplying(false)
     }
@@ -245,7 +248,11 @@ export function ProxySourceAbnormalModal({
         {fetchError && (
           <div className='flex items-center justify-between rounded-lg border border-[var(--color-error)] bg-red-500/5 px-3 py-2'>
             <span className='text-sm text-red-500'>{fetchError}</span>
-            <Button size='sm' variant='secondary' onClick={() => setRetryTick(tick => tick + 1)}>
+            <Button size='sm' variant='secondary' onClick={() => {
+              void onApplied()
+                .then(() => setRetryTick(tick => tick + 1))
+                .catch((error: Error) => setFetchError(error.message || '加载代理池失败'))
+            }}>
               <RefreshCw className='h-3.5 w-3.5' />重试
             </Button>
           </div>

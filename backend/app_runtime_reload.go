@@ -52,6 +52,7 @@ func (a *App) ReloadConfig() error {
 	if a.automationMgr != nil {
 		a.automationMgr.SetConfig(cfg)
 	}
+	logger.SetGlobalLevelString(cfg.Logging.Level)
 	a.restartSpeedScheduler()
 
 	log.Info("前端触发配置重载成功")

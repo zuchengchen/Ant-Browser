@@ -55,9 +55,28 @@ try {
     Assert-Installed $user $userDir
     Assert-Entry (Read-Entry $machine $command '') $null 'Fresh install changed machine handler'
 
+    $userFiles = @{
+        'config.yaml' = 'user settings'
+        'proxies.yaml' = 'user proxy list'
+        'chrome\chromium-test\chrome.exe' = 'downloaded browser core'
+        'bin\xray.exe' = 'user-supplied Xray replacement'
+        'bin\windows-amd64\mihomo\mihomo.exe' = 'downloaded proxy core'
+        'data\app.db' = 'instance data'
+    }
+    foreach ($file in $userFiles.GetEnumerator()) {
+        $path = Join-Path $userDir $file.Key
+        New-Item -ItemType Directory -Path (Split-Path -Parent $path) -Force | Out-Null
+        [System.IO.File]::WriteAllText($path, $file.Value)
+    }
+
     Write-Entry $machine $uninstall 'InstallLocation' $machineDir
     Write-Entry $machine $command '' $foreign
     Invoke-Installer (Join-Path $userDir 'Uninstall.exe') "/S _?=$userDir"
+    foreach ($file in $userFiles.GetEnumerator()) {
+        $path = Join-Path $userDir $file.Key
+        Assert-Entry ([System.IO.File]::ReadAllText($path)) $file.Value "Uninstall changed $($file.Key)"
+    }
+    Assert-Entry (Test-Path -LiteralPath (Join-Path $userDir 'ant-chrome.exe')) $false 'User executable left behind'
     Assert-Entry (Read-Entry $user $command '') $null 'User handler left behind'
     Assert-Entry (Read-Entry $user $uninstall 'InstallLocation') $null 'User uninstall entry left behind'
     Assert-Entry (Read-Entry $machine $command '') $foreign 'User uninstall changed machine handler'

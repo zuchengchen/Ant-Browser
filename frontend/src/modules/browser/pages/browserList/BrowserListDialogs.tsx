@@ -251,7 +251,8 @@ export function BrowserListDialogs({
       >
         <div className="space-y-2 text-sm text-[var(--color-text-secondary)]">
           <p>确定彻底删除实例「{permanentDeleteConfirm.profile?.profileName || '未命名实例'}」？</p>
-          <p className="text-red-500">这会删除配置、浏览器用户数据、快照、快捷码和插件绑定，删除后不可恢复。</p>
+          <p className="text-red-500">这会删除配置、专属浏览器数据、快照、快捷码和插件绑定，删除后不可恢复。</p>
+          <p>其他实例仍使用的共享数据目录会保留，包括与其他实例数据目录存在父子关系的目录。</p>
         </div>
       </Modal>
 

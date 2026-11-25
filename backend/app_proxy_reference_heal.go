@@ -41,7 +41,7 @@ func (a *App) loadProxyPoolForHeal() ([]BrowserProxy, bool) {
 	if a.config == nil {
 		return nil, false
 	}
-	return append([]BrowserProxy(nil), a.config.Browser.Proxies...), true
+	return append([]BrowserProxy(nil), a.proxyConfigFallback()...), true
 }
 
 // ReconcileProxyReferences 幂等地把指向已删除对象的引用修复成明确态。
@@ -51,6 +51,8 @@ func (a *App) ReconcileProxyReferences() ProxyReferenceHealReport {
 	if a == nil || a.browserMgr == nil {
 		return report
 	}
+	a.proxySourceRefreshMu.Lock()
+	defer a.proxySourceRefreshMu.Unlock()
 
 	pool, ok := a.loadProxyPoolForHeal()
 	if !ok {
@@ -131,7 +133,9 @@ func (a *App) saveProxiesWithoutHeal(proxies []BrowserProxy) error {
 		}
 	}
 	if a.config != nil {
+		unlock := config.LockConfigWrite()
 		a.config.Browser.Proxies = normalized
+		unlock()
 	}
 	return nil
 }

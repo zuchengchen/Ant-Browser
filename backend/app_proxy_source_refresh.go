@@ -672,22 +672,28 @@ func buildRefreshedProxyPool(
 // BrowserProxyRefreshSource 手动触发一次订阅源刷新（前端“刷新订阅”按钮与定时调度共用同一套匹配逻辑）。
 func (a *App) BrowserProxyRefreshSource(sourceId string, fetchProxyId string) (ProxySourceRefreshResult, error) {
 	sourceId = strings.TrimSpace(sourceId)
+	if a == nil {
+		return ProxySourceRefreshResult{}, fmt.Errorf("应用未初始化")
+	}
 	if sourceId == "" {
 		return ProxySourceRefreshResult{}, fmt.Errorf("订阅源 ID 不能为空")
 	}
-	pool := a.getLatestProxies()
-	var meta *proxySourceMeta
-	for _, item := range collectProxySourceMetas(pool) {
-		if item.SourceID == sourceId || strings.TrimSpace(item.SourceURL) == sourceId {
-			copyMeta := item
-			meta = &copyMeta
-			break
+	return a.refreshProxySource(sourceId, strings.TrimSpace(fetchProxyId), time.Time{})
+}
+
+func findProxySourceMeta(pool []BrowserProxy, sourceID string) (proxySourceMeta, bool) {
+	metas := collectProxySourceMetas(pool)
+	for _, meta := range metas {
+		if proxySourceMetaKey(meta) == sourceID {
+			return meta, true
 		}
 	}
-	if meta == nil {
-		return ProxySourceRefreshResult{}, fmt.Errorf("订阅源不存在：%s", sourceId)
+	for _, meta := range metas {
+		if meta.SourceURL == sourceID {
+			return meta, true
+		}
 	}
-	return a.refreshProxySourceWithMeta(pool, *meta, fetchProxyId)
+	return proxySourceMeta{}, false
 }
 
 // BrowserProxyUpdateSourceConfig 更新订阅源的自动更新开关/间隔/拉取代理。
@@ -715,7 +721,10 @@ func (a *App) BrowserProxyUpdateSourceConfig(sourceId string, autoRefresh bool, 
 	a.proxySourceRefreshMu.Lock()
 	defer a.proxySourceRefreshMu.Unlock()
 
-	pool := a.getLatestProxies()
+	pool, err := a.BrowserProxyList()
+	if err != nil {
+		return err
+	}
 	if fetchProxyId != "" {
 		found := false
 		for _, item := range pool {
@@ -750,16 +759,16 @@ func (a *App) BrowserProxyUpdateSourceConfig(sourceId string, autoRefresh bool, 
 		changed++
 	}
 	if !metaFound {
-		return fmt.Errorf("订阅源不存在：%s", sourceId)
+		return fmt.Errorf("订阅源不存在")
 	}
 	if changed == 0 {
 		return nil
 	}
-	if err := a.SaveBrowserProxies(pool); err != nil {
+	if err := a.saveBrowserProxiesLocked(pool); err != nil {
 		return fmt.Errorf("保存订阅源配置失败: %w", err)
 	}
 	logger.New("ProxySource").Info("订阅源配置已更新",
-		logger.F("source_id", sourceId),
+		logger.F("source_id", proxySourceLogID(sourceId)),
 		logger.F("auto_refresh", autoRefresh),
 		logger.F("interval_m", intervalM),
 		logger.F("fetch_proxy_id", fetchProxyId),
@@ -773,40 +782,54 @@ func rowConfigMatchesSourceId(row BrowserProxy, sourceId string) bool {
 	return trimmed != "" && strings.TrimSpace(row.SourceURL) == trimmed
 }
 
-func (a *App) refreshProxySourceWithMeta(pool []BrowserProxy, meta proxySourceMeta, fetchProxyID string) (ProxySourceRefreshResult, error) {
-	// 手动刷新未指定代理时回退到导入时持久化的拉取代理；
-	// 订阅地址常被墙，直连拉取会让"导入可用、之后刷新永远失败"。
-	fetchProxyID = strings.TrimSpace(fetchProxyID)
-	if fetchProxyID == "" {
-		fetchProxyID = strings.TrimSpace(meta.SourceFetchProxy)
-	}
+func (a *App) refreshProxySource(sourceID, fetchProxyID string, dueAt time.Time) (ProxySourceRefreshResult, error) {
+	a.proxySourceFetchMu.Lock()
+	defer a.proxySourceFetchMu.Unlock()
 
-	// 串行化刷新：前端手动/自动刷新与后端调度器并发时，
-	// "读池 → 合并 → 全量保存"交错会把先完成的结果覆盖回旧状态。
-	a.proxySourceRefreshMu.Lock()
-	defer a.proxySourceRefreshMu.Unlock()
-
-	fetched, err := a.browserProxyFetchClashByURL(meta.SourceURL, fetchProxyID)
+	originalPool, err := a.BrowserProxyList()
 	if err != nil {
-		a.markProxySourceRefreshFailed(meta, err)
 		return ProxySourceRefreshResult{}, err
 	}
-	content, _ := fetched["content"].(string)
-	payload, ok := parseClashPayload(content)
-	if !ok {
-		parseErr := fmt.Errorf("订阅内容不是有效的 Clash YAML")
-		a.markProxySourceRefreshFailed(meta, parseErr)
-		return ProxySourceRefreshResult{}, parseErr
+	meta, exists := findProxySourceMeta(originalPool, sourceID)
+	if !exists {
+		if !dueAt.IsZero() {
+			return ProxySourceRefreshResult{}, nil
+		}
+		return ProxySourceRefreshResult{}, fmt.Errorf("订阅源不存在")
 	}
-	nodes := parseClashNodes(payload)
-	if len(nodes) == 0 {
-		emptyErr := fmt.Errorf("订阅内容未解析到可用代理")
-		a.markProxySourceRefreshFailed(meta, emptyErr)
-		return ProxySourceRefreshResult{}, emptyErr
+	if !dueAt.IsZero() && (!a.proxySourceRefreshEnabled() || !proxySourceRefreshDue(meta, dueAt)) {
+		return ProxySourceRefreshResult{}, nil
+	}
+	if fetchProxyID == "" {
+		fetchProxyID = meta.SourceFetchProxy
 	}
 
+	nodes, fetchErr := a.fetchProxySourceNodes(meta.SourceURL, fetchProxyID)
+	// 拉取期间允许用户保存。持锁重新读池后合并，并检查源和节点是否已变更。
+	a.proxySourceRefreshMu.Lock()
+	defer a.proxySourceRefreshMu.Unlock()
+	pool, err := a.BrowserProxyList()
+	if err != nil {
+		return ProxySourceRefreshResult{}, err
+	}
+	key := proxySourceMetaKey(meta)
+	latest, exists := findProxySourceMeta(pool, key)
+	if !exists || proxySourceMetaKey(latest) != key || latest.SourceURL != meta.SourceURL {
+		return ProxySourceRefreshResult{}, fmt.Errorf("订阅源已删除或地址已更改，请重新加载代理池")
+	}
+	if fetchErr != nil {
+		if latest.SourceFetchProxy == meta.SourceFetchProxy {
+			a.markProxySourceRefreshFailed(pool, latest, fetchErr)
+		}
+		return ProxySourceRefreshResult{}, fetchErr
+	}
+	if proxySourceNodesChanged(originalPool, pool, key) {
+		return ProxySourceRefreshResult{}, fmt.Errorf("拉取期间订阅节点已修改，请重新刷新")
+	}
+
+	meta = latest
 	plan := buildRefreshedProxyPool(pool, meta, nodes, a.proxySourceIgnoredNames(meta.SourceID), generateUUID, time.Now())
-	if err := a.SaveBrowserProxies(plan.merged); err != nil {
+	if err := a.saveBrowserProxiesLocked(plan.merged); err != nil {
 		return plan.result, err
 	}
 	// 需求②：把本次刷新的对齐明细落盘（每源保留最近 3 条）。
@@ -822,8 +845,7 @@ func (a *App) refreshProxySourceWithMeta(pool []BrowserProxy, meta proxySourceMe
 		KeptMissing: plan.result.MarkedMissing,
 	})
 	logger.New("ProxySource").Info("订阅源刷新完成",
-		logger.F("source_id", meta.SourceID),
-		logger.F("source_url", meta.SourceURL),
+		logger.F("source_id", proxySourceLogID(meta.SourceID)),
 		logger.F("fetch_proxy_id", fetchProxyID),
 		logger.F("fetched", plan.result.Fetched),
 		logger.F("name_matched", plan.result.NameMatched),
@@ -847,21 +869,61 @@ func (a *App) refreshProxySourceWithMeta(pool []BrowserProxy, meta proxySourceMe
 	return plan.result, nil
 }
 
+func (a *App) fetchProxySourceNodes(sourceURL, fetchProxyID string) ([]clashNode, error) {
+	fetched, err := a.browserProxyFetchClashByURL(sourceURL, fetchProxyID)
+	if err != nil {
+		return nil, err
+	}
+	content, _ := fetched["content"].(string)
+	payload, ok := parseClashPayload(content)
+	if !ok {
+		return nil, fmt.Errorf("订阅内容不是有效的 Clash YAML")
+	}
+	nodes := parseClashNodes(payload)
+	if len(nodes) == 0 {
+		return nil, fmt.Errorf("订阅内容未解析到可用代理")
+	}
+	return nodes, nil
+}
+
+func proxySourceNodesChanged(before, after []BrowserProxy, sourceKey string) bool {
+	original := make(map[string]BrowserProxy)
+	for _, row := range before {
+		if proxySourceKey(row) == sourceKey {
+			original[row.ProxyId] = row
+		}
+	}
+	for _, row := range after {
+		if proxySourceKey(row) != sourceKey {
+			continue
+		}
+		old, exists := original[row.ProxyId]
+		if !exists || old.ProxyName != row.ProxyName || old.ProxyConfig != row.ProxyConfig || old.PreferredKernel != row.PreferredKernel {
+			return true
+		}
+		delete(original, row.ProxyId)
+	}
+	return len(original) > 0
+}
+
+func proxySourceLogID(sourceID string) string {
+	if strings.Contains(sourceID, "://") {
+		return ""
+	}
+	return sourceID
+}
+
 // markProxySourceRefreshFailed 把刷新失败原因写到该源所有节点行上（成功刷新时清除）。
 // 失败必须有落盘的明确记录：只打日志的话，前端永远只能看到旧的"上次更新时间"，
 // 会把一直失败的订阅误判成正常等待调度。
-func (a *App) markProxySourceRefreshFailed(meta proxySourceMeta, refreshErr error) {
-	if a == nil || refreshErr == nil {
-		return
-	}
+func (a *App) markProxySourceRefreshFailed(pool []BrowserProxy, meta proxySourceMeta, refreshErr error) {
 	metaKey := proxySourceMetaKey(meta)
-	pool := a.getLatestProxies()
+	message := refreshErr.Error()
 	changed := false
 	for index, row := range pool {
 		if proxySourceKey(row) != metaKey {
 			continue
 		}
-		message := refreshErr.Error()
 		if row.SourceLastRefreshError == message {
 			continue
 		}
@@ -871,9 +933,9 @@ func (a *App) markProxySourceRefreshFailed(meta proxySourceMeta, refreshErr erro
 	if !changed {
 		return
 	}
-	if err := a.SaveBrowserProxies(pool); err != nil {
+	if err := a.saveBrowserProxiesLocked(pool); err != nil {
 		logger.New("ProxySource").Warn("订阅刷新失败记录写入失败",
-			logger.F("source_id", meta.SourceID),
+			logger.F("source_id", proxySourceLogID(meta.SourceID)),
 			logger.F("error", err.Error()),
 		)
 	}
@@ -928,6 +990,8 @@ func (a *App) appendSourceAlignRecord(sourceId string, record config.SourceAlign
 	if a == nil || a.config == nil {
 		return
 	}
+	unlock := config.LockConfigWrite()
+	defer unlock()
 	if a.config.Browser.AlignRecords == nil {
 		a.config.Browser.AlignRecords = map[string][]config.SourceAlignRecord{}
 	}
@@ -936,7 +1000,7 @@ func (a *App) appendSourceAlignRecord(sourceId string, record config.SourceAlign
 		records = records[:maxSourceAlignRecords]
 	}
 	a.config.Browser.AlignRecords[sourceId] = records
-	if err := a.config.Save(a.resolveAppPath("config.yaml")); err != nil {
+	if err := a.config.SaveLocked(a.resolveAppPath("config.yaml")); err != nil {
 		logger.New("ProxySource").Warn("对齐记录写入失败", logger.F("error", err.Error()))
 	}
 }
@@ -947,6 +1011,8 @@ func (a *App) BrowserProxyAlignRecords(sourceId string) []config.SourceAlignReco
 	if a == nil || a.config == nil || sourceId == "" {
 		return []config.SourceAlignRecord{}
 	}
+	unlock := config.LockConfigWrite()
+	defer unlock()
 	records := a.config.Browser.AlignRecords[sourceId]
 	if records == nil {
 		return []config.SourceAlignRecord{}

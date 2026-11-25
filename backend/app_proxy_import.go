@@ -57,11 +57,12 @@ func (a *App) browserProxyFetchClashByURL(rawURL string, proxyID string) (map[st
 
 	client := &http.Client{Timeout: clashSubscriptionTimeout}
 	if proxyID != "" {
-		proxyClient, err := a.clashSubscriptionProxyClient(proxyID)
+		proxyClient, release, err := a.clashSubscriptionProxyClient(proxyID)
 		if err != nil {
 			return nil, err
 		}
 		client = proxyClient
+		defer release()
 	}
 	content, payload, err := fetchClashSubscriptionWithFallback(client, parsedURL.String(), clashSubscriptionTimeout)
 	if err != nil {
@@ -85,23 +86,17 @@ func (a *App) browserProxyFetchClashByURL(rawURL string, proxyID string) (map[st
 	}, nil
 }
 
-func (a *App) clashSubscriptionProxyClient(proxyID string) (*http.Client, error) {
+func (a *App) clashSubscriptionProxyClient(proxyID string) (*http.Client, func(), error) {
 	if a == nil || a.config == nil {
-		return nil, fmt.Errorf("代理拉取需要应用配置已初始化")
+		return nil, nil, fmt.Errorf("代理拉取需要应用配置已初始化")
 	}
 	proxies := a.getLatestProxies()
-	found := false
-	for _, item := range proxies {
-		if strings.EqualFold(strings.TrimSpace(item.ProxyId), proxyID) && strings.TrimSpace(item.ProxyConfig) != "" {
-			found = true
-			break
-		}
-	}
-	if !found {
-		return nil, fmt.Errorf("拉取代理不存在或配置为空")
-	}
 	connectorType := config.NormalizeBrowserConnectorType(a.config.Browser.DefaultConnectorType)
-	return proxy.BuildProxyHTTPClient("", proxyID, proxies, a.xrayMgr, a.singboxMgr, a.clashMgr, a.mieruMgr, connectorType, clashSubscriptionTimeout)
+	client, release, err := proxy.AcquireProxyHTTPClient(context.Background(), "", proxyID, proxies, a.xrayMgr, a.singboxMgr, a.clashMgr, a.mieruMgr, connectorType, clashSubscriptionTimeout)
+	if errors.Is(err, proxy.ErrProxyConfigUnavailable) {
+		return nil, nil, fmt.Errorf("拉取代理不存在或配置为空")
+	}
+	return client, release, err
 }
 
 func fetchClashSubscriptionWithFallback(client *http.Client, targetURL string, timeout time.Duration) (string, interface{}, error) {

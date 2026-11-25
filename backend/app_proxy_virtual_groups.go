@@ -329,11 +329,7 @@ func (a *App) latestProxiesForVirtualGroup() []browser.Proxy {
 	if a == nil || a.browserMgr == nil {
 		return []browser.Proxy{}
 	}
-	var fallback []browser.Proxy
-	if a.config != nil {
-		fallback = a.config.Browser.Proxies
-	}
-	return browser.LatestProxiesWithFallback(a.browserMgr.ProxyDAO, fallback)
+	return browser.LatestProxiesWithFallback(a.browserMgr.ProxyDAO, a.proxyConfigFallback())
 }
 
 func (a *App) listLatestProxyGroups() []string {

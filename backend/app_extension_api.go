@@ -5,6 +5,7 @@ import (
 	"ant-chrome/backend/internal/config"
 	"ant-chrome/backend/internal/logger"
 	"ant-chrome/backend/internal/proxy"
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -57,10 +58,11 @@ func (a *App) BrowserExtensionLookupWithProxy(input BrowserExtensionWebStoreRequ
 	if a.browserMgr == nil {
 		return BrowserExtensionLookupResult{}, fmt.Errorf("浏览器管理器未初始化")
 	}
-	client, err := a.extensionDownloadHTTPClient(input.UseProxy, input.ProxyConfig)
+	client, release, err := a.extensionDownloadHTTPClient(context.Background(), input.UseProxy, input.ProxyConfig)
 	if err != nil {
 		return BrowserExtensionLookupResult{}, fmt.Errorf("下载代理配置错误: %w", err)
 	}
+	defer release()
 	return a.browserMgr.LookupExtensionWithHTTPClient(input.Query, client)
 }
 
@@ -78,10 +80,11 @@ func (a *App) BrowserExtensionInstallWithProxy(input BrowserExtensionWebStoreReq
 	if a.browserMgr == nil {
 		return BrowserExtension{}, fmt.Errorf("浏览器管理器未初始化")
 	}
-	client, err := a.extensionDownloadHTTPClient(input.UseProxy, input.ProxyConfig)
+	client, release, err := a.extensionDownloadHTTPClient(a.ctx, input.UseProxy, input.ProxyConfig)
 	if err != nil {
 		return BrowserExtension{}, fmt.Errorf("下载代理配置错误: %w", err)
 	}
+	defer release()
 	return a.browserMgr.InstallExtensionFromWebStoreWithHTTPClient(a.ctx, input.Query, client, a.builtinConflictDialogHandler())
 }
 
@@ -220,32 +223,24 @@ func (a *App) resolveManualDownloadFile(fileName string) (string, error) {
 	return fullPath, nil
 }
 
-func (a *App) extensionDownloadHTTPClient(useProxy bool, proxyConfig string) (*http.Client, error) {
+func (a *App) extensionDownloadHTTPClient(ctx context.Context, useProxy bool, proxyConfig string) (*http.Client, func(), error) {
 	proxyConfig = strings.TrimSpace(proxyConfig)
 	log := logger.New("Extension")
 	if useProxy && proxyConfig == "" {
-		return nil, fmt.Errorf("已启用下载代理，但代理配置为空，请重新选择代理节点")
+		return nil, nil, fmt.Errorf("已启用下载代理，但代理配置为空，请重新选择代理节点")
 	}
 	if proxyConfig == "" || strings.EqualFold(proxyConfig, "direct://") {
 		log.Info("Chrome 插件下载使用直连")
-		client, _, err := proxyCoreHTTPClient(browser.ExtensionDownloadTimeout(), "")
-		return client, err
+		client := &http.Client{Timeout: browser.ExtensionDownloadTimeout(), Transport: proxyCoreDirectTransport()}
+		return client, client.CloseIdleConnections, nil
 	}
 	proxies := a.getLatestProxies()
 	connectorType := config.BrowserConnectorXray
 	if a != nil && a.config != nil {
 		connectorType = a.config.Browser.DefaultConnectorType
 	}
-	log.Info("Chrome 插件下载使用代理", logger.F("connector", connectorType), logger.F("proxy_prefix", proxyConfigLogPrefix(proxyConfig)))
-	return proxy.BuildProxyHTTPClient(proxyConfig, "", proxies, a.xrayMgr, a.singboxMgr, a.clashMgr, a.mieruMgr, connectorType, browser.ExtensionDownloadTimeout())
-}
-
-func proxyConfigLogPrefix(proxyConfig string) string {
-	proxyConfig = strings.TrimSpace(proxyConfig)
-	if len(proxyConfig) <= 24 {
-		return proxyConfig
-	}
-	return proxyConfig[:24]
+	log.Info("Chrome 插件下载使用代理", logger.F("connector", connectorType), logger.F("protocol", proxy.DetectProxyProtocol(proxyConfig)))
+	return proxy.AcquireProxyHTTPClient(ctx, proxyConfig, "", proxies, a.xrayMgr, a.singboxMgr, a.clashMgr, a.mieruMgr, connectorType, browser.ExtensionDownloadTimeout())
 }
 
 func (a *App) BrowserExtensionInstallLocalFile() (BrowserExtension, error) {

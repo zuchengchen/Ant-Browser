@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Button, toast } from '../../../shared/components'
 import type { TableColumn } from '../../../shared/components/Table'
 import type { BrowserProxy } from '../types'
-import { fetchClashImportFromURL, saveBrowserProxies } from '../api'
+import { fetchBrowserProxies, fetchClashImportFromURL, saveBrowserProxies } from '../api'
 import { selectUsableProxies, useProxySpeedStore } from '../proxySpeedStore'
 import { DIRECT_QUICK_IMPORT_TEMPLATE, buildDirectImportCandidatesFromText, parseDirectImportText } from '../pages/proxyPool/helpers'
 import {
@@ -39,6 +39,7 @@ export function ProxyImportModal({
   const [importUrl, setImportUrl] = useState('')
   const [importFetchProxyId, setImportFetchProxyId] = useState('')
   const [importResolvedUrl, setImportResolvedUrl] = useState('')
+  const [subscriptionSnapshot, setSubscriptionSnapshot] = useState<BrowserProxy[]>([])
   const [importText, setImportText] = useState('')
   const [importDnsServers, setImportDnsServers] = useState('')
   const [importNamePrefix, setImportNamePrefix] = useState('')
@@ -67,6 +68,7 @@ export function ProxyImportModal({
     setImportUrl('')
     setImportFetchProxyId('')
     setImportResolvedUrl('')
+    setSubscriptionSnapshot([])
     setImportText('')
     setImportDnsServers('')
     setImportNamePrefix('')
@@ -106,6 +108,7 @@ export function ProxyImportModal({
 
     setFetchingImportUrl(true)
     try {
+      const snapshot = await fetchBrowserProxies()
       const result = await fetchClashImportFromURL(targetURL, importFetchProxyId)
       const content = (result?.content || '').trim()
       if (!content) {
@@ -113,6 +116,7 @@ export function ProxyImportModal({
       }
 
       setImportResolvedUrl((result?.url || targetURL).trim())
+      setSubscriptionSnapshot(snapshot)
       setImportText(content)
 
       if (!importDnsServers.trim() && typeof result?.dnsServers === 'string' && result.dnsServers.trim()) {
@@ -203,14 +207,14 @@ export function ProxyImportModal({
       const sourceURL = importMode === 'clash' ? importResolvedUrl.trim() : ''
       const isURLImport = !!sourceURL
       const sourceNamePrefix = importMode === 'clash' ? importNamePrefix.trim() : ''
-      const sourceID = isURLImport ? resolveImportSourceID(existingProxies, sourceURL, sourceNamePrefix) : ''
+      const sourceID = isURLImport ? resolveImportSourceID(subscriptionSnapshot, sourceURL, sourceNamePrefix) : ''
       // 该入口没有自动刷新开关 UI：与既有行为一致，导入的订阅默认手动刷新，
       // 需要定时刷新时在代理池页的更新管理里开启。
       const sourceAutoRefresh = false
       const sourceRefreshIntervalM = 0
       const sourceLastRefreshAt = isURLImport ? new Date().toISOString() : ''
       const oldSourceProxies = isURLImport
-        ? existingProxies.filter(item => (item.sourceId || '').trim() === sourceID)
+        ? subscriptionSnapshot.filter(item => (item.sourceId || '').trim() === sourceID)
         : []
       const pickExisting = createExistingProxyPicker(oldSourceProxies)
       const sourceFetchProxyId = (importMode === 'clash' ? importFetchProxyId.trim() : '') || undefined
@@ -244,11 +248,7 @@ export function ProxyImportModal({
           sourceFetchProxyId,
         })
         : []
-      const allProxies = isURLImport
-        ? existingProxies.filter(item => (item.sourceId || '').trim() !== sourceID).concat(newProxies, keptMissing)
-        : [...existingProxies, ...newProxies]
-
-      await saveBrowserProxies(allProxies)
+      await saveBrowserProxies(oldSourceProxies, [...newProxies, ...keptMissing], sourceID)
       await onImported?.(newProxies)
       toast.success(`成功导入 ${newProxies.length} 个代理`)
       setPreviewModalOpen(false)

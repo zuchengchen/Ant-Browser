@@ -59,8 +59,8 @@ func NewApp(appRoot, version string) *App {
 	return &App{App: backend.NewApp(appRoot, version)}
 }
 
-func (a *App) startup(ctx context.Context) {
-	backend.Start(a.App, ctx)
+func (a *App) startup(ctx context.Context) error {
+	return backend.Start(a.App, ctx)
 }
 
 func (a *App) shutdown(ctx context.Context) {
@@ -227,13 +227,15 @@ func main() {
 	}
 
 	// 加载配置
-	cfg, err := backend.LoadConfig(backend.ResolveRuntimePath(appRoot, "config.yaml"))
+	configPath := backend.ResolveRuntimePath(appRoot, "config.yaml")
+	cfg, err := backend.LoadConfig(configPath)
 	if err != nil {
-		log.Printf("加载配置失败，使用默认配置: %v", err)
 		lifecycle.Log(appRoot, "config.error", map[string]interface{}{"error": err.Error()})
+		// Defaults here only size the window that will report the startup error.
 		cfg = backend.DefaultConfig()
+	} else {
+		lifecycle.Log(appRoot, "config.loaded", map[string]interface{}{"path": configPath})
 	}
-	lifecycle.Log(appRoot, "config.loaded", map[string]interface{}{"path": backend.ResolveRuntimePath(appRoot, "config.yaml")})
 
 	// 创建应用实例
 	app := NewApp(appRoot, buildVersion)
@@ -247,7 +249,9 @@ func main() {
 		}
 		go func() {
 			<-backendReady
-			backend.HandleKeyPouchLink(app.App, uri, singleinstance.FocusExistingWindow)
+			if app.IsAppReady() {
+				backend.HandleKeyPouchLink(app.App, uri, singleinstance.FocusExistingWindow)
+			}
 		}()
 	}
 	go func() {
@@ -313,6 +317,17 @@ func main() {
 			}
 			runtime.WindowCenter(wailsCtx)
 			backend.ApplyMainApplicationWindowIcon(appRoot, cfg.App.Name)
+			startupErr := app.startup(ctx)
+			close(backendReady)
+			if startupErr != nil {
+				log.Printf("启动应用失败: %v", startupErr)
+				lifecycle.Log(appRoot, "wails.on_startup.error", map[string]interface{}{"error": startupErr.Error()})
+				_, _ = runtime.MessageDialog(ctx, runtime.MessageDialogOptions{
+					Type: runtime.ErrorDialog, Title: "Ant Browser 启动失败", Message: startupErr.Error(),
+				})
+				app.ForceQuit()
+				return
+			}
 			// 启动系统托盘（非阻塞）
 			go lifecycle.RunTraySafely(appRoot, backend.TrayCallbacks{
 				OnShow: func() {
@@ -334,8 +349,6 @@ func main() {
 				},
 			})
 			lifecycle.Log(appRoot, "tray.start.requested", nil)
-			app.startup(ctx)
-			close(backendReady)
 			dispatchURI(launchURI)
 			lifecycle.Log(appRoot, "wails.on_startup.complete", nil)
 			if startupDebugEnabled {

@@ -274,29 +274,26 @@ export function ProxyPickerModal({ open, currentProxyId, title = '从代理池�
     if (chainEditMode) {
       try {
         nextConfig = buildChainProxyConfig(chainEditForm)
+        const original = parseChainSocks5Config(editingProxy.proxyConfig)
+        if (original && JSON.stringify(toChainEditForm('', original)) === JSON.stringify({ ...chainEditForm, proxyName: '' })) {
+          nextConfig = editingProxy.proxyConfig
+        }
       } catch (error: any) {
         toast.error(error?.message || '链式代理配置无效')
         return
       }
     }
 
-    const nextProxies = allProxies.map(item =>
-      item.proxyId === editingProxy.proxyId
-        ? {
-            ...item,
-            proxyName: nextName,
-            proxyConfig: nextConfig,
-            groupName: editGroup.trim() || undefined,
-            dnsServers: editDnsServers.trim() || undefined,
-          }
-        : item
-    )
-
     setSavingEdit(true)
     try {
-      await saveBrowserProxies(nextProxies)
-      setAllProxies(nextProxies)
-      onProxyListUpdated?.(nextProxies)
+      await saveBrowserProxies([editingProxy], [{
+        ...editingProxy,
+        proxyName: nextName,
+        proxyConfig: nextConfig,
+        groupName: editGroup.trim() || undefined,
+        dnsServers: editDnsServers.trim() || undefined,
+      }])
+      const nextProxies = await loadData()
       if (editingProxy.proxyId === currentProxyId) {
         const updated = nextProxies.find(item => item.proxyId === currentProxyId)
         if (updated) onSelect(updated)
@@ -318,11 +315,9 @@ export function ProxyPickerModal({ open, currentProxyId, title = '从代理池�
 
   const handleDeleteConfirm = async () => {
     if (!deleteCandidate) return
-    const nextProxies = allProxies.filter(item => item.proxyId !== deleteCandidate.proxyId)
     try {
-      await saveBrowserProxies(nextProxies)
-      setAllProxies(nextProxies)
-      onProxyListUpdated?.(nextProxies)
+      await saveBrowserProxies([deleteCandidate], [])
+      const nextProxies = await loadData()
       onProxyDeleted?.(deleteCandidate.proxyId, nextProxies)
       toast.success('代理已删除')
       setDeleteCandidate(null)

@@ -42,8 +42,8 @@ func (a *App) QuitAppOnly() {
 	a.runtimeQuit()
 }
 
-func Start(a *App, ctx context.Context) {
-	a.startup(ctx)
+func Start(a *App, ctx context.Context) error {
+	return a.startup(ctx)
 }
 
 func Stop(a *App, ctx context.Context) {

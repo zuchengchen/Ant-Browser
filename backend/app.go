@@ -49,6 +49,7 @@ type App struct {
 	runtimeMu                   sync.RWMutex
 	runtimeStopped              bool
 	startupReady                atomic.Bool
+	databaseRecoveryNotice      atomic.Pointer[database.RecoveryInfo]
 	backgroundTaskCtx           context.Context
 	backgroundTaskCancel        context.CancelFunc
 	backgroundTasks             sync.WaitGroup
@@ -62,9 +63,9 @@ type App struct {
 	virtualGroupMemberStateGate virtualGroupMemberStateGateCache
 	proxyFailoverMu             sync.Mutex
 	proxySourceIgnoredMu        sync.Mutex
-	// proxySourceRefreshMu 串行化订阅刷新的"读池 → 合并 → 全量保存"过程。
-	// 前端手动刷新、前端自动刷新与后端调度器可能同时触发，非原子会导致后保存者覆盖先保存者的结果。
+	// 代理池写入在同一个临界区内读取和合并。订阅拉取单独串行，不占用写锁。
 	proxySourceRefreshMu sync.Mutex
+	proxySourceFetchMu   sync.Mutex
 	proxyFailoverLastAt  map[string]time.Time
 	proxyFailoverCount   map[string]int
 	// instanceGate 实例并发启动闸门（安全控制），见 app_instance_launch_gate.go。

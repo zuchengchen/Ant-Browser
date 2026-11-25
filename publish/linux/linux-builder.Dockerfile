@@ -5,6 +5,7 @@ RUN sed -i 's|http://deb.debian.org|https://deb.debian.org|g' /etc/apt/sources.l
   && apt-get update -o Acquire::Retries=8 -o Acquire::https::Timeout=60 \
   && apt-get install -y --fix-missing --no-install-recommends \
     -o Acquire::Retries=8 -o Acquire::https::Timeout=60 \
+    binutils \
     build-essential \
     ca-certificates \
     curl \

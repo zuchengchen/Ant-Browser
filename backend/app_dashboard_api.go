@@ -2,8 +2,11 @@ package backend
 
 import (
 	"ant-chrome/backend/internal/browser"
+	"ant-chrome/backend/internal/config"
 	"ant-chrome/backend/internal/logger"
+	"fmt"
 	goruntime "runtime"
+	"strings"
 )
 
 func (a *App) GetDashboardStats() map[string]interface{} {
@@ -50,6 +53,31 @@ func (a *App) GetMemoryStats() map[string]interface{} {
 func (a *App) TriggerGC()               { goruntime.GC() }
 func (a *App) SetLogLevel(level string) { logger.SetGlobalLevelString(level) }
 func (a *App) GetLogLevel() string      { return logger.New("App").GetLevel().String() }
+
+func (a *App) SaveLogLevel(level string) error {
+	level = strings.ToLower(strings.TrimSpace(level))
+	switch level {
+	case "debug", "info", "warn", "error":
+	default:
+		return fmt.Errorf("未知的日志级别")
+	}
+	a.maintenanceMu.Lock()
+	defer a.maintenanceMu.Unlock()
+	if a.config == nil {
+		return fmt.Errorf("应用配置未初始化")
+	}
+
+	unlock := config.LockConfigWrite()
+	defer unlock()
+	next := *a.config
+	next.Logging.Level = level
+	if err := next.SaveLocked(a.resolveAppPath("config.yaml")); err != nil {
+		return err
+	}
+	a.config.Logging.Level = level
+	logger.SetGlobalLevelString(level)
+	return nil
+}
 
 // GetAppLogs 获取内存缓冲日志
 func (a *App) GetAppLogs() []logger.MemoryLogEntry {

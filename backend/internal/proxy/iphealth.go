@@ -142,6 +142,9 @@ func parseIPHealthBody(body []byte, parser string) (map[string]interface{}, erro
 	if err := json.Unmarshal(body, &result); err != nil {
 		return nil, err
 	}
+	if result == nil {
+		return nil, fmt.Errorf("IP 健康检测响应必须是 JSON 对象")
+	}
 	return result, nil
 }
 

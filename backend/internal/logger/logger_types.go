@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"sync"
+	"sync/atomic"
 )
 
 // Level 日志级别
@@ -15,6 +16,8 @@ const (
 	WARN
 	ERROR
 )
+
+const inheritLevel Level = -1
 
 // String 返回日志级别的字符串表示
 func (l Level) String() string {
@@ -79,7 +82,8 @@ type RotationConfig struct {
 
 // Logger 日志记录器
 type Logger struct {
-	level     Level
+	level     atomic.Int32
+	root      *Logger
 	component string
 	ctx       context.Context
 

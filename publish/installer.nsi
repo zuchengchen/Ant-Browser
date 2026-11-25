@@ -422,10 +422,7 @@ Section "Uninstall"
 
   Delete /REBOOTOK "$INSTDIR\${PRODUCT_EXE}"
   Delete /REBOOTOK "$INSTDIR\${PRODUCT_ICON}"
-  Delete /REBOOTOK "$INSTDIR\proxies.yaml"
   Delete /REBOOTOK "$INSTDIR\Uninstall.exe"
-  RMDir /r /REBOOTOK "$INSTDIR\bin"
-  RMDir /r /REBOOTOK "$INSTDIR\chrome"
   ReadRegStr $0 SHCTX "${PROTOCOL_KEY}\shell\open\command" ""
   ${If} $0 == '"$INSTDIR\${PRODUCT_EXE}" "%1"'
     DeleteRegKey SHCTX "${PROTOCOL_KEY}"
@@ -438,19 +435,15 @@ Section "Uninstall"
     Delete /REBOOTOK "$DESKTOP\${PRODUCT_NAME}.lnk"
     DeleteRegKey SHCTX "${UNINSTALL_KEY}"
   ${EndIf}
-  MessageBox MB_ICONQUESTION|MB_YESNO|MB_DEFBUTTON2 "是否彻底清理所有用户数据？$\r$\n$\r$\n选择“是”将删除 data 目录（含数据库/实例数据）以及安装目录残留文件。$\r$\n此操作不可恢复。" /SD IDNO IDYES un_remove_all_data IDNO un_keep_user_data
+  ; bin 和 chrome 也存放用户安装的代理内核与浏览器内核。
+  MessageBox MB_ICONQUESTION|MB_YESNO|MB_DEFBUTTON2 "是否删除整个安装目录？$\r$\n$\r$\n选择“是”将删除此目录内的实例数据、代理配置和内核等文件。$\r$\n此操作不可恢复。" /SD IDNO IDYES un_remove_all_data
+  Goto un_done
 
 un_remove_all_data:
-  RMDir /r /REBOOTOK "$INSTDIR\data"
-  RMDir /r /REBOOTOK "$INSTDIR\logs"
+  SetOutPath "$TEMP"
   RMDir /r /REBOOTOK "$INSTDIR"
-  Goto un_done
-
-un_keep_user_data:
-  RMDir /REBOOTOK "$INSTDIR"
-  Goto un_done
-
-un_done:
   IfFileExists "$INSTDIR\." 0 +2
     MessageBox MB_ICONEXCLAMATION|MB_OK "检测到部分文件仍被占用，已标记为重启后自动删除。" /SD IDOK
+
+un_done:
 SectionEnd

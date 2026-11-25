@@ -100,11 +100,13 @@ func (m *Manager) downloadAndExtractCore(ctx context.Context, coreInput CoreInpu
 	var client *http.Client
 	var err error
 	if proxyConfig != "__system__" && m.CoreDownloadHTTPClientFactory != nil {
-		client, err = m.CoreDownloadHTTPClientFactory(proxyConfig, 0)
+		var release func()
+		client, release, err = m.CoreDownloadHTTPClientFactory(ctx, proxyConfig, 0)
 		if err != nil {
 			sendEvent("error", 0, "创建下载代理客户端失败: "+err.Error())
 			return
 		}
+		defer release()
 	} else {
 		transport := &http.Transport{}
 		if proxyConfig == "__system__" {
@@ -113,7 +115,7 @@ func (m *Manager) downloadAndExtractCore(ctx context.Context, coreInput CoreInpu
 			if sysProxy, rErr := readSystemProxy(); rErr == nil && sysProxy != "" {
 				if proxyURL, pErr := url.Parse(sysProxy); pErr == nil {
 					transport.Proxy = http.ProxyURL(proxyURL)
-					sendEvent("downloading", 0, "已从系统注册表读取代理: "+sysProxy)
+					sendEvent("downloading", 0, "已从系统注册表读取代理")
 				} else {
 					// 解析失败则回退到环境变量
 					transport.Proxy = http.ProxyFromEnvironment
@@ -127,7 +129,7 @@ func (m *Manager) downloadAndExtractCore(ctx context.Context, coreInput CoreInpu
 			if proxyURL, pErr := url.Parse(proxyConfig); pErr == nil {
 				transport.Proxy = http.ProxyURL(proxyURL)
 			} else {
-				sendEvent("error", 0, "代理地址解析失败: "+pErr.Error())
+				sendEvent("error", 0, "代理地址解析失败")
 				return
 			}
 		}
@@ -136,6 +138,7 @@ func (m *Manager) downloadAndExtractCore(ctx context.Context, coreInput CoreInpu
 			Timeout:   0,
 			Transport: transport,
 		}
+		defer client.CloseIdleConnections()
 	}
 
 	tempFile, err := os.CreateTemp(parentDir, coreArchiveTempPattern(targetUrl))

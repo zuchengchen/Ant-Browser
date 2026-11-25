@@ -1,9 +1,6 @@
-// Settings 模块 API
-import type { AppSettings } from './types'
-import { defaultSettings } from './types'
-
-// 本地存储 key
-const SETTINGS_KEY = 'app_settings'
+import { waitForAppReady } from '../../utils/appReady'
+import { logLevels, type LogLevel } from './types'
+import { GetLogLevel, SaveLogLevel } from '../../wailsjs/go/main/App'
 
 const getBindings = async () => {
   try {
@@ -151,39 +148,34 @@ export const defaultAutomationState: AutomationState = {
   },
 }
 
-// 获取设置
-export async function fetchSettings(): Promise<AppSettings> {
-  try {
-    const stored = localStorage.getItem(SETTINGS_KEY)
-    if (stored) {
-      return { ...defaultSettings, ...JSON.parse(stored) }
-    }
-  } catch (error) {
-    console.error('Failed to load settings:', error)
+async function waitForLogLevelBindings() {
+  const app = (globalThis as { go?: { main?: { App?: Record<string, unknown> } } }).go?.main?.App
+  if (typeof app?.GetLogLevel !== 'function' || typeof app.SaveLogLevel !== 'function') {
+    throw new Error('请在更新后的 Ant Browser 桌面应用中设置日志级别')
   }
-  return defaultSettings
+  await waitForAppReady()
 }
 
-// 保存设置
-export async function saveSettings(settings: AppSettings): Promise<boolean> {
-  try {
-    localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings))
-    return true
-  } catch (error) {
-    console.error('Failed to save settings:', error)
-    return false
-  }
+export async function fetchLogLevel(): Promise<LogLevel> {
+  await waitForLogLevelBindings()
+  const current = (await GetLogLevel()).trim().toLowerCase()
+  const level = logLevels.find(value => value === current)
+  if (!level) throw new Error('应用返回了无法识别的日志级别')
+  return level
+}
+
+export async function saveLogLevel(level: LogLevel): Promise<void> {
+  await waitForLogLevelBindings()
+  await SaveLogLevel(level)
 }
 
 // 重置设置
-export async function resetSettings(): Promise<AppSettings> {
+export async function resetSettings(): Promise<void> {
   const bindings: any = await getBindings()
   if (!bindings?.ResetManagedSettings) {
     throw new Error('当前环境不支持重置所有设置')
   }
   await bindings.ResetManagedSettings()
-  localStorage.removeItem(SETTINGS_KEY)
-  return defaultSettings
 }
 
 

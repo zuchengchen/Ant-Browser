@@ -215,14 +215,20 @@ export async function fetchClashImportFromURL(targetURL: string, proxyId = ''): 
   throw new Error('当前环境不支持 URL 导入 Clash 配置')
 }
 
-export async function saveBrowserProxies(proxies: BrowserProxy[]): Promise<boolean> {
-  const bindings: any = await getBindings()
-  if (bindings?.SaveBrowserProxies) {
-    await bindings.SaveBrowserProxies(proxies)
-    return true
+export async function saveBrowserProxies(base: BrowserProxy[], edited: BrowserProxy[], sourceId = ''): Promise<void> {
+  const app = getGoApp()
+  if (app) {
+    await withBackendReady(() => app.BrowserProxyApplyChanges(base, edited, sourceId))
+    return
   }
-  setMockProxies(proxies)
-  return true
+  const baseIds = new Set(base.map(row => row.proxyId))
+  const edits = new Map(edited.map(row => [row.proxyId, row]))
+  const current = getMockProxies().flatMap(row => {
+    if (!baseIds.has(row.proxyId)) return [row]
+    const edit = edits.get(row.proxyId)
+    return edit ? [edit] : []
+  })
+  setMockProxies([...current, ...edited.filter(row => !baseIds.has(row.proxyId))])
 }
 
 /**

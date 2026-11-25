@@ -12,8 +12,6 @@ import (
 	"sort"
 	"strings"
 	"time"
-
-	xproxy "golang.org/x/net/proxy"
 )
 
 type githubRelease struct {
@@ -25,42 +23,6 @@ type githubReleaseAsset struct {
 	Name               string `json:"name"`
 	BrowserDownloadURL string `json:"browser_download_url"`
 	Size               int64  `json:"size"`
-}
-
-func proxyCoreHTTPClient(timeout time.Duration, proxyConfig string) (*http.Client, string, error) {
-	proxyConfig = strings.TrimSpace(proxyConfig)
-	if proxyConfig == "" || strings.EqualFold(proxyConfig, "direct://") {
-		return &http.Client{Timeout: timeout, Transport: proxyCoreDirectTransport()}, "直连", nil
-	}
-	u, err := url.Parse(proxyConfig)
-	if err != nil {
-		return nil, "", fmt.Errorf("代理地址解析失败: %w", err)
-	}
-	if isBadLocalHTTPSProxy(u) {
-		return nil, "", fmt.Errorf("下载代理不能填 %s，127.0.0.1:443 通常不是本机代理端口；请改成真实代理端口，如 socks5://127.0.0.1:7890，或留空直连", u.Host)
-	}
-	scheme := strings.ToLower(u.Scheme)
-	switch scheme {
-	case "http", "https":
-		return &http.Client{Timeout: timeout, Transport: &http.Transport{Proxy: http.ProxyURL(u)}}, "指定代理", nil
-	case "socks5":
-		var auth *xproxy.Auth
-		if u.User != nil {
-			password, _ := u.User.Password()
-			auth = &xproxy.Auth{User: u.User.Username(), Password: password}
-		}
-		dialer, err := xproxy.SOCKS5("tcp", u.Host, auth, xproxy.Direct)
-		if err != nil {
-			return nil, "", fmt.Errorf("SOCKS5 dialer 创建失败: %w", err)
-		}
-		contextDialer, ok := dialer.(xproxy.ContextDialer)
-		if !ok {
-			return nil, "", fmt.Errorf("SOCKS5 dialer 不支持 ContextDialer")
-		}
-		return &http.Client{Timeout: timeout, Transport: &http.Transport{DialContext: contextDialer.DialContext}}, "指定代理", nil
-	default:
-		return nil, "", fmt.Errorf("仅支持 http://、https://、socks5:// 或 direct://")
-	}
 }
 
 func proxyCoreDirectTransport() *http.Transport {

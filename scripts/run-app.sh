@@ -10,6 +10,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BIN="$ROOT_DIR/build/bin/ant-chrome"
+LOG_FILE="$ROOT_DIR/data/logs/dev-stdout.log"
 PORT=19876
 LOCK="$ROOT_DIR/app-instance.lock"
 # 安装版（旧构建）把根目录落在 XDG 数据目录，锁文件在这里
@@ -48,8 +49,9 @@ show_state() {
   fi
   if port_busy; then
     local n
-    n="$(curl -s -m 5 "http://127.0.0.1:$PORT/api/profiles" 2>/dev/null | sed -n 's/.*"count":\([0-9]*\).*/\1/p' | head -1)"
-    [[ -n "${n:-}" ]] && echo "接口实例数: $n（37=项目版 / 110=安装版）"
+    if n="$(curl -fs -m 5 "http://127.0.0.1:$PORT/api/profiles" 2>/dev/null | sed -n 's/.*"count":[[:space:]]*\([0-9][0-9]*\).*/\1/p' | head -n 1)" && [[ -n "$n" ]]; then
+      echo "接口实例数: $n"
+    fi
   fi
 }
 
@@ -130,8 +132,9 @@ if [[ ! -x "$BIN" ]]; then
 fi
 
 cd "$ROOT_DIR"
+mkdir -p "$(dirname "$LOG_FILE")"
 echo "启动：$BIN（工作目录 $ROOT_DIR → appRoot 取当前目录，数据 data/app.db）"
-setsid nohup "$BIN" >"$ROOT_DIR/data/logs/dev-stdout.log" 2>&1 &
+setsid nohup "$BIN" >"$LOG_FILE" 2>&1 &
 disown 2>/dev/null || true
 
 for _ in $(seq 1 20); do
@@ -147,6 +150,6 @@ if [[ -f "$LOCK" ]]; then
   echo "  curl -s http://127.0.0.1:$PORT/api/profiles | head -c 120"
 else
   echo "没等到 app-instance.lock，启动可能失败，看日志："
-  echo "  tail -20 $ROOT_DIR/data/logs/dev-stdout.log"
+  echo "  tail -20 $LOG_FILE"
   exit 1
 fi

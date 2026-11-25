@@ -120,20 +120,20 @@ func (s *proxySourceRefreshScheduler) refreshDueSources(now time.Time) {
 	due := selectDueProxySources(app.getLatestProxies(), now)
 
 	for _, meta := range due {
-		if attemptAt, ok := s.nextAttempt(meta.SourceID); ok && now.Before(attemptAt) {
+		key := proxySourceMetaKey(meta)
+		if attemptAt, ok := s.nextAttempt(key); ok && now.Before(attemptAt) {
 			continue
 		}
-		if _, err := app.refreshProxySourceWithMeta(app.getLatestProxies(), meta, meta.SourceFetchProxy); err != nil {
-			s.setNextAttempt(meta.SourceID, now.Add(proxySourceRefreshFailureRetry))
+		if _, err := app.refreshProxySource(key, "", now); err != nil {
+			s.setNextAttempt(key, now.Add(proxySourceRefreshFailureRetry))
 			logger.New("ProxySource").Warn("订阅源定时刷新失败",
-				logger.F("source_id", meta.SourceID),
-				logger.F("source_url", meta.SourceURL),
+				logger.F("source_id", proxySourceLogID(meta.SourceID)),
 				logger.F("retry_at", now.Add(proxySourceRefreshFailureRetry).Format(time.RFC3339)),
 				logger.F("error", err.Error()),
 			)
 			continue
 		}
-		s.clearNextAttempt(meta.SourceID)
+		s.clearNextAttempt(key)
 	}
 }
 
@@ -142,23 +142,24 @@ func (s *proxySourceRefreshScheduler) refreshDueSources(now time.Time) {
 func selectDueProxySources(pool []BrowserProxy, now time.Time) []proxySourceMeta {
 	due := make([]proxySourceMeta, 0)
 	for _, meta := range collectProxySourceMetas(pool) {
-		if !meta.AutoRefresh {
-			continue
+		if proxySourceRefreshDue(meta, now) {
+			due = append(due, meta)
 		}
-		intervalM := meta.IntervalM
-		if intervalM <= 0 {
-			intervalM = defaultProxySourceRefreshIntervalM
-		}
-		if intervalM < minProxySourceRefreshIntervalM {
-			intervalM = minProxySourceRefreshIntervalM
-		}
-		last := time.UnixMilli(parseProxyTimestampMs(meta.LastRefreshAt))
-		if !last.IsZero() && now.Sub(last) < time.Duration(intervalM)*time.Minute {
-			continue
-		}
-		due = append(due, meta)
 	}
 	return due
+}
+
+func proxySourceRefreshDue(meta proxySourceMeta, now time.Time) bool {
+	if !meta.AutoRefresh {
+		return false
+	}
+	intervalM := meta.IntervalM
+	if intervalM <= 0 {
+		intervalM = defaultProxySourceRefreshIntervalM
+	}
+	intervalM = max(intervalM, minProxySourceRefreshIntervalM)
+	last := parseProxyTimestampMs(meta.LastRefreshAt)
+	return last == 0 || now.Sub(time.UnixMilli(last)) >= time.Duration(intervalM)*time.Minute
 }
 
 func (s *proxySourceRefreshScheduler) nextAttempt(sourceID string) (time.Time, bool) {

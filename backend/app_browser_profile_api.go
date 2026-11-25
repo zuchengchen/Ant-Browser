@@ -70,6 +70,8 @@ func (a *App) BrowserProfileRestore(profileId string) (*BrowserProfile, error) {
 
 // BrowserProfilePermanentlyDelete 从回收站彻底删除实例
 func (a *App) BrowserProfilePermanentlyDelete(profileId string) error {
+	a.maintenanceMu.Lock()
+	defer a.maintenanceMu.Unlock()
 	return a.browserMgr.PermanentlyDelete(profileId)
 }
 

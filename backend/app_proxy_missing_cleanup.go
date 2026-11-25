@@ -71,7 +71,7 @@ func (a *App) BrowserProxyCleanupMissing(sourceId string, dryRun bool) (ProxyMis
 	if dryRun || result.Deletable == 0 {
 		return result, nil
 	}
-	if err := a.SaveBrowserProxies(remaining); err != nil {
+	if err := a.saveBrowserProxiesLocked(remaining); err != nil {
 		return result, fmt.Errorf("清理异常节点失败: %w", err)
 	}
 	result.Deleted = result.Deletable

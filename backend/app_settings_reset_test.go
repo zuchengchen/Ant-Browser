@@ -2,6 +2,8 @@ package backend
 
 import (
 	"ant-chrome/backend/internal/config"
+	"ant-chrome/backend/internal/logger"
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -12,6 +14,9 @@ func TestResetManagedSettingsResetsManagedConfigAndSecrets(t *testing.T) {
 	app := NewApp(root)
 	cfg := config.DefaultConfig()
 	cfg.App.Name = "custom app"
+	cfg.Logging.Level = "warn"
+	logger.Init(context.Background(), cfg.Logging.Level)
+	t.Cleanup(func() { _ = logger.Close() })
 	cfg.Browser.UserDataRoot = filepath.Join(root, "browser-data")
 	cfg.Automation.Enabled = true
 	cfg.Automation.NodeSource = config.AutomationNodeSourceSystem
@@ -61,6 +66,9 @@ func TestResetManagedSettingsResetsManagedConfigAndSecrets(t *testing.T) {
 	if app.config.LaunchServer != defaults.LaunchServer {
 		t.Fatalf("LaunchServer config = %+v, want %+v", app.config.LaunchServer, defaults.LaunchServer)
 	}
+	if app.config.Logging.Level != defaults.Logging.Level || app.GetLogLevel() != "INFO" {
+		t.Fatalf("log level was not reset: config=%s, runtime=%s", app.config.Logging.Level, app.GetLogLevel())
+	}
 	if app.config.App.Name != "custom app" {
 		t.Fatalf("unmanaged app settings changed: %q", app.config.App.Name)
 	}
@@ -83,11 +91,45 @@ func TestResetManagedSettingsResetsManagedConfigAndSecrets(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load persisted config: %v", err)
 	}
-	if persisted.Automation != defaults.Automation || !backupConfigsEqual(persisted.Backup, defaults.Backup) || persisted.LaunchServer != defaults.LaunchServer {
+	if persisted.Automation != defaults.Automation || !backupConfigsEqual(persisted.Backup, defaults.Backup) || persisted.LaunchServer != defaults.LaunchServer || persisted.Logging.Level != defaults.Logging.Level {
 		t.Fatalf("persisted managed settings were not reset: automation=%+v backup=%+v launchServer=%+v", persisted.Automation, persisted.Backup, persisted.LaunchServer)
 	}
 	if persisted.App.Name != "custom app" || persisted.Browser.UserDataRoot != filepath.Join(root, "browser-data") {
 		t.Fatalf("persisted unmanaged settings changed: app=%+v browser.userDataRoot=%q", persisted.App, persisted.Browser.UserDataRoot)
+	}
+}
+
+func TestSaveLogLevelPersistsAndUpdatesExistingLoggers(t *testing.T) {
+	app := NewApp(t.TempDir())
+	app.config = config.DefaultConfig()
+	logger.Init(context.Background(), app.config.Logging.Level)
+	t.Cleanup(func() { _ = logger.Close() })
+	active := logger.New("active component")
+	path := app.resolveAppPath("config.yaml")
+	if err := app.SaveLogLevel(" Debug "); err != nil {
+		t.Fatal(err)
+	}
+	saved, err := LoadConfig(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if saved.Logging.Level != "debug" || app.GetLogLevel() != "DEBUG" || !active.ShouldLog(logger.DEBUG) {
+		t.Fatalf("saved=%s, runtime=%s, existing logger=%s", saved.Logging.Level, app.GetLogLevel(), active.GetLevel())
+	}
+	if err := app.SaveLogLevel("verbose"); err == nil {
+		t.Fatal("invalid log level was accepted")
+	}
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(path, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := app.SaveLogLevel("error"); err == nil {
+		t.Fatal("expected save to fail with a directory as its target")
+	}
+	if app.config.Logging.Level != "debug" || active.GetLevel() != logger.DEBUG {
+		t.Fatal("failed save changed the active log level")
 	}
 }
 

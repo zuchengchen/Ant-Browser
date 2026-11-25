@@ -47,11 +47,11 @@ func TestWaitSocks5ReadyContextHonorsCancellation(t *testing.T) {
 	}
 }
 
-func TestBuildProxyHTTPClientContextHonorsCancellation(t *testing.T) {
+func TestAcquireProxyHTTPClientHonorsCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	_, err := buildProxyHTTPClientContext(
+	_, _, err := AcquireProxyHTTPClient(
 		ctx,
 		"vmess://temporary.example.com",
 		"proxy-1",
@@ -64,6 +64,6 @@ func TestBuildProxyHTTPClientContextHonorsCancellation(t *testing.T) {
 		time.Second,
 	)
 	if !errors.Is(err, context.Canceled) {
-		t.Fatalf("buildProxyHTTPClientContext error = %v, want context.Canceled", err)
+		t.Fatalf("AcquireProxyHTTPClient error = %v, want context.Canceled", err)
 	}
 }

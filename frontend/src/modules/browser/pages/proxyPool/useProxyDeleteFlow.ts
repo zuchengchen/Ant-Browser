@@ -4,7 +4,7 @@ import type { BrowserProxy } from '../../types'
 
 interface UseProxyDeleteFlowOptions {
   proxies: BrowserProxy[]
-  saveProxies: (list: BrowserProxy[]) => Promise<void>
+  saveProxies: (base: BrowserProxy[], edited: BrowserProxy[]) => Promise<void>
   removeSelectedId: (proxyId: string) => void
 }
 
@@ -20,8 +20,7 @@ export function useProxyDeleteFlow({ proxies, saveProxies, removeSelectedId }: U
   const handleDeleteConfirm = async () => {
     if (!deletingId) return
     try {
-      const newProxies = proxies.filter(p => p.proxyId !== deletingId)
-      await saveProxies(newProxies)
+      await saveProxies(proxies.filter(p => p.proxyId === deletingId), [])
       removeSelectedId(deletingId)
       toast.success('代理已删除')
     } catch (error: any) {

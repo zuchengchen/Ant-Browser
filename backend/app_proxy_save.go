@@ -10,6 +10,140 @@ import (
 )
 
 func (a *App) SaveBrowserProxies(proxies []BrowserProxy) error {
+	a.proxySourceRefreshMu.Lock()
+	defer a.proxySourceRefreshMu.Unlock()
+	return a.saveBrowserProxiesLocked(proxies)
+}
+
+// BrowserProxyApplyChanges saves additions, edits and deletions made to a
+// proxy snapshot while retaining updates the user did not edit.
+func (a *App) BrowserProxyApplyChanges(base, edited []BrowserProxy, sourceID string) error {
+	a.proxySourceRefreshMu.Lock()
+	defer a.proxySourceRefreshMu.Unlock()
+	latest, err := a.BrowserProxyList()
+	if err != nil {
+		return err
+	}
+	if sourceID = strings.TrimSpace(sourceID); sourceID != "" && proxySourcePreviewChanged(base, latest, sourceID) {
+		return fmt.Errorf("订阅源已有更新，请重新加载代理池和订阅内容")
+	}
+	merged, changed, err := mergeBrowserProxyEdits(base, edited, latest)
+	if err != nil || !changed {
+		return err
+	}
+	return a.saveBrowserProxiesLocked(merged)
+}
+
+func mergeBrowserProxyEdits(base, edited, latest []BrowserProxy) ([]BrowserProxy, bool, error) {
+	baseByID := proxyRowsByID(base)
+	editedByID := proxyRowsByID(edited)
+	latestByID := proxyRowsByID(latest)
+	merged := make([]BrowserProxy, 0, len(latest))
+	changed := false
+	for _, current := range latest {
+		id := proxyRowID(current)
+		before, inBase := baseByID[id]
+		after, inEdit := editedByID[id]
+		if inBase && !inEdit && id != "__direct__" {
+			changed = true
+			continue
+		}
+		if inBase && inEdit {
+			updated := applyBrowserProxyFields(current, before, after)
+			changed = changed || updated != current
+			current = updated
+		}
+		merged = append(merged, current)
+	}
+	for _, after := range edited {
+		id := proxyRowID(after)
+		before, inBase := baseByID[id]
+		_, exists := latestByID[id]
+		if inBase {
+			if !exists && applyBrowserProxyFields(before, before, after) != before {
+				return nil, false, fmt.Errorf("代理「%s」已删除，请重新加载代理池", before.ProxyName)
+			}
+			continue
+		}
+		if exists {
+			return nil, false, fmt.Errorf("代理 ID 已存在，请重新加载代理池")
+		}
+		changed = true
+		merged = append(merged, after)
+	}
+	return merged, changed, nil
+}
+
+func proxyRowID(row BrowserProxy) string {
+	return strings.ToLower(strings.TrimSpace(row.ProxyId))
+}
+
+func proxyRowsByID(rows []BrowserProxy) map[string]BrowserProxy {
+	index := make(map[string]BrowserProxy, len(rows))
+	for _, row := range rows {
+		if id := proxyRowID(row); id != "" {
+			index[id] = row
+		}
+	}
+	return index
+}
+
+func proxySourcePreviewChanged(base, latest []BrowserProxy, sourceID string) bool {
+	original := make(map[string]BrowserProxy)
+	for _, row := range base {
+		if proxySourceKey(row) == sourceID {
+			original[proxyRowID(row)] = row
+		}
+	}
+	for _, row := range latest {
+		if proxySourceKey(row) != sourceID {
+			continue
+		}
+		id := proxyRowID(row)
+		before, exists := original[id]
+		if !exists || applyBrowserProxyFields(before, before, row) != before {
+			return true
+		}
+		delete(original, id)
+	}
+	return len(original) > 0
+}
+
+func applyBrowserProxyFields(current, base, edited BrowserProxy) BrowserProxy {
+	applyProxyField(&current.ProxyName, base.ProxyName, edited.ProxyName)
+	applyProxyField(&current.ProxyConfig, base.ProxyConfig, edited.ProxyConfig)
+	applyProxyField(&current.PreferredKernel, proxy.NormalizePreferredKernel(base.PreferredKernel), proxy.NormalizePreferredKernel(edited.PreferredKernel))
+	applyProxyField(&current.DnsServers, base.DnsServers, edited.DnsServers)
+	applyProxyField(&current.GroupName, base.GroupName, edited.GroupName)
+	applyProxyField(&current.SourceID, base.SourceID, edited.SourceID)
+	applyProxyField(&current.SourceURL, base.SourceURL, edited.SourceURL)
+	applyProxyField(&current.SourceNamePrefix, base.SourceNamePrefix, edited.SourceNamePrefix)
+	applyProxyField(&current.SourceAutoRefresh, base.SourceAutoRefresh, edited.SourceAutoRefresh)
+	applyProxyField(&current.SourceRefreshIntervalM, base.SourceRefreshIntervalM, edited.SourceRefreshIntervalM)
+	applyProxyField(&current.SourceFetchProxyID, base.SourceFetchProxyID, edited.SourceFetchProxyID)
+	// 手动对齐可更新刷新状态。并发刷新的较新状态优先。
+	if current.SourceLastRefreshAt == base.SourceLastRefreshAt &&
+		current.SourceLastRefreshError == base.SourceLastRefreshError &&
+		current.SourceMissing == base.SourceMissing &&
+		current.SourceMissingSince == base.SourceMissingSince {
+		applyProxyField(&current.SourceLastRefreshAt, base.SourceLastRefreshAt, edited.SourceLastRefreshAt)
+		applyProxyField(&current.SourceLastRefreshError, base.SourceLastRefreshError, edited.SourceLastRefreshError)
+		applyProxyField(&current.SourceMissing, base.SourceMissing, edited.SourceMissing)
+		applyProxyField(&current.SourceMissingSince, base.SourceMissingSince, edited.SourceMissingSince)
+	}
+	return current
+}
+
+func applyProxyField[T comparable](field *T, base, edited T) {
+	if base != edited {
+		*field = edited
+	}
+}
+
+func (a *App) saveBrowserProxiesLocked(proxies []BrowserProxy) error {
+	if a.browserMgr == nil || a.config == nil {
+		return fmt.Errorf("代理数据保存上下文不可用")
+	}
 	log := logger.New("Browser")
 	normalized := proxy.NormalizeBrowserProxies(proxies, generateUUID)
 	// 在持久化前完成拉取代理自愈：一次 ReplaceAll 写回，避免二次全量写与竞态窗口。
@@ -27,7 +161,9 @@ func (a *App) SaveBrowserProxies(proxies []BrowserProxy) error {
 			return err
 		}
 	}
+	unlock := config.LockConfigWrite()
 	a.config.Browser.Proxies = normalized
+	unlock()
 	a.healProfileProxyBindings()
 	if err := a.pruneProxyVirtualGroupMembers(normalized); err != nil {
 		return err

@@ -161,3 +161,40 @@ func TestMofaSiteSurvivesBuiltinUpdate(t *testing.T) {
 		t.Fatalf("site configuration after reinstallation = %q, %v", got, err)
 	}
 }
+
+func TestSyncRepairsIncompleteMofaAtTheInstalledVersion(t *testing.T) {
+	manager := newIsolationManager(t)
+	if err := manager.SyncBuiltinExtensions(); err != nil {
+		t.Fatal(err)
+	}
+	extension, err := manager.ExtensionDAO.Get(MofaImportExtensionID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	site := filepath.Join(extension.InstallDir, "site.json")
+	settings := []byte(`{"site":"https://mofa.example.test","bridgePort":12345}`)
+	if err := os.WriteFile(site, settings, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := manager.ExtensionDAO.SetDefaultInstall(MofaImportExtensionID, false); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(filepath.Join(extension.InstallDir, "toolbar-v1-0-8.js")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(extension.InstallDir, "obsolete-worker.js"), []byte("old"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := manager.SyncBuiltinExtensions(); err != nil {
+		t.Fatal(err)
+	}
+	if err := VerifyMofaImportFiles(extension.InstallDir); err != nil {
+		t.Fatalf("extension still fails bridge verification: %v", err)
+	}
+	if got, err := os.ReadFile(site); err != nil || !slices.Equal(got, settings) {
+		t.Fatalf("installation settings changed: %q, %v", got, err)
+	}
+	if repaired, err := manager.ExtensionDAO.Get(MofaImportExtensionID); err != nil || repaired.DefaultInstall {
+		t.Fatalf("default install setting changed: %+v, %v", repaired, err)
+	}
+}

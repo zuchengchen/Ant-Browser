@@ -1,17 +1,19 @@
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import type { KeyboardEvent as ReactKeyboardEvent } from "react";
-import { BrowserRouter as Router } from "react-router-dom";
+import { createBrowserRouter, RouterProvider } from "react-router-dom";
 import { ThemeProvider } from "./shared/theme";
 import { Layout } from "./shared/layout";
-import { MODAL_EXIT_DURATION_MS, ToastContainer, Modal, Button, Loading, toast } from "./shared/components";
+import { Alert, MODAL_EXIT_DURATION_MS, ToastContainer, Modal, Button, Loading, toast } from "./shared/components";
 import { AlertCircle, X } from "lucide-react";
 import { AppRoutes } from "./routes/AppRoutes";
 import { lazyNamed } from "./routes/lazyNamed";
 import { useNotificationStore } from "./store/notificationStore";
 import { useBackupStore } from "./store/backupStore";
+import { waitForAppReady } from "./utils/appReady";
 import { installWailsOperationLogger } from "./utils/wailsOperationLogger";
 import {
   ForceQuit as ForceQuitApp,
+  GetDatabaseRecoveryNotice,
   QuitAppOnly as QuitAppOnlyApp,
 } from "./wailsjs/go/main/App";
 import {
@@ -150,6 +152,65 @@ function useGlobalErrorNotifications() {
       window.removeEventListener("unhandledrejection", handleUnhandledRejection);
     };
   }, [addNotification]);
+}
+
+function DatabaseRecoveryNotice() {
+  const [notice, setNotice] = useState<Record<string, string> | null>(null);
+
+  useEffect(() => {
+    const app = (window as Window & { go?: { main?: { App?: Record<string, unknown> } } }).go?.main?.App;
+    if (typeof app?.GetDatabaseRecoveryNotice !== "function") return;
+
+    let disposed = false;
+    void waitForAppReady()
+      .then(() => disposed ? null : GetDatabaseRecoveryNotice())
+      .then((recovery) => {
+        if (disposed || !recovery) return;
+        const { reason, backupPath, parkedPath } = recovery;
+        if (!reason && !backupPath && !parkedPath) return;
+
+        setNotice(recovery);
+        useNotificationStore.getState().addNotification({
+          type: "warning",
+          title: "数据库已重建",
+          message: [
+            "旧数据库已损坏，历史实例、代理和插件记录未恢复。",
+            reason && `原因：${reason}`,
+            backupPath && `损坏库备份：${backupPath}`,
+            parkedPath && `原库保留位置：${parkedPath}`,
+          ].filter(Boolean).join("\n"),
+          source: "system",
+          dedupeKey: `system:database-recovery:${backupPath || parkedPath}`,
+        });
+      })
+      .catch((error: unknown) => console.warn("读取数据库重建通知失败", error));
+
+    return () => { disposed = true; };
+  }, []);
+
+  if (!notice) return null;
+
+  return (
+    <div role="alert">
+      <Alert
+        type="warning"
+        title="数据库已重建"
+        className="mb-4"
+        message={(
+          <div className="space-y-2">
+            <p>旧数据库已损坏，历史实例、代理和插件记录未恢复。</p>
+            <details className="space-y-1">
+              <summary className="cursor-pointer">查看备份位置和重建原因</summary>
+              {notice.backupPath && <p className="break-all">损坏库备份：{notice.backupPath}</p>}
+              {notice.parkedPath && <p className="break-all">原库保留位置：{notice.parkedPath}</p>}
+              {notice.reason && <p className="break-words">原因：{notice.reason}</p>}
+            </details>
+            <Button variant="secondary" size="sm" onClick={() => setNotice(null)}>知道了</Button>
+          </div>
+        )}
+      />
+    </div>
+  );
 }
 
 type CloseAction = "tray" | "app-only" | "app-and-browser";
@@ -403,7 +464,7 @@ function WindowCloseControl() {
   );
 }
 
-function App() {
+function AppLayout() {
   useEffect(() => {
     installWailsOperationLogger();
   }, []);
@@ -432,23 +493,32 @@ function App() {
   }, []);
 
   return (
-    <ThemeProvider>
-      <Router>
-        <Layout closeControl={<WindowCloseControl />}>
-          <Suspense fallback={routeFallback}>
-            <AppRoutes />
-          </Suspense>
-        </Layout>
-        <ToastContainer />
-        <Suspense fallback={null}>
-          {quickLaunchOpen ? (
-            <QuickLaunchModal
-              open={quickLaunchOpen}
-              onClose={() => setQuickLaunchOpen(false)}
-            />
-          ) : null}
+    <>
+      <Layout closeControl={<WindowCloseControl />}>
+        <DatabaseRecoveryNotice />
+        <Suspense fallback={routeFallback}>
+          <AppRoutes />
         </Suspense>
-      </Router>
+      </Layout>
+      <ToastContainer />
+      <Suspense fallback={null}>
+        {quickLaunchOpen ? (
+          <QuickLaunchModal
+            open={quickLaunchOpen}
+            onClose={() => setQuickLaunchOpen(false)}
+          />
+        ) : null}
+      </Suspense>
+    </>
+  );
+}
+
+const router = createBrowserRouter([{ path: "*", element: <AppLayout /> }]);
+
+function App() {
+  return (
+    <ThemeProvider>
+      <RouterProvider router={router} />
     </ThemeProvider>
   );
 }

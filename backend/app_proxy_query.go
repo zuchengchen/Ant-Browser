@@ -3,6 +3,7 @@ package backend
 import (
 	"ant-chrome/backend/internal/browser"
 	"ant-chrome/backend/internal/config"
+	"ant-chrome/backend/internal/logger"
 	"ant-chrome/backend/internal/proxy"
 	"context"
 	"fmt"
@@ -15,11 +16,7 @@ func (a *App) BrowserProxyList() ([]BrowserProxy, error) {
 	if a == nil || a.browserMgr == nil || a.config == nil {
 		return nil, fmt.Errorf("代理数据加载上下文不可用")
 	}
-	proxies, err := browser.LoadLatestProxiesWithFallback(a.browserMgr.ProxyDAO, a.config.Browser.Proxies)
-	if err != nil {
-		return nil, err
-	}
-	return proxies, nil
+	return browser.LoadLatestProxiesWithFallback(a.browserMgr.ProxyDAO, a.proxyConfigFallback())
 }
 
 // BrowserProxyListGroups 获取所有代理分组名称
@@ -27,7 +24,7 @@ func (a *App) BrowserProxyListGroups() ([]string, error) {
 	if a == nil || a.browserMgr == nil || a.config == nil {
 		return nil, fmt.Errorf("代理数据加载上下文不可用")
 	}
-	return browser.LoadProxyGroupsWithFallback(a.browserMgr.ProxyDAO, a.config.Browser.Proxies)
+	return browser.LoadProxyGroupsWithFallback(a.browserMgr.ProxyDAO, a.proxyConfigFallback())
 }
 
 // BrowserProxyListByGroup 按分组名称查询代理
@@ -35,7 +32,7 @@ func (a *App) BrowserProxyListByGroup(groupName string) ([]BrowserProxy, error) 
 	if a == nil || a.browserMgr == nil || a.config == nil {
 		return nil, fmt.Errorf("代理数据加载上下文不可用")
 	}
-	proxies, err := browser.LoadProxiesByGroupWithFallback(a.browserMgr.ProxyDAO, groupName, a.config.Browser.Proxies)
+	proxies, err := browser.LoadProxiesByGroupWithFallback(a.browserMgr.ProxyDAO, groupName, a.proxyConfigFallback())
 	if err != nil {
 		return nil, err
 	}
@@ -225,5 +222,18 @@ func resolveProxyConfigForApp(proxyConfig string, proxies []BrowserProxy, proxyI
 
 // getLatestProxies 获取最新的代理列表，优先从数据库读取
 func (a *App) getLatestProxies() []BrowserProxy {
-	return browser.LatestProxiesWithFallback(a.browserMgr.ProxyDAO, a.config.Browser.Proxies)
+	proxies, err := a.BrowserProxyList()
+	if err != nil {
+		logger.New("BrowserProxy").Error("读取最新代理目录失败", logger.F("error", err))
+	}
+	return proxies
+}
+
+func (a *App) proxyConfigFallback() []BrowserProxy {
+	if a.config == nil || a.browserMgr != nil && a.browserMgr.ProxyDAO != nil {
+		return nil
+	}
+	unlock := config.LockConfigWrite()
+	defer unlock()
+	return a.config.Browser.Proxies
 }

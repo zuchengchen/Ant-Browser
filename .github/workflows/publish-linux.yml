@@ -72,6 +72,7 @@ jobs:
           set -euo pipefail
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
+            binutils \
             build-essential \
             ca-certificates \
             curl \
@@ -116,6 +117,13 @@ jobs:
           dpkg-deb -c "$deb_file" >/dev/null
           deb_root="$(mktemp -d)"
           dpkg-deb -x "$deb_file" "$deb_root"
+          depends="$(dpkg-deb -f "$deb_file" Depends)"
+          if readelf --dynamic --wide "$deb_root/opt/ant-browser/ant-chrome" | grep -F '[libwebkit2gtk-4.1.so.0]'; then
+            [[ ", $depends," == *", libwebkit2gtk-4.1-0,"* && "$depends" != *libwebkit2gtk-4.0-37* ]]
+          else
+            readelf --dynamic --wide "$deb_root/opt/ant-browser/ant-chrome" | grep -F '[libwebkit2gtk-4.0.so.37]'
+            [[ ", $depends," == *", libwebkit2gtk-4.0-37,"* && "$depends" != *libwebkit2gtk-4.1-0* ]]
+          fi
           desktop="$deb_root/usr/share/applications/ant-browser.desktop"
           grep -Fx 'Exec=/opt/ant-browser/ant-chrome %u' "$desktop"
           grep -Fx 'MimeType=x-scheme-handler/ant-browser;' "$desktop"

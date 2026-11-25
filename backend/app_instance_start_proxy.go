@@ -90,11 +90,9 @@ func (a *App) resolveBrowserStartProxy(input browserStartInput, profile *Browser
 	log.Info("代理配置检查",
 		logger.F("profile_id", profileID),
 		logger.F("proxy_id", profile.ProxyId),
-		logger.F("profile_proxy_config", profile.ProxyConfig),
 		logger.F("temporary_proxy", usingTemporaryProxy),
 		logger.F("temporary_proxy_id", input.TemporaryProxyID),
-		logger.F("temporary_proxy_config", input.TemporaryProxyConfig),
-		logger.F("resolved_proxy_config", resolvedProxyConfig),
+		logger.F("resolved_proxy_id", resolvedProxyID),
 	)
 	proxyURL, bridgeRef, releaseBridge, err := a.acquireBrowserProxyBridge(profileID, profile.ProfileName, resolvedProxyID, resolvedProxyConfig, proxies, connectorType)
 	if err != nil {

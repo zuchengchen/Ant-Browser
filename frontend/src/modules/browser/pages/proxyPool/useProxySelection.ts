@@ -6,7 +6,7 @@ import { isSelectableProxyDisplay, type ProxyDisplayInfo } from './helpers'
 interface UseProxySelectionOptions {
   proxies: BrowserProxy[]
   filteredList: ProxyDisplayInfo[]
-  saveProxies: (list: BrowserProxy[]) => Promise<void>
+  saveProxies: (base: BrowserProxy[], edited: BrowserProxy[]) => Promise<void>
 }
 
 export function useProxySelection({ proxies, filteredList, saveProxies }: UseProxySelectionOptions) {
@@ -45,8 +45,7 @@ export function useProxySelection({ proxies, filteredList, saveProxies }: UsePro
 
   const handleBatchDeleteConfirm = async () => {
     try {
-      const newProxies = proxies.filter(p => !selectedIds.has(p.proxyId))
-      await saveProxies(newProxies)
+      await saveProxies(proxies.filter(p => selectedIds.has(p.proxyId)), [])
       toast.success(`已删除 ${selectedIds.size} 个代理`)
       setSelectedIds(new Set())
     } catch (error: any) {

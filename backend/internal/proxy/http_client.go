@@ -2,10 +2,12 @@ package proxy
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"ant-chrome/backend/internal/config"
@@ -14,39 +16,26 @@ import (
 	xproxy "golang.org/x/net/proxy"
 )
 
-// buildProxyHTTPClient 根据代理配置构建 HTTP 客户端，统一用于测速/健康检测场景。
-func BuildProxyHTTPClient(
-	src string,
-	proxyId string,
-	proxies []config.BrowserProxy,
-	xrayMgr *XrayManager,
-	singboxMgr *SingBoxManager,
-	clashMgr *ClashManager,
-	mieruMgr *MieruManager,
-	connectorType string,
-	timeout time.Duration,
-) (*http.Client, error) {
-	return buildProxyHTTPClientContext(context.Background(), src, proxyId, proxies, xrayMgr, singboxMgr, clashMgr, mieruMgr, connectorType, timeout)
-}
+var ErrProxyConfigUnavailable = errors.New("代理不存在或配置为空")
 
-func buildProxyHTTPClient(
-	src string,
-	proxyId string,
-	proxies []config.BrowserProxy,
-	xrayMgr *XrayManager,
-	singboxMgr *SingBoxManager,
-	clashMgr *ClashManager,
-	mieruMgr *MieruManager,
-	connectorType string,
-	timeout time.Duration,
-) (*http.Client, error) {
-	return buildProxyHTTPClientContext(context.Background(), src, proxyId, proxies, xrayMgr, singboxMgr, clashMgr, mieruMgr, connectorType, timeout)
-}
-
-// buildProbeHTTPClientContext 构建短时探测（测速/IP 健康/连通性）专用的 HTTP 客户端。
-// 与普通客户端不同，它对桥接进程持有引用计数；返回的 release 必须在探测结束后调用：
-// 关闭空闲连接、释放引用，并在无人占用时立即回收桥接进程，避免批量探测后内核进程滞留。
 func buildProbeHTTPClientContext(
+	ctx context.Context,
+	src string,
+	proxyId string,
+	proxies []config.BrowserProxy,
+	xrayMgr *XrayManager,
+	singboxMgr *SingBoxManager,
+	clashMgr *ClashManager,
+	mieruMgr *MieruManager,
+	connectorType string,
+	timeout time.Duration,
+) (*http.Client, func(), error) {
+	return AcquireProxyHTTPClient(ctx, src, proxyId, proxies, xrayMgr, singboxMgr, clashMgr, mieruMgr, connectorType, timeout)
+}
+
+// AcquireProxyHTTPClient holds a bridge reference until release is called after
+// all requests and response bodies have finished.
+func AcquireProxyHTTPClient(
 	ctx context.Context,
 	src string,
 	proxyId string,
@@ -64,7 +53,11 @@ func buildProbeHTTPClientContext(
 	if err := ctx.Err(); err != nil {
 		return nil, nil, err
 	}
-	src = strings.TrimSpace(resolveProxyConfig(src, proxies, proxyId))
+	proxyId = strings.TrimSpace(proxyId)
+	src = resolveProxyConfig(src, proxies, proxyId)
+	if src == "" && proxyId != "" {
+		return nil, nil, fmt.Errorf("%w: %s", ErrProxyConfigUnavailable, proxyId)
+	}
 	log := logger.New("ProxyHTTPClient")
 	resolution, err := ResolveProxyKernelForConnector(src, proxies, proxyId, connectorType)
 	if err != nil {
@@ -74,128 +67,6 @@ func buildProbeHTTPClientContext(
 		)
 		return nil, nil, err
 	}
-	closeOnly := func(client *http.Client) func() {
-		return func() { client.CloseIdleConnections() }
-	}
-	l := strings.ToLower(strings.TrimSpace(src))
-	if resolution.Kernel == ProxyKernelNative || l == "" || l == "direct://" {
-		client, err := buildProxyHTTPClientContext(ctx, src, proxyId, proxies, xrayMgr, singboxMgr, clashMgr, mieruMgr, connectorType, timeout)
-		if err != nil {
-			return nil, nil, err
-		}
-		return client, closeOnly(client), nil
-	}
-
-	switch resolution.Kernel {
-	case ProxyKernelMieru:
-		if mieruMgr == nil {
-			return nil, nil, fmt.Errorf("mieru 管理器未初始化")
-		}
-		socks5Addr, key, err := mieruMgr.ensureBridgeContext(ctx, src, proxies, proxyId, true)
-		if err != nil {
-			return nil, nil, fmt.Errorf("mieru 桥接启动失败: %w", err)
-		}
-		client, err := buildSocks5HTTPClient(strings.TrimPrefix(socks5Addr, "socks5://"), timeout)
-		if err != nil {
-			mieruMgr.ReleaseBridge(key)
-			mieruMgr.ReclaimBridgeIfIdle(key)
-			return nil, nil, err
-		}
-		return client, func() {
-			client.CloseIdleConnections()
-			mieruMgr.ReleaseBridge(key)
-			mieruMgr.ReclaimBridgeIfIdle(key)
-		}, nil
-	case ProxyKernelMihomo:
-		if clashMgr == nil {
-			return nil, nil, fmt.Errorf("Mihomo 管理器未初始化")
-		}
-		proxyAddr, key, err := clashMgr.ensureNodeBridgeContext(ctx, src, proxies, proxyId, true)
-		if err != nil {
-			return nil, nil, fmt.Errorf("Mihomo 桥接启动失败: %w", err)
-		}
-		client, err := buildHTTPProxyClient(proxyAddr, timeout)
-		if err != nil {
-			clashMgr.ReleaseNodeBridge(key)
-			clashMgr.ReclaimBridgeIfIdle(key)
-			return nil, nil, err
-		}
-		return client, func() {
-			client.CloseIdleConnections()
-			clashMgr.ReleaseNodeBridge(key)
-			clashMgr.ReclaimBridgeIfIdle(key)
-		}, nil
-	case ProxyKernelSingBox:
-		if singboxMgr == nil {
-			return nil, nil, fmt.Errorf("sing-box 管理器未初始化")
-		}
-		socks5Addr, key, err := singboxMgr.ensureBridgeContext(ctx, src, proxies, proxyId, true)
-		if err != nil {
-			return nil, nil, fmt.Errorf("sing-box 桥接启动失败: %w", err)
-		}
-		client, err := buildSocks5HTTPClient(strings.TrimPrefix(socks5Addr, "socks5://"), timeout)
-		if err != nil {
-			singboxMgr.ReleaseBridge(key)
-			singboxMgr.ReclaimBridgeIfIdle(key)
-			return nil, nil, err
-		}
-		return client, func() {
-			client.CloseIdleConnections()
-			singboxMgr.ReleaseBridge(key)
-			singboxMgr.ReclaimBridgeIfIdle(key)
-		}, nil
-	case ProxyKernelXray:
-		if xrayMgr == nil {
-			return nil, nil, fmt.Errorf("xray 管理器未初始化")
-		}
-		socks5Addr, key, err := xrayMgr.ensureBridgeContext(ctx, src, proxies, proxyId, true)
-		if err != nil {
-			return nil, nil, fmt.Errorf("xray 桥接启动失败: %w", err)
-		}
-		client, err := buildSocks5HTTPClient(strings.TrimPrefix(socks5Addr, "socks5://"), timeout)
-		if err != nil {
-			xrayMgr.ReleaseBridge(key)
-			xrayMgr.ReclaimBridgeIfIdle(key)
-			return nil, nil, err
-		}
-		return client, func() {
-			client.CloseIdleConnections()
-			xrayMgr.ReleaseBridge(key)
-			xrayMgr.ReclaimBridgeIfIdle(key)
-		}, nil
-	default:
-		return nil, nil, fmt.Errorf("无法为协议 %s 选择代理内核", resolution.Protocol)
-	}
-}
-
-func buildProxyHTTPClientContext(
-	ctx context.Context,
-	src string,
-	proxyId string,
-	proxies []config.BrowserProxy,
-	xrayMgr *XrayManager,
-	singboxMgr *SingBoxManager,
-	clashMgr *ClashManager,
-	mieruMgr *MieruManager,
-	connectorType string,
-	timeout time.Duration,
-) (*http.Client, error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	src = strings.TrimSpace(resolveProxyConfig(src, proxies, proxyId))
-	log := logger.New("ProxyHTTPClient")
-	resolution, err := ResolveProxyKernelForConnector(src, proxies, proxyId, connectorType)
-	if err != nil {
-		log.Warn("代理内核解析失败",
-			logger.F("proxy_id", proxyId),
-			logger.F("error", err.Error()),
-		)
-		return nil, err
-	}
 	log.Info("代理 HTTP 客户端内核选择",
 		logger.F("proxy_id", proxyId),
 		logger.F("protocol", resolution.Protocol),
@@ -204,103 +75,125 @@ func buildProxyHTTPClientContext(
 		logger.F("supported_kernels", strings.Join(resolution.SupportedKernels, ",")),
 		logger.F("reason", resolution.Reason),
 	)
-	l := strings.ToLower(strings.TrimSpace(src))
-	if resolution.Kernel == ProxyKernelNative || l == "" || l == "direct://" {
-		if strings.HasPrefix(l, "socks5://") {
-			u, err := url.Parse(src)
-			if err != nil {
-				return nil, fmt.Errorf("SOCKS5 地址解析失败: %w", err)
-			}
-			var auth *xproxy.Auth
-			if u.User != nil {
-				pass, _ := u.User.Password()
-				auth = &xproxy.Auth{User: u.User.Username(), Password: pass}
-			}
-			dialer, err := xproxy.SOCKS5("tcp", u.Host, auth, xproxy.Direct)
-			if err != nil {
-				return nil, fmt.Errorf("SOCKS5 dialer 创建失败: %w", err)
-			}
-			contextDialer, ok := dialer.(xproxy.ContextDialer)
-			if !ok {
-				return nil, fmt.Errorf("SOCKS5 dialer 不支持 ContextDialer")
-			}
-			return &http.Client{Transport: &http.Transport{DialContext: contextDialer.DialContext}, Timeout: timeout}, nil
-		}
-		if strings.HasPrefix(l, "http://") || strings.HasPrefix(l, "https://") {
-			proxyURL, err := url.Parse(src)
-			if err != nil {
-				return nil, fmt.Errorf("代理地址解析失败: %w", err)
-			}
-			return &http.Client{Transport: &http.Transport{Proxy: http.ProxyURL(proxyURL)}, Timeout: timeout}, nil
-		}
-		return &http.Client{Timeout: timeout}, nil
-	}
-
+	var client *http.Client
+	var releaseBridge func()
 	switch resolution.Kernel {
+	case ProxyKernelNative:
+		client, err = buildNativeProxyHTTPClient(src, resolution.Protocol, timeout)
 	case ProxyKernelMieru:
 		if mieruMgr == nil {
-			log.Warn("mieru 管理器未初始化", logger.F("proxy_id", proxyId))
-			return nil, fmt.Errorf("mieru 管理器未初始化")
+			return nil, nil, fmt.Errorf("mieru 管理器未初始化")
 		}
-		socks5Addr, err := mieruMgr.EnsureBridgeContext(ctx, src, proxies, proxyId)
-		if err != nil {
-			log.Warn("mieru 桥接启动失败", logger.F("proxy_id", proxyId), logger.F("error", err.Error()))
-			return nil, fmt.Errorf("mieru 桥接启动失败: %w", err)
+		socks5Addr, key, bridgeErr := mieruMgr.ensureBridgeContext(ctx, src, proxies, proxyId, true)
+		if bridgeErr != nil {
+			return nil, nil, fmt.Errorf("mieru 桥接启动失败: %w", bridgeErr)
 		}
-		log.Info("mieru 桥接已就绪", logger.F("proxy_id", proxyId), logger.F("socks5_addr", socks5Addr))
-		return buildSocks5HTTPClient(strings.TrimPrefix(socks5Addr, "socks5://"), timeout)
+		client, err = buildSocks5HTTPClient(strings.TrimPrefix(socks5Addr, "socks5://"), timeout)
+		releaseBridge = func() {
+			mieruMgr.ReleaseBridge(key)
+			mieruMgr.ReclaimBridgeIfIdle(key)
+		}
 	case ProxyKernelMihomo:
 		if clashMgr == nil {
-			log.Warn("Mihomo 管理器未初始化", logger.F("proxy_id", proxyId))
-			return nil, fmt.Errorf("Mihomo 管理器未初始化")
+			return nil, nil, fmt.Errorf("Mihomo 管理器未初始化")
 		}
-		proxyAddr, err := clashMgr.EnsureNodeBridgeContext(ctx, src, proxies, proxyId)
-		if err != nil {
-			log.Warn("Mihomo 桥接启动失败", logger.F("proxy_id", proxyId), logger.F("error", err.Error()))
-			return nil, fmt.Errorf("Mihomo 桥接启动失败: %w", err)
+		proxyAddr, key, bridgeErr := clashMgr.ensureNodeBridgeContext(ctx, src, proxies, proxyId, true)
+		if bridgeErr != nil {
+			return nil, nil, fmt.Errorf("Mihomo 桥接启动失败: %w", bridgeErr)
 		}
-		log.Info("Mihomo 桥接已就绪", logger.F("proxy_id", proxyId), logger.F("proxy_addr", proxyAddr))
-		return buildHTTPProxyClient(proxyAddr, timeout)
+		client, err = buildHTTPProxyClient(proxyAddr, timeout)
+		releaseBridge = func() {
+			clashMgr.ReleaseNodeBridge(key)
+			clashMgr.ReclaimBridgeIfIdle(key)
+		}
 	case ProxyKernelSingBox:
 		if singboxMgr == nil {
-			log.Warn("sing-box 管理器未初始化", logger.F("proxy_id", proxyId))
-			return nil, fmt.Errorf("sing-box 管理器未初始化")
+			return nil, nil, fmt.Errorf("sing-box 管理器未初始化")
 		}
-		socks5Addr, err := singboxMgr.EnsureBridgeContext(ctx, src, proxies, proxyId)
-		if err != nil {
-			log.Warn("sing-box 桥接启动失败", logger.F("proxy_id", proxyId), logger.F("error", err.Error()))
-			return nil, fmt.Errorf("sing-box 桥接启动失败: %w", err)
+		socks5Addr, key, bridgeErr := singboxMgr.ensureBridgeContext(ctx, src, proxies, proxyId, true)
+		if bridgeErr != nil {
+			return nil, nil, fmt.Errorf("sing-box 桥接启动失败: %w", bridgeErr)
 		}
-		log.Info("sing-box 桥接已就绪", logger.F("proxy_id", proxyId), logger.F("socks5_addr", socks5Addr))
-		return buildSocks5HTTPClient(strings.TrimPrefix(socks5Addr, "socks5://"), timeout)
+		client, err = buildSocks5HTTPClient(strings.TrimPrefix(socks5Addr, "socks5://"), timeout)
+		releaseBridge = func() {
+			singboxMgr.ReleaseBridge(key)
+			singboxMgr.ReclaimBridgeIfIdle(key)
+		}
 	case ProxyKernelXray:
 		if xrayMgr == nil {
-			log.Warn("xray 管理器未初始化", logger.F("proxy_id", proxyId))
-			return nil, fmt.Errorf("xray 管理器未初始化")
+			return nil, nil, fmt.Errorf("xray 管理器未初始化")
 		}
-		socks5Addr, err := xrayMgr.EnsureBridgeContext(ctx, src, proxies, proxyId)
-		if err != nil {
-			log.Warn("xray 桥接启动失败", logger.F("proxy_id", proxyId), logger.F("error", err.Error()))
-			return nil, fmt.Errorf("xray 桥接启动失败: %w", err)
+		socks5Addr, key, bridgeErr := xrayMgr.ensureBridgeContext(ctx, src, proxies, proxyId, true)
+		if bridgeErr != nil {
+			return nil, nil, fmt.Errorf("xray 桥接启动失败: %w", bridgeErr)
 		}
-		log.Info("xray 桥接已就绪", logger.F("proxy_id", proxyId), logger.F("socks5_addr", socks5Addr))
-		return buildSocks5HTTPClient(strings.TrimPrefix(socks5Addr, "socks5://"), timeout)
+		client, err = buildSocks5HTTPClient(strings.TrimPrefix(socks5Addr, "socks5://"), timeout)
+		releaseBridge = func() {
+			xrayMgr.ReleaseBridge(key)
+			xrayMgr.ReclaimBridgeIfIdle(key)
+		}
 	default:
-		return nil, fmt.Errorf("无法为协议 %s 选择代理内核", resolution.Protocol)
+		return nil, nil, fmt.Errorf("无法为协议 %s 选择代理内核", resolution.Protocol)
+	}
+	if err != nil {
+		if releaseBridge != nil {
+			releaseBridge()
+		}
+		return nil, nil, err
+	}
+	var once sync.Once
+	return client, func() {
+		once.Do(func() {
+			client.CloseIdleConnections()
+			if releaseBridge != nil {
+				releaseBridge()
+			}
+		})
+	}, nil
+}
+
+func buildNativeProxyHTTPClient(src, protocol string, timeout time.Duration) (*http.Client, error) {
+	if protocol == "direct" {
+		return &http.Client{Timeout: timeout, Transport: &http.Transport{}}, nil
+	}
+	address, _, err := ParseProxyNode(src)
+	if err != nil || address == "" {
+		return nil, fmt.Errorf("代理地址解析失败")
+	}
+	switch protocol {
+	case "socks5":
+		u, err := url.Parse(address)
+		if err != nil {
+			return nil, fmt.Errorf("SOCKS5 地址解析失败")
+		}
+		var auth *xproxy.Auth
+		if u.User != nil {
+			pass, _ := u.User.Password()
+			auth = &xproxy.Auth{User: u.User.Username(), Password: pass}
+		}
+		return newSocks5HTTPClient(u.Host, auth, timeout)
+	case "http", "https":
+		return buildHTTPProxyClient(address, timeout)
+	default:
+		return nil, fmt.Errorf("不支持的直连协议: %s", protocol)
 	}
 }
 
 func buildHTTPProxyClient(proxyAddr string, timeout time.Duration) (*http.Client, error) {
 	proxyURL, err := url.Parse(proxyAddr)
 	if err != nil {
-		return nil, fmt.Errorf("HTTP 代理地址解析失败: %w", err)
+		return nil, fmt.Errorf("HTTP 代理地址解析失败")
 	}
 	transport := &http.Transport{Proxy: http.ProxyURL(proxyURL)}
 	return &http.Client{Transport: transport, Timeout: timeout}, nil
 }
 
 func buildSocks5HTTPClient(socks5Host string, timeout time.Duration) (*http.Client, error) {
-	dialer, err := xproxy.SOCKS5("tcp", socks5Host, nil, xproxy.Direct)
+	return newSocks5HTTPClient(socks5Host, nil, timeout)
+}
+
+func newSocks5HTTPClient(socks5Host string, auth *xproxy.Auth, timeout time.Duration) (*http.Client, error) {
+	dialer, err := xproxy.SOCKS5("tcp", socks5Host, auth, xproxy.Direct)
 	if err != nil {
 		return nil, fmt.Errorf("SOCKS5 dialer 创建失败: %w", err)
 	}

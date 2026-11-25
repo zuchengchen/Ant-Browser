@@ -3,6 +3,7 @@ package browser
 import (
 	"ant-chrome/backend/internal/apppath"
 	"ant-chrome/backend/internal/config"
+	"context"
 	"net/http"
 	"os/exec"
 	"sync"
@@ -158,7 +159,7 @@ type RuntimeEventEmitter func(eventName string, optionalData ...interface{})
 
 type ProfileRuntimeDetector func(profile *Profile) bool
 
-type CoreDownloadHTTPClientFactory func(proxyConfig string, timeout time.Duration) (*http.Client, error)
+type CoreDownloadHTTPClientFactory func(ctx context.Context, proxyConfig string, timeout time.Duration) (*http.Client, func(), error)
 
 // Manager 浏览器管理器
 type Manager struct {

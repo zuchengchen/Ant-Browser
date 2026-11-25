@@ -1,8 +1,13 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { RotateCcw, Save } from 'lucide-react'
 
 import { Button, Card, ThemeSwitcher, toast } from '../../shared/components'
 import { useTheme } from '../../shared/theme'
+import {
+  isNotificationHistoryEnabled,
+  resetNotificationHistory,
+  saveNotificationHistory,
+} from '../../store/notificationStore'
 import { errorMessage } from '../../utils/errors'
 import {
   automationProbeSystemNode,
@@ -11,8 +16,8 @@ import {
   fetchAutomationState,
   fetchKeyPouchSettings,
   fetchLaunchServerSettings,
+  fetchLogLevel,
   fetchMofaSettings,
-  fetchSettings,
   installAutomationRuntime,
   resetSettings,
   saveAutomationRuntimeSettings,
@@ -20,16 +25,15 @@ import {
   saveAutomationSettings,
   saveKeyPouchSettings,
   saveLaunchServerSettings,
+  saveLogLevel,
   saveMofaSettings,
-  saveSettings,
 } from './api'
 import type { AutomationNodeSource, AutomationRuntimeCheck, AutomationState, AutomationSystemNodeProbe, KeyPouchSettings, MofaSettings } from './api'
 import { AutomationSettingsCard } from './components/AutomationSettingsCard'
 import type { MofaSettingsDraft } from './components/MofaSettingsFields'
 import { useSettingsProgressEffects } from './hooks/useSettingsProgressEffects'
-import { SettingsAdvancedCard, SettingsBasicFeatureCards } from './components/SettingsGeneralCards'
-import { defaultSettings } from './types'
-import type { AppSettings } from './types'
+import { SettingsBasicCard, SettingsDiagnosticsCard } from './components/SettingsGeneralCards'
+import type { LogLevel } from './types'
 import type { AutomationRuntimeProgress } from './progress'
 
 type AutomationBusyState = 'none' | 'toggle' | 'probe' | 'runtime' | 'package' | 'install' | 'check'
@@ -54,8 +58,12 @@ function mofaOrigin(siteUrl: string) {
 
 export function SettingsPage() {
   const { setTheme } = useTheme()
-  const [settings, setSettings] = useState<AppSettings>(defaultSettings)
-  const [savedSettings, setSavedSettings] = useState(settings)
+  const [enableNotifications, setEnableNotifications] = useState(isNotificationHistoryEnabled)
+  const [savedEnableNotifications, setSavedEnableNotifications] = useState(enableNotifications)
+  const [logLevel, setLogLevel] = useState<LogLevel | null>(null)
+  const [savedLogLevel, setSavedLogLevel] = useState<LogLevel | null>(null)
+  const [logLevelError, setLogLevelError] = useState('')
+  const logLevelRequest = useRef(0)
   const [keyPouch, setKeyPouch] = useState<KeyPouchSettings | null | undefined>(undefined)
   const [siteUrlDraft, setSiteUrlDraft] = useState('')
   const [siteError, setSiteError] = useState('')
@@ -76,7 +84,8 @@ export function SettingsPage() {
   const [launchServerSaving, setLaunchServerSaving] = useState(false)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const generalChanged = settings !== savedSettings
+  const notificationHistoryChanged = enableNotifications !== savedEnableNotifications
+  const logLevelChanged = logLevel !== null && logLevel !== savedLogLevel
   const siteChanged = keyPouch !== undefined && siteUrlDraft.trim() !== (keyPouch?.siteUrl ?? '')
   const canReuseMofaCredentials = !!mofaSettings?.siteUrl && mofaOrigin(mofaDraft.siteUrl) === mofaSettings.siteUrl &&
     mofaDraft.username.trim() === mofaSettings.username
@@ -88,6 +97,7 @@ export function SettingsPage() {
 
   useEffect(() => {
     void loadSettings()
+    void loadLogLevel()
   }, [])
 
   useSettingsProgressEffects({
@@ -130,31 +140,40 @@ export function SettingsPage() {
     }
   }
 
+  const loadLogLevel = async () => {
+    const request = ++logLevelRequest.current
+    setLogLevel(null)
+    setLogLevelError('')
+    try {
+      const current = await fetchLogLevel()
+      if (request !== logLevelRequest.current) return
+      setLogLevel(current)
+      setSavedLogLevel(current)
+    } catch (error) {
+      if (request === logLevelRequest.current) {
+        setLogLevelError(errorMessage(error, '读取日志级别失败'))
+      }
+    }
+  }
+
   const loadSettings = async () => {
     setLoading(true)
     try {
-      const [data, automation, launchServer] = await Promise.all([
-        fetchSettings(),
+      const [automation, launchServer] = await Promise.all([
         fetchAutomationState(),
         fetchLaunchServerSettings(),
         loadKeyPouch(),
         loadMofaSettings(),
       ])
-      setSettings(data)
-      setSavedSettings(data)
       setAutomationState(automation)
       setLaunchServerPortDraft(String(launchServer.preferredPort || launchServer.port || 19876))
       setLaunchServerBaseUrl(launchServer.baseUrl)
       setLaunchServerReady(launchServer.ready)
-    } catch (error: any) {
-      toast.error(error?.message || '系统设置加载失败')
+    } catch (error) {
+      toast.error(errorMessage(error, '系统设置加载失败'))
     } finally {
       setLoading(false)
     }
-  }
-
-  const handleChange = <K extends keyof AppSettings>(key: K, value: AppSettings[K]) => {
-    setSettings(prev => ({ ...prev, [key]: value }))
   }
 
   const handleMofaChange = (update: Partial<MofaSettingsDraft>) => {
@@ -221,33 +240,59 @@ export function SettingsPage() {
           return
         }
       }
-      if (generalChanged) {
-        if (!await saveSettings(settings)) throw new Error('通用设置保存失败，请重试')
-        setSavedSettings(settings)
+      if (logLevelChanged) {
+        setLogLevelError('')
+        try {
+          await saveLogLevel(logLevel)
+          setSavedLogLevel(logLevel)
+        } catch (error) {
+          const message = errorMessage(error, '日志级别保存失败，请重试')
+          setLogLevelError(message)
+          toast.error(message)
+          return
+        }
+      }
+      if (notificationHistoryChanged) {
+        saveNotificationHistory(enableNotifications)
+        setSavedEnableNotifications(enableNotifications)
       }
       toast.success('设置已保存')
     } catch (error) {
-      toast.error(errorMessage(error, '保存失败，请检查配置'))
+      toast.error(errorMessage(error, '通知历史设置保存失败，请重试'))
     } finally {
       setSaving(false)
     }
   }
 
   const handleReset = async () => {
-    if (!confirm('确定要重置所有设置吗？将重置通用设置、KeyPouch 地址、MOFA 地址及管理员凭据、自动化、备份渠道和 Launch Server。浏览器实例、代理和内核数据会保留。')) return
+    if (!confirm('确定要重置所有设置吗？将重置主题、日志级别、通知历史开关、KeyPouch 地址、MOFA 地址及管理员凭据、自动化、备份渠道和 Launch Server。浏览器实例、代理和内核数据会保留。')) return
 
     setLoading(true)
     try {
-      const nextSettings = await resetSettings()
-      setSettings(nextSettings)
-      setSavedSettings(nextSettings)
+      await resetSettings()
+      let localResetFailed = false
+      try {
+        resetNotificationHistory()
+      } catch (error) {
+        toast.error(errorMessage(error, '通知历史设置重置失败'))
+        localResetFailed = true
+      }
+      try {
+        setTheme('light')
+      } catch (error) {
+        toast.error(errorMessage(error, '主题设置重置失败'))
+        localResetFailed = true
+      }
+      const historyEnabled = isNotificationHistoryEnabled()
+      setEnableNotifications(historyEnabled)
+      setSavedEnableNotifications(historyEnabled)
       const [automation, launchServer] = await Promise.all([
         fetchAutomationState(),
         fetchLaunchServerSettings(),
         loadKeyPouch(),
         loadMofaSettings(),
+        loadLogLevel(),
       ])
-      setTheme('light')
       setAutomationState(automation)
       setAutomationProgress(null)
       setAutomationCheck(null)
@@ -258,7 +303,7 @@ export function SettingsPage() {
       setLaunchServerPortDraft(String(launchServer.preferredPort || launchServer.port || 19876))
       setLaunchServerBaseUrl(launchServer.baseUrl)
       setLaunchServerReady(launchServer.ready)
-      toast.success('设置已重置')
+      if (!localResetFailed) toast.success('设置已重置')
     } catch (error) {
       toast.error(errorMessage(error, '设置重置失败'))
     } finally {
@@ -421,7 +466,7 @@ export function SettingsPage() {
               <RotateCcw className="h-4 w-4" />
               重置
             </Button>
-            <Button variant="danger" size="sm" onClick={handleSave} loading={saving} disabled={!generalChanged && !siteChanged && !mofaChanged}>
+            <Button variant="danger" size="sm" onClick={handleSave} loading={saving} disabled={!notificationHistoryChanged && !logLevelChanged && !siteChanged && !mofaChanged}>
               <Save className="h-4 w-4" />
               保存
             </Button>
@@ -432,9 +477,7 @@ export function SettingsPage() {
       <Card title="主题">
         <ThemeSwitcher />
       </Card>
-      <SettingsBasicFeatureCards
-        settings={settings}
-        onChange={handleChange}
+      <SettingsBasicCard
         siteUrl={siteUrlDraft}
         fallbackUrl={keyPouch?.fallbackUrl ?? ''}
         siteDisabled={keyPouch === undefined || saving}
@@ -485,7 +528,18 @@ export function SettingsPage() {
         onInstall={() => { void handleAutomationInstall() }}
         onSelfCheck={() => { void handleAutomationSelfCheck() }}
       />
-      <SettingsAdvancedCard settings={settings} onChange={handleChange} />
+      <SettingsDiagnosticsCard
+        enableNotifications={enableNotifications}
+        onNotificationHistoryChange={setEnableNotifications}
+        logLevel={logLevel}
+        onLogLevelChange={value => {
+          setLogLevel(value)
+          setLogLevelError('')
+        }}
+        logLevelError={logLevelError}
+        onLogLevelRetry={() => { void loadLogLevel() }}
+        disabled={saving}
+      />
     </div>
   )
 }

@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"context"
 	"io"
 	"net/http"
 	"sort"
@@ -61,10 +62,15 @@ func ProbeBrowserPageConnectivityWithConnector(
 	cfg *BrowserPageProbeConfig,
 ) BrowserPageProbeResult {
 	normalized := normalizeBrowserPageProbeConfig(cfg)
-	client, err := buildProxyHTTPClient("", proxyId, proxies, xrayMgr, singboxMgr, clashMgr, mieruMgr, connectorType, normalized.Timeout)
+	proxyId = strings.TrimSpace(proxyId)
+	if proxyId == "" {
+		return BrowserPageProbeResult{Concurrency: normalized.Concurrency, Error: "请选择要探测的代理节点（直连也需显式选择）"}
+	}
+	client, release, err := AcquireProxyHTTPClient(context.Background(), "", proxyId, proxies, xrayMgr, singboxMgr, clashMgr, mieruMgr, connectorType, normalized.Timeout)
 	if err != nil {
 		return BrowserPageProbeResult{ProxyId: proxyId, Ok: false, Error: err.Error(), Concurrency: normalized.Concurrency}
 	}
+	defer release()
 	return runBrowserPageProbe(proxyId, client, normalized)
 }
 

@@ -1,7 +1,8 @@
-import { useMemo, useEffect, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useCallback, useMemo, useEffect, useRef, useState } from 'react'
+import { useBlocker, useNavigate, useParams, type BlockerFunction } from 'react-router-dom'
 import { ChevronDown, ChevronUp, FolderOpen, HelpCircle, Layers, ShieldCheck } from 'lucide-react'
-import { Button, Card, ConfirmModal, FormItem, Input, Modal, Select, Textarea, toast } from '../../../shared/components'
+import { Button, Card, FormItem, Input, Modal, Select, Textarea, toast } from '../../../shared/components'
+import { errorMessage } from '../../../utils/errors'
 import type { BrowserCore, BrowserFingerprintCapabilityReport, BrowserFingerprintCapabilityRow, BrowserFingerprintCheckResult, BrowserProfileInput, BrowserProxy, BrowserProxyVirtualGroup, BrowserGroup, ProxyLocationResolveResult } from '../types'
 import { browserProxyResolveLocation, checkBrowserProfileFingerprint, createBrowserProfile, fetchBrowserCores, fetchBrowserProfileFingerprintMatrix, fetchBrowserProfiles, fetchBrowserProxies, fetchBrowserProxyVirtualGroups, fetchBrowserSettings, fetchGroups, openBrowserFingerprintCheck, openUserDataDir, updateBrowserProfile, validateProxyConfig } from '../api'
 import { FingerprintPanel } from '../components/FingerprintPanel'
@@ -300,6 +301,10 @@ function resolveProfileProxySelection(
 
 export function BrowserEditPage() {
   const { id } = useParams()
+  return <BrowserEditForm key={id} id={id} />
+}
+
+function BrowserEditForm({ id }: { id: string | undefined }) {
   const navigate = useNavigate()
   const isCreate = id === 'new'
   const [formData, setFormData] = useState<BrowserProfileEditForm>({
@@ -331,7 +336,18 @@ export function BrowserEditPage() {
   const [proxyPickerOpen, setProxyPickerOpen] = useState(false)
   const [proxyMode, setProxyMode] = useState<ProxySourceMode>('fixed')
   const [isDirty, setIsDirty] = useState(false)
-  const [leaveConfirm, setLeaveConfirm] = useState(false)
+  const hasUnsavedChanges = useRef(false)
+  const mounted = useRef(true)
+  const previousFocus = useRef<HTMLElement | null>(null)
+  const focusStayButton = useCallback((container: HTMLDivElement | null) => {
+    if (!container) return
+    previousFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    container.querySelector('button')?.focus()
+  }, [])
+  const shouldBlockNavigation = useCallback<BlockerFunction>(({ currentLocation, nextLocation }) => (
+    hasUnsavedChanges.current && currentLocation.pathname !== nextLocation.pathname
+  ), [])
+  const blocker = useBlocker(shouldBlockNavigation)
   const [saveError, setSaveError] = useState('')
   const [locationResolving, setLocationResolving] = useState(false)
   const [locationResult, setLocationResult] = useState<ProxyLocationResolveResult | null>(null)
@@ -344,7 +360,29 @@ export function BrowserEditPage() {
   const [launchArgsOpen, setLaunchArgsOpen] = useState(false)
   const [launchArgsHelpOpen, setLaunchArgsHelpOpen] = useState(false)
 
+  const continueEditing = () => {
+    blocker.reset?.()
+    if (previousFocus.current?.isConnected) previousFocus.current.focus()
+  }
+
   useEffect(() => {
+    mounted.current = true
+    return () => { mounted.current = false }
+  }, [])
+
+  useEffect(() => {
+    if (!isDirty) return
+    const confirmUnload = (event: BeforeUnloadEvent) => {
+      if (!hasUnsavedChanges.current) return
+      event.preventDefault()
+      event.returnValue = ''
+    }
+    window.addEventListener('beforeunload', confirmUnload)
+    return () => window.removeEventListener('beforeunload', confirmUnload)
+  }, [isDirty])
+
+  useEffect(() => {
+    let disposed = false
     const loadData = async () => {
       const [coreList, proxyList, proxyVirtualGroupList, groupList, settings] = await Promise.all([
         fetchBrowserCores(),
@@ -353,6 +391,7 @@ export function BrowserEditPage() {
         fetchGroups(),
         fetchBrowserSettings(),
       ])
+      if (disposed) return
       const resolvedDefaultLaunchArgs = resolveDefaultLaunchArgs(settings.defaultLaunchArgs || [])
       setCores(coreList)
       setProxies(proxyList)
@@ -375,6 +414,7 @@ export function BrowserEditPage() {
         return
       }
       const list = await fetchBrowserProfiles()
+      if (disposed) return
       const current = list.find(item => item.profileId === id)
       if (!current) throw new Error('实例不存在或已移入回收站')
       const currentLaunchArgs = normalizeLaunchArgs(current.launchArgs)
@@ -405,7 +445,12 @@ export function BrowserEditPage() {
     }
     setLoading(true)
     setLoadError('')
-    void loadData().catch(error => setLoadError(typeof error === 'string' ? error : error?.message || '加载实例配置失败')).finally(() => setLoading(false))
+    void loadData().catch(error => {
+      if (!disposed) setLoadError(errorMessage(error, '加载实例配置失败'))
+    }).finally(() => {
+      if (!disposed) setLoading(false)
+    })
+    return () => { disposed = true }
   }, [id, isCreate, loadAttempt])
 
   // 虚拟分组成员集合：这些成员不作为独立选项出现在实体列表中，
@@ -437,8 +482,14 @@ export function BrowserEditPage() {
     return () => { cancelled = true }
   }, [id, isCreate, formData.coreId, fingerprintArgsKey])
 
-  const handleChange = (field: keyof BrowserProfileInput, value: string | string[] | number) => {
+  const markDirty = () => {
+    hasUnsavedChanges.current = true
     setIsDirty(true)
+  }
+
+  const handleChange = (field: keyof BrowserProfileInput, value: string | string[] | number) => {
+    if (saving) return
+    markDirty()
     setFormData(prev => {
       if (field === 'proxyId') {
         return { ...prev, proxyId: typeof value === 'string' ? value : '' }
@@ -448,7 +499,8 @@ export function BrowserEditPage() {
   }
 
   const handleProxyModeChange = (mode: ProxySourceMode) => {
-    setIsDirty(true)
+    if (saving) return
+    markDirty()
     setProxyMode(mode)
     setLocationResult(null)
     setFormData(prev => ({
@@ -460,7 +512,7 @@ export function BrowserEditPage() {
   }
 
   const handleSave = async () => {
-    if (loading || loadError) return
+    if (saving || locationResolving || loading || loadError) return
     const resolvedProxyId = proxyMode === 'fixed' ? (formData.proxyId || '').trim() : ''
     const resolvedProxyConfig = proxyMode === 'local' ? (formData.proxyConfig || '').trim() : ''
     if (proxyMode === 'local' && !resolvedProxyConfig) {
@@ -495,33 +547,35 @@ export function BrowserEditPage() {
       return
     }
 
+    setSaveError('')
     setSaving(true)
     try {
       if (proxyMode !== 'dynamic') {
         const validation = await validateProxyConfig(payload.proxyConfig, payload.proxyId)
+        if (!mounted.current) return
         if (!validation.supported) {
           setSaveError(validation.errorMsg || '代理配置无效')
           return
         }
       }
       if (isCreate) {
-        await createBrowserProfile(payload)
+        const created = await createBrowserProfile(payload)
+        if (!created?.profileId) throw new Error('新建实例未返回结果，请检查实例列表')
         toast.success('配置已创建')
       } else if (id) {
-        await updateBrowserProfile(id, payload)
+        const updated = await updateBrowserProfile(id, payload)
+        if (!updated?.profileId) throw new Error('实例未返回更新结果，请重新加载后重试')
         toast.success('配置已更新')
       }
+      if (!mounted.current) return
+      hasUnsavedChanges.current = false
       setIsDirty(false)
       navigate('/browser/list')
-    } catch (error: any) {
-      setSaveError(typeof error === 'string' ? error : error?.message || '保存失败')
+    } catch (error) {
+      if (mounted.current) setSaveError(errorMessage(error, '保存失败'))
     } finally {
-      setSaving(false)
+      if (mounted.current) setSaving(false)
     }
-  }
-
-  const handleBack = () => {
-    if (isDirty) { setLeaveConfirm(true) } else { navigate('/browser/list') }
   }
 
   const handleApplyProxyLocation = async () => {
@@ -642,13 +696,13 @@ export function BrowserEditPage() {
   </div>
 
   return (
-    <div className="space-y-4 animate-fade-in">
+    <fieldset disabled={saving} aria-labelledby="browser-config-title" className="min-w-0 space-y-4 animate-fade-in">
       <Card padding="none" className="shadow-[var(--shadow-sm)]">
         <div className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-          <h1 className="text-xl font-semibold text-[var(--color-text-primary)]">{isCreate ? '新建配置' : '编辑配置'}</h1>
+          <h1 id="browser-config-title" className="text-xl font-semibold text-[var(--color-text-primary)]">{isCreate ? '新建配置' : '编辑配置'}</h1>
           <div className="flex flex-wrap gap-2 sm:justify-end">
-            <Button variant="secondary" size="sm" onClick={handleBack}>返回列表</Button>
-            <Button size="sm" onClick={handleSave} loading={saving} disabled={loading || !!loadError}>保存配置</Button>
+            <Button variant="secondary" size="sm" onClick={() => navigate('/browser/list')}>返回列表</Button>
+            <Button size="sm" onClick={handleSave} loading={saving} disabled={locationResolving}>保存配置</Button>
           </div>
         </div>
       </Card>
@@ -910,7 +964,11 @@ export function BrowserEditPage() {
           <div className="space-y-3 px-4 pb-4 border-t border-[var(--color-border-muted)] pt-3">
             <Textarea
               value={launchArgsText}
-              onChange={e => { setLaunchArgsText(e.target.value); setIsDirty(true) }}
+              onChange={e => {
+                if (saving) return
+                setLaunchArgsText(e.target.value)
+                markDirty()
+              }}
               rows={6}
               placeholder="--disable-sync"
             />
@@ -961,16 +1019,47 @@ export function BrowserEditPage() {
         </div>
       </Modal>
 
-      <ConfirmModal
-        open={leaveConfirm}
-        onClose={() => setLeaveConfirm(false)}
-        onConfirm={() => navigate('/browser/list')}
+      <Modal
+        open={blocker.state === 'blocked'}
+        onClose={continueEditing}
+        ariaLabel="放弃未保存的更改"
+        closeButtonLabel="关闭放弃修改提示"
+        onKeyDown={event => {
+          if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
+            event.preventDefault()
+            event.stopPropagation()
+            return
+          }
+          if (event.key === 'Escape') {
+            event.preventDefault()
+            continueEditing()
+            return
+          }
+          if (event.key === 'Tab') {
+            const buttons = event.currentTarget.querySelectorAll<HTMLButtonElement>('button:not(:disabled)')
+            const first = buttons[0]
+            const last = buttons[buttons.length - 1]
+            const terminal = event.shiftKey ? first : last
+            const destination = event.shiftKey ? last : first
+            if (document.activeElement === terminal) {
+              event.preventDefault()
+              destination?.focus()
+            }
+          }
+        }}
         title="放弃未保存的更改？"
-        content="当前页面有未保存的修改，离开后将丢失这些更改。"
-        confirmText="放弃并离开"
-        cancelText="继续编辑"
-        danger
-      />
+        width="400px"
+        footer={(
+          <>
+            <div ref={blocker.state === 'blocked' ? focusStayButton : undefined}>
+              <Button variant="secondary" onClick={continueEditing}>继续编辑</Button>
+            </div>
+            <Button variant="danger" onClick={() => blocker.proceed?.()}>放弃并离开</Button>
+          </>
+        )}
+      >
+        <p className="text-[var(--color-text-secondary)]">当前页面有未保存的修改，离开后将丢失这些更改。</p>
+      </Modal>
 
       <Modal
         open={fingerprintCheckOpen}
@@ -1043,6 +1132,6 @@ export function BrowserEditPage() {
       >
         <div className="text-[var(--color-text-secondary)]">{saveError}</div>
       </Modal>
-    </div>
+    </fieldset>
   )
 }

@@ -6,9 +6,7 @@ import (
 
 // SetLevel 动态设置日志级别（并发安全）
 func (l *Logger) SetLevel(level Level) {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	l.level = level
+	l.level.Store(int32(level))
 }
 
 // SetLevelString 通过字符串动态设置日志级别
@@ -18,20 +16,20 @@ func (l *Logger) SetLevelString(levelStr string) {
 
 // GetLevel 获取当前日志级别
 func (l *Logger) GetLevel() Level {
-	l.mu.RLock()
-	defer l.mu.RUnlock()
-	return l.level
+	level := Level(l.level.Load())
+	if level == inheritLevel && l.root != nil {
+		return Level(l.root.level.Load())
+	}
+	return level
 }
 
 // SetGlobalLevel 设置全局日志级别
 func SetGlobalLevel(level Level) {
-	globalMu.Lock()
-	defer globalMu.Unlock()
+	globalMu.RLock()
+	defer globalMu.RUnlock()
 
 	if globalLogger != nil {
-		globalLogger.mu.Lock()
-		globalLogger.level = level
-		globalLogger.mu.Unlock()
+		globalLogger.SetLevel(level)
 	}
 }
 
@@ -42,44 +40,28 @@ func SetGlobalLevelString(levelStr string) {
 
 // Debug 记录调试日志
 func (l *Logger) Debug(msg string, fields ...Field) {
-	l.mu.RLock()
-	level := l.level
-	l.mu.RUnlock()
-
-	if level <= DEBUG {
+	if l.ShouldLog(DEBUG) {
 		l.log(DEBUG, msg, fields...)
 	}
 }
 
 // Info 记录信息日志
 func (l *Logger) Info(msg string, fields ...Field) {
-	l.mu.RLock()
-	level := l.level
-	l.mu.RUnlock()
-
-	if level <= INFO {
+	if l.ShouldLog(INFO) {
 		l.log(INFO, msg, fields...)
 	}
 }
 
 // Warn 记录警告日志
 func (l *Logger) Warn(msg string, fields ...Field) {
-	l.mu.RLock()
-	level := l.level
-	l.mu.RUnlock()
-
-	if level <= WARN {
+	if l.ShouldLog(WARN) {
 		l.log(WARN, msg, fields...)
 	}
 }
 
 // Error 记录错误日志
 func (l *Logger) Error(msg string, fields ...Field) {
-	l.mu.RLock()
-	level := l.level
-	l.mu.RUnlock()
-
-	if level <= ERROR {
+	if l.ShouldLog(ERROR) {
 		l.log(ERROR, msg, fields...)
 	}
 }
@@ -143,16 +125,9 @@ func (l *Logger) handleFileWriteError(entry *LogEntry, err error) {
 
 // LogEntry 直接写入日志条目（用于拦截器等高级用法）
 func (l *Logger) LogEntry(entry *LogEntry) {
-	l.mu.RLock()
-	level := l.level
-	l.mu.RUnlock()
-
-	// 检查日志级别
-	if entry.Level < level {
-		return
+	if l.ShouldLog(entry.Level) {
+		l.writeEntry(entry)
 	}
-
-	l.writeEntry(entry)
 }
 
 // WithComponent 创建带有组件名的新日志记录器
@@ -160,8 +135,8 @@ func (l *Logger) WithComponent(component string) *Logger {
 	l.mu.RLock()
 	defer l.mu.RUnlock()
 
-	return &Logger{
-		level:           l.level,
+	logger := &Logger{
+		root:            l.root,
 		component:       component,
 		ctx:             l.ctx,
 		writers:         l.writers,
@@ -170,6 +145,8 @@ func (l *Logger) WithComponent(component string) *Logger {
 		rotationManager: l.rotationManager,
 		fileWriteFailed: l.fileWriteFailed,
 	}
+	logger.level.Store(l.level.Load())
+	return logger
 }
 
 // Flush 刷新所有写入器的缓冲区
@@ -223,7 +200,5 @@ func (l *Logger) GetWriters() []Writer {
 
 // ShouldLog 检查指定级别是否应该被记录
 func (l *Logger) ShouldLog(level Level) bool {
-	l.mu.RLock()
-	defer l.mu.RUnlock()
-	return level >= l.level
+	return level >= l.GetLevel()
 }

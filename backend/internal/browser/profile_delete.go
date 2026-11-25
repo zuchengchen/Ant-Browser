@@ -48,7 +48,9 @@ func (m *Manager) Delete(profileId string) error {
 	delete(m.Profiles, profileId)
 	resolvedDir := m.ResolveUserDataDir(profile)
 	dataDirExists := pathExists(resolvedDir)
-	if err := m.deleteProfileFingerprintCheckDir(profile.ProfileId); err != nil {
+	fingerprintRoot := filepath.Join(m.ResolveRelativePath("data"), "fingerprint-check")
+	fingerprintDir := filepath.Join(fingerprintRoot, safeProfilePathSegment(profile.ProfileId))
+	if err := m.deleteProfileDirectoriesLocked(profile, []profileDirectoryLocation{{fingerprintDir, fingerprintRoot}}); err != nil {
 		log.Error("删除实例指纹检测页缓存失败", logger.F("profile_id", profile.ProfileId), logger.F("error", err))
 	}
 	m.writeProfileDeleteAudit(log, profileDeleteAuditEntry{
@@ -205,6 +207,10 @@ func (m *Manager) deleteProfileRelatedDataLocked(log *logger.Logger, profile *Pr
 	if profile == nil {
 		return nil
 	}
+	directories, err := m.profileDirectoriesForRemoval(profile, m.profileDirectoryLocations(profile))
+	if err != nil {
+		return err
+	}
 	var firstErr error
 	if m.CodeProvider != nil {
 		if err := m.CodeProvider.Remove(profile.ProfileId); err != nil && firstErr == nil {
@@ -225,23 +231,12 @@ func (m *Manager) deleteProfileRelatedDataLocked(log *logger.Logger, profile *Pr
 			}
 		}
 	}
-	userDataDir := m.ResolveUserDataDir(profile)
-	if err := m.deleteProfileUserDataDir(userDataDir); err != nil {
-		log.Error("删除实例数据目录失败", logger.F("profile_id", profile.ProfileId), logger.F("dir", userDataDir), logger.F("error", err))
-		if firstErr == nil {
-			firstErr = err
-		}
-	}
-	if err := m.deleteProfileSnapshotDir(profile.ProfileId); err != nil {
-		log.Error("删除实例快照目录失败", logger.F("profile_id", profile.ProfileId), logger.F("error", err))
-		if firstErr == nil {
-			firstErr = err
-		}
-	}
-	if err := m.deleteProfileFingerprintCheckDir(profile.ProfileId); err != nil {
-		log.Error("删除实例指纹检测页缓存失败", logger.F("profile_id", profile.ProfileId), logger.F("error", err))
-		if firstErr == nil {
-			firstErr = err
+	for _, directory := range directories {
+		if err := os.RemoveAll(directory); err != nil {
+			log.Error("删除实例目录失败", logger.F("profile_id", profile.ProfileId), logger.F("dir", directory), logger.F("error", err))
+			if firstErr == nil {
+				firstErr = fmt.Errorf("删除实例目录失败: %w", err)
+			}
 		}
 	}
 	if firstErr == nil && m.AppRoot != "" {
@@ -250,84 +245,133 @@ func (m *Manager) deleteProfileRelatedDataLocked(log *logger.Logger, profile *Pr
 	return firstErr
 }
 
-func (m *Manager) deleteProfileFingerprintCheckDir(profileId string) error {
-	profileId = strings.TrimSpace(profileId)
-	if profileId == "" {
-		return nil
-	}
-	dataRoot, err := filepath.Abs(m.ResolveRelativePath("data"))
+func (m *Manager) deleteProfileDirectoriesLocked(profile *Profile, locations []profileDirectoryLocation) error {
+	paths, err := m.profileDirectoriesForRemoval(profile, locations)
 	if err != nil {
-		return fmt.Errorf("解析数据根目录失败: %w", err)
+		return err
 	}
-	fingerprintRoot := filepath.Join(dataRoot, "fingerprint-check")
-	target, err := filepath.Abs(filepath.Join(fingerprintRoot, safeProfilePathSegment(profileId)))
-	if err != nil {
-		return fmt.Errorf("解析指纹检测页缓存目录失败: %w", err)
-	}
-	dataRoot = filepath.Clean(dataRoot)
-	fingerprintRoot = filepath.Clean(fingerprintRoot)
-	target = filepath.Clean(target)
-	if samePath(target, fingerprintRoot) || samePath(target, dataRoot) || !isPathInside(target, fingerprintRoot) {
-		return nil
-	}
-	if err := os.RemoveAll(target); err != nil {
-		return fmt.Errorf("删除指纹检测页缓存目录失败: %w", err)
+	for _, path := range paths {
+		if err := os.RemoveAll(path); err != nil {
+			return err
+		}
 	}
 	return nil
 }
 
-func (m *Manager) deleteProfileSnapshotDir(profileId string) error {
-	profileId = strings.TrimSpace(profileId)
-	if profileId == "" {
-		return nil
-	}
-	dataRoot, err := filepath.Abs(m.ResolveRelativePath("data"))
-	if err != nil {
-		return fmt.Errorf("解析数据根目录失败: %w", err)
-	}
-	snapshotRoot := filepath.Join(dataRoot, "snapshots")
-	target, err := filepath.Abs(filepath.Join(snapshotRoot, profileId))
-	if err != nil {
-		return fmt.Errorf("解析快照目录失败: %w", err)
-	}
-	dataRoot = filepath.Clean(dataRoot)
-	snapshotRoot = filepath.Clean(snapshotRoot)
-	target = filepath.Clean(target)
-	if samePath(target, snapshotRoot) || samePath(target, dataRoot) || !isPathInside(target, snapshotRoot) {
-		return nil
-	}
-	if err := os.RemoveAll(target); err != nil {
-		return fmt.Errorf("删除快照目录失败: %w", err)
-	}
-	return nil
+type profileDirectory struct {
+	path     string
+	resolved string
 }
 
-func (m *Manager) deleteProfileUserDataDir(userDataDir string) error {
-	userDataDir = strings.TrimSpace(userDataDir)
-	if userDataDir == "" {
-		return nil
+type profileDirectoryLocation struct {
+	path string
+	root string
+}
+
+// profileDirectoriesForRemoval runs under Mutex before any part of a profile is removed.
+func (m *Manager) profileDirectoriesForRemoval(profile *Profile, locations []profileDirectoryLocation) ([]string, error) {
+	var candidates []profileDirectory
+	for _, location := range locations {
+		directory, err := resolveProfileDirectory(location.path)
+		if err != nil {
+			return nil, fmt.Errorf("检查待删除目录失败: %w", err)
+		}
+		if directory.resolved == "" {
+			continue
+		}
+		root, err := resolveProfileDirectory(location.root)
+		if err != nil {
+			return nil, fmt.Errorf("检查实例目录根路径失败: %w", err)
+		}
+		if !isPathInside(directory.path, root.path) || root.resolved == "" || !isPathInside(directory.resolved, root.resolved) || samePath(directory.resolved, root.resolved) {
+			continue
+		}
+		candidates = append(candidates, directory)
 	}
-	target, err := filepath.Abs(userDataDir)
-	if err != nil {
-		return fmt.Errorf("解析实例数据目录失败: %w", err)
+	if len(candidates) == 0 {
+		return nil, nil
 	}
+
+	others := make(map[string]*Profile)
+	for id, other := range m.Profiles {
+		others[id] = other
+	}
+	if m.ProfileDAO != nil {
+		active, err := m.ProfileDAO.List()
+		if err != nil {
+			return nil, fmt.Errorf("无法核对其他实例的数据目录: %w", err)
+		}
+		deleted, err := m.ProfileDAO.ListDeleted()
+		if err != nil {
+			return nil, fmt.Errorf("无法核对回收站实例的数据目录: %w", err)
+		}
+		for _, other := range append(active, deleted...) {
+			if other != nil {
+				others[other.ProfileId] = other
+			}
+		}
+	}
+	var protected []profileDirectory
+	for id, other := range others {
+		if other == nil || id == profile.ProfileId {
+			continue
+		}
+		for _, location := range m.profileDirectoryLocations(other) {
+			directory, err := resolveProfileDirectory(location.path)
+			if err != nil {
+				return nil, fmt.Errorf("无法确认其他实例的数据目录: %w", err)
+			}
+			protected = append(protected, directory)
+		}
+	}
+
+	var paths []string
+	for _, directory := range candidates {
+		shared := false
+		for _, other := range protected {
+			if profileDirectoriesOverlap(directory.path, other.path) || (other.resolved != "" && profileDirectoriesOverlap(directory.resolved, other.resolved)) {
+				shared = true
+				break
+			}
+		}
+		if !shared {
+			paths = append(paths, directory.path)
+		}
+	}
+	return paths, nil
+}
+
+func (m *Manager) profileDirectoryLocations(profile *Profile) []profileDirectoryLocation {
 	root := strings.TrimSpace(m.Config.Browser.UserDataRoot)
 	if root == "" {
 		root = "data"
 	}
-	rootAbs, err := filepath.Abs(m.ResolveRelativePath(root))
+	dataRoot := m.ResolveRelativePath("data")
+	snapshotRoot := filepath.Join(dataRoot, "snapshots")
+	fingerprintRoot := filepath.Join(dataRoot, "fingerprint-check")
+	return []profileDirectoryLocation{
+		{m.ResolveUserDataDir(profile), m.ResolveRelativePath(root)},
+		{filepath.Join(snapshotRoot, profile.ProfileId), snapshotRoot},
+		{filepath.Join(fingerprintRoot, safeProfilePathSegment(profile.ProfileId)), fingerprintRoot},
+	}
+}
+
+func resolveProfileDirectory(path string) (profileDirectory, error) {
+	absolute, err := filepath.Abs(path)
 	if err != nil {
-		return fmt.Errorf("解析用户数据根目录失败: %w", err)
+		return profileDirectory{}, err
 	}
-	target = filepath.Clean(target)
-	rootAbs = filepath.Clean(rootAbs)
-	if samePath(target, rootAbs) || !isPathInside(target, rootAbs) {
-		return nil
+	resolved, err := filepath.EvalSymlinks(absolute)
+	if os.IsNotExist(err) {
+		return profileDirectory{path: absolute}, nil
 	}
-	if err := os.RemoveAll(target); err != nil {
-		return fmt.Errorf("删除实例数据目录失败: %w", err)
-	}
-	return nil
+	return profileDirectory{path: absolute, resolved: resolved}, err
+}
+
+func profileDirectoriesOverlap(a, b string) bool {
+	// A case-insensitive data volume can be mounted on any supported OS.
+	a, b = strings.ToLower(a), strings.ToLower(b)
+	return a == b || isPathInside(a, b) || isPathInside(b, a)
 }
 
 func safeProfilePathSegment(value string) string {

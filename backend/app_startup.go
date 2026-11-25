@@ -16,20 +16,22 @@ import (
 	"os"
 	"strings"
 	"time"
-
-	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 // startup 应用启动时调用
-func (a *App) startup(ctx context.Context) {
+func (a *App) startup(ctx context.Context) error {
 	a.startupReady.Store(false)
+	a.databaseRecoveryNotice.Store(nil)
 	a.setRuntimeContext(ctx)
 	if err := apppath.EnsureWritableLayout(a.appRoot); err != nil {
-		runtime.LogFatal(ctx, fmt.Sprintf("初始化 Linux 用户数据目录失败: %v", err))
-		return
+		return fmt.Errorf("初始化用户数据目录失败: %w", err)
 	}
 
-	cfg := a.startupLoadConfig()
+	configPath := a.resolveAppPath("config.yaml")
+	cfg, err := LoadConfig(configPath)
+	if err != nil {
+		return fmt.Errorf("无法加载配置。请修正或恢复以下文件后重新启动。\n%s\n%w", configPath, err)
+	}
 	a.config = cfg
 	a.applyRuntimeConfig(cfg.Runtime)
 
@@ -53,8 +55,7 @@ func (a *App) startup(ctx context.Context) {
 	db, recovery, err := a.startupInitDatabase(cfg)
 	if err != nil {
 		log.Error("初始化数据库失败", logger.F("error", err))
-		runtime.LogFatal(ctx, fmt.Sprintf("初始化数据库失败: %v", err))
-		return
+		return fmt.Errorf("初始化数据库失败: %w", err)
 	}
 	a.db = db
 	a.reportDatabaseRecovery(log, recovery)
@@ -73,9 +74,7 @@ func (a *App) startup(ctx context.Context) {
 
 	if err := a.startupInitManagers(cfg, db); err != nil {
 		log.Error("浏览器数据初始化失败", logger.F("error", err))
-		_ = db.Close()
-		runtime.LogFatal(ctx, fmt.Sprintf("浏览器数据初始化失败: %v", err))
-		return
+		return fmt.Errorf("浏览器数据初始化失败: %w", err)
 	}
 	if err := a.startMofaToolbarBridge(); err != nil {
 		log.Error("启动 MOFA 工具栏服务失败", logger.F("error", err))
@@ -93,20 +92,13 @@ func (a *App) startup(ctx context.Context) {
 	a.emitRuntimeEvent("app:ready")
 
 	log.Info("应用启动成功")
+	return nil
 }
 
 // IsAppReady also works for pages opened after the one-shot app:ready event.
 // Publish readiness only after database migrations and all managers are ready.
 func (a *App) IsAppReady() bool {
 	return a != nil && a.startupReady.Load()
-}
-
-func (a *App) startupLoadConfig() *config.Config {
-	cfg, err := LoadConfig(a.resolveAppPath("config.yaml"))
-	if err != nil {
-		return config.DefaultConfig()
-	}
-	return cfg
 }
 
 func (a *App) startupInitLogger(ctx context.Context, cfg *config.Config) *logger.Logger {
@@ -172,16 +164,30 @@ func (a *App) reportDatabaseRecovery(log *logger.Logger, recovery database.Recov
 	if !recovery.Recovered {
 		return
 	}
+	a.databaseRecoveryNotice.Store(&recovery)
 	log.Error("数据库无法使用，已自动备份并重建空库（历史实例/代理/插件数据未恢复）",
 		logger.F("reason", recovery.Reason),
 		logger.F("backup", recovery.BrokenBackupPath),
 		logger.F("parked", recovery.BrokenParkedPath))
 	a.emitRuntimeEvent("app:db-recovered", map[string]any{
-		"reason":       recovery.Reason,
-		"backup_path":  recovery.BrokenBackupPath,
-		"parked_path":  recovery.BrokenParkedPath,
-		"recovered":    true,
+		"reason":      recovery.Reason,
+		"backup_path": recovery.BrokenBackupPath,
+		"parked_path": recovery.BrokenParkedPath,
+		"recovered":   true,
 	})
+}
+
+// GetDatabaseRecoveryNotice lets the frontend read a startup recovery after the event has passed.
+func (a *App) GetDatabaseRecoveryNotice() map[string]string {
+	notice := a.databaseRecoveryNotice.Load()
+	if notice == nil {
+		return nil
+	}
+	return map[string]string{
+		"reason":     notice.Reason,
+		"backupPath": notice.BrokenBackupPath,
+		"parkedPath": notice.BrokenParkedPath,
+	}
 }
 
 func (a *App) startupInitManagers(cfg *config.Config, db *database.DB) error {
@@ -194,9 +200,9 @@ func (a *App) startupInitManagers(cfg *config.Config, db *database.DB) error {
 	a.clashMgr = proxy.NewClashManager(cfg, a.appRoot)
 	a.singboxMgr = proxy.NewSingBoxManager(cfg, a.appRoot)
 	a.mieruMgr = proxy.NewMieruManager(cfg, a.appRoot)
-	a.browserMgr.CoreDownloadHTTPClientFactory = func(proxyConfig string, timeout time.Duration) (*http.Client, error) {
-		client, _, err := a.unifiedProxyCoreHTTPClient(timeout, proxyConfig)
-		return client, err
+	a.browserMgr.CoreDownloadHTTPClientFactory = func(ctx context.Context, proxyConfig string, timeout time.Duration) (*http.Client, func(), error) {
+		client, release, _, err := a.unifiedProxyCoreHTTPClient(ctx, timeout, proxyConfig)
+		return client, release, err
 	}
 
 	conn := db.GetConn()

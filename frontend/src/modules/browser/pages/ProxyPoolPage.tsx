@@ -108,8 +108,8 @@ export function ProxyPoolPage() {
     groupName: '',
   })
   const [saving, setSaving] = useState(false)
-  const saveProxies = useCallback(async (list: BrowserProxy[]) => {
-    await saveBrowserProxies(list)
+  const saveProxies = useCallback(async (base: BrowserProxy[], edited: BrowserProxy[], sourceId = '') => {
+    await saveBrowserProxies(base, edited, sourceId)
     const [savedList, grps, nextVirtualGroups] = await Promise.all([
       fetchBrowserProxies(),
       fetchBrowserProxyGroups(),
@@ -133,7 +133,6 @@ export function ProxyPoolPage() {
     handleCopyDirectTemplate, handleApplyChainJSON, handleApplyDirectText, handleImportUrlChange,
     handleFetchImportURL, handleParseImport, handleConfirmImport,
   } = useProxyImportFlow({
-    proxies,
     saveProxies,
   })
 
@@ -348,8 +347,11 @@ export function ProxyPoolPage() {
     if (chainEditMode) {
       try {
         const candidate = buildChainImportCandidate(chainEditForm)
+        const original = toChainImportForm('', editingProxy.proxyConfig)
         nextProxyName = candidate.proxyName
-        nextProxyConfig = candidate.proxyConfig
+        nextProxyConfig = JSON.stringify(original) === JSON.stringify({ ...chainEditForm, proxyName: '' })
+          ? editingProxy.proxyConfig
+          : candidate.proxyConfig
       } catch (error: any) {
         toast.error(error?.message || '链式代理配置无效')
         return
@@ -357,8 +359,11 @@ export function ProxyPoolPage() {
     } else if (directEditMode) {
       try {
         const candidate = buildDirectImportCandidate(directEditForm)
+        const original = toDirectImportForm('', editingProxy.proxyConfig)
         nextProxyName = candidate.proxyName
-        nextProxyConfig = candidate.proxyConfig
+        nextProxyConfig = JSON.stringify(original) === JSON.stringify({ ...directEditForm, proxyName: '' })
+          ? editingProxy.proxyConfig
+          : candidate.proxyConfig
       } catch (error: any) {
         toast.error(error?.message || '代理配置无效')
         return
@@ -370,19 +375,14 @@ export function ProxyPoolPage() {
 
     setSaving(true)
     try {
-      const newProxies = proxies.map(p =>
-        p.proxyId === editingProxy.proxyId
-          ? {
-            ...p,
-            proxyName: nextProxyName,
-            proxyConfig: nextProxyConfig,
-            preferredKernel: editForm.preferredKernel === 'auto' ? undefined : editForm.preferredKernel,
-            dnsServers: editForm.dnsServers.trim() || undefined,
-            groupName: editForm.groupName.trim() || undefined,
-          }
-          : p
-      )
-      await saveProxies(newProxies)
+      await saveProxies([editingProxy], [{
+        ...editingProxy,
+        proxyName: nextProxyName,
+        proxyConfig: nextProxyConfig,
+        preferredKernel: editForm.preferredKernel === 'auto' ? undefined : editForm.preferredKernel,
+        dnsServers: editForm.dnsServers.trim() || undefined,
+        groupName: editForm.groupName.trim() || undefined,
+      }])
       setEditModalOpen(false)
       toast.success('代理已更新')
     } catch (error: any) {

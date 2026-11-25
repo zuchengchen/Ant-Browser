@@ -1,7 +1,10 @@
 package config
 
 import (
+	"bytes"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sync"
@@ -28,13 +31,34 @@ func Load(configPath string) (*Config, error) {
 	data, err := os.ReadFile(configPath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return DefaultConfig(), nil
+			if _, statErr := os.Lstat(configPath); os.IsNotExist(statErr) {
+				return DefaultConfig(), nil
+			}
 		}
 		return nil, fmt.Errorf("读取配置文件失败: %w", err)
 	}
 
+	decoder := yaml.NewDecoder(bytes.NewReader(data))
+	var document yaml.Node
+	if err := decoder.Decode(&document); err != nil {
+		if errors.Is(err, io.EOF) {
+			return nil, fmt.Errorf("配置文件为空")
+		}
+		return nil, fmt.Errorf("解析配置文件失败: %w", err)
+	}
+	if len(document.Content) != 1 || document.Content[0].Kind != yaml.MappingNode {
+		return nil, fmt.Errorf("配置文件应包含一个 YAML 映射")
+	}
+	var extra yaml.Node
+	if err := decoder.Decode(&extra); !errors.Is(err, io.EOF) {
+		if err != nil {
+			return nil, fmt.Errorf("解析配置文件失败: %w", err)
+		}
+		return nil, fmt.Errorf("配置文件只能包含一个 YAML 文档")
+	}
+
 	var config Config
-	if err := yaml.Unmarshal(data, &config); err != nil {
+	if err := document.Decode(&config); err != nil {
 		return nil, fmt.Errorf("解析配置文件失败: %w", err)
 	}
 
@@ -63,11 +87,48 @@ func (c *Config) SaveLocked(configPath string) error {
 	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
 		return fmt.Errorf("创建配置目录失败: %w", err)
 	}
-	if err := os.WriteFile(configPath, data, 0o644); err != nil {
+	if err := replaceConfigFile(configPath, data); err != nil {
 		return fmt.Errorf("写入配置文件失败: %w", err)
 	}
 
 	return nil
+}
+
+func replaceConfigFile(path string, data []byte) error {
+	mode := os.FileMode(0o600)
+	info, err := os.Lstat(path)
+	if err == nil && info.Mode()&os.ModeSymlink != 0 {
+		path, err = filepath.EvalSymlinks(path)
+		if err != nil {
+			return err
+		}
+		info, err = os.Stat(path)
+	}
+	if err == nil {
+		if !info.Mode().IsRegular() || info.Mode().Perm()&0o222 == 0 {
+			return &os.PathError{Op: "replace", Path: path, Err: os.ErrPermission}
+		}
+		mode = info.Mode().Perm()
+	} else if !os.IsNotExist(err) {
+		return err
+	}
+
+	file, err := os.CreateTemp(filepath.Dir(path), ".config-*")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(file.Name())
+	_, err = file.Write(data)
+	if err == nil {
+		err = file.Chmod(mode)
+	}
+	if err == nil {
+		err = file.Sync()
+	}
+	if err := errors.Join(err, file.Close()); err != nil {
+		return err
+	}
+	return os.Rename(file.Name(), path)
 }
 
 func sanitizeBackupConfig(value BackupConfig) BackupConfig {

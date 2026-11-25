@@ -74,7 +74,8 @@ export function useProxyCoreDownload() {
 
   const handleStartCoreDownload = useCallback(async () => {
     const downloadProxy = coreDownloadProxy.trim()
-    setCoreDownloadProgress({ core: coreDownloadType, goos: coreDownloadGOOS, goarch: coreDownloadGOARCH, phase: 'starting', progress: 0, message: downloadProxy ? `准备下载（指定代理：${downloadProxy}）` : '准备下载（直连）' })
+    const usingProxy = downloadProxy && downloadProxy.toLowerCase() !== 'direct://' && downloadProxy !== '__direct__'
+    setCoreDownloadProgress({ core: coreDownloadType, goos: coreDownloadGOOS, goarch: coreDownloadGOARCH, phase: 'starting', progress: 0, message: usingProxy ? '准备下载（指定代理）' : '准备下载（直连）' })
     try {
       await browserProxyCoreDownload(coreDownloadType, coreDownloadGOOS, coreDownloadGOARCH, downloadProxy)
     } catch (error: any) {

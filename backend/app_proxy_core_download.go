@@ -108,12 +108,14 @@ func (a *App) BrowserProxyCoreDownloadInfo(input ProxyCoreDownloadRequest) Proxy
 	info := proxyCoreDownloadInfoBase(a, spec, target)
 	info.Version = version
 	info.ReleaseURL = proxyCoreReleaseURL(spec.Repo, version)
-	client, _, err := a.unifiedProxyCoreHTTPClient(30*time.Second, input.ProxyConfig)
+	ctx := context.Background()
+	client, releaseClient, _, err := a.unifiedProxyCoreHTTPClient(ctx, 30*time.Second, input.ProxyConfig)
 	if err != nil {
 		info.Message = manualProxyCoreDownloadMessage(spec, target, "下载代理配置错误: "+err.Error())
 		return info
 	}
-	release, err := fetchGitHubRelease(context.Background(), client, spec.Repo, version)
+	defer releaseClient()
+	release, err := fetchGitHubRelease(ctx, client, spec.Repo, version)
 	if err != nil {
 		info.Message = manualProxyCoreDownloadMessage(spec, target, "自动查询 Release 失败: "+err.Error())
 		return info
@@ -209,11 +211,12 @@ func (a *App) downloadProxyCore(ctx context.Context, spec proxyCoreSpec, target 
 	send := func(phase string, progress int, message string) {
 		a.emitRuntimeEvent("proxy-core:download:progress", ProxyCoreDownloadProgress{Core: spec.Core, GOOS: target.GOOS, GOARCH: target.GOARCH, Phase: phase, Progress: progress, Message: message})
 	}
-	client, proxyLabel, err := a.unifiedProxyCoreHTTPClient(90*time.Second, proxyConfig)
+	client, releaseClient, proxyLabel, err := a.unifiedProxyCoreHTTPClient(ctx, 90*time.Second, proxyConfig)
 	if err != nil {
 		send("error", 0, "下载代理配置错误: "+err.Error())
 		return
 	}
+	defer releaseClient()
 	send("resolving", 0, fmt.Sprintf("正在查询官方 Release %s（%s）", version, proxyLabel))
 
 	release, err := fetchGitHubRelease(ctx, client, spec.Repo, version)

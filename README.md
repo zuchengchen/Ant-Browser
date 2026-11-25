@@ -8,7 +8,7 @@
 
 本仓库是 [black-ant/Ant-Browser](https://github.com/black-ant/Ant-Browser) 的独立维护分支，在自己的 `master` 上开发并通过本地 merge 同步上游，不需要同步 PR。更新源与发行包使用本仓库，自有发布标签为 `czc-vX.Y.Z`。操作说明见 [Fork 开发与上游同步](docs/upstream-sync.md)。
 
-本项目版本：`1.9.4-25` · 已集成上游 `v1.9.4`（`15afd113`）
+本项目版本：`1.9.4-26` · 已集成上游 `v1.9.4`（`15afd113`）
 
 ## 推荐内核项目
 
@@ -182,9 +182,9 @@ Ant Browser 适合以下场景：
 
 - `default_connector_type` 只有两套连接栈：`xray` 和 `mihomo`。
 - `xray` 表示 Xray + sing-box 组合栈：Xray 负责 vmess/vless/trojan/shadowsocks/链式代理等，sing-box 负责 hysteria2/tuic/anytls 等协议。
-- `mihomo` 表示独立 Mihomo 栈：需要桥接的代理统一走 mihomo。
+- `mihomo` 表示独立 Mihomo 栈，由 Mihomo 处理本栈的桥接协议。Mieru 节点使用专用桥接。
 - 实例启动、代理测速、真实连通性、IP 健康、预热和插件下载代理必须按当前连接栈执行；不得在 `xray` 组合栈和 `mihomo` 栈之间自动混用。
-- 详细约束见 [VPN / 代理协议审计报告](docs/audits/vpn-protocol-audit-report.md)。
+- 详细约束见 [代理连接栈](docs/proxy-connector-stacks.md)。
 
 ### 3. 代理生效验证
 

@@ -72,6 +72,7 @@ export function ProxySourceAlignPage() {
   )
 
   const [subNodes, setSubNodes] = useState<AlignSubNode[]>([])
+  const [subscriptionSnapshot, setSubscriptionSnapshot] = useState<BrowserProxy[]>([])
   const [fetching, setFetching] = useState(false)
   const [fetchError, setFetchError] = useState('')
   const [retryTick, setRetryTick] = useState(0)
@@ -80,6 +81,7 @@ export function ProxySourceAlignPage() {
 
   useEffect(() => {
     setSubNodes([])
+    setSubscriptionSnapshot([])
     setPairs({})
     setFetchError('')
     if (!source) return
@@ -106,6 +108,7 @@ export function ProxySourceAlignPage() {
           initPairs[row.proxyId] = suggested ? nodes.find(node => node.poolName === suggested) || null : null
         })
         setSubNodes(nodes)
+        setSubscriptionSnapshot(sourceRows)
         setPairs(initPairs)
       } catch (e: any) {
         if (!cancelled) setFetchError(e?.message || '订阅拉取失败')
@@ -240,9 +243,9 @@ export function ProxySourceAlignPage() {
         if (sub) manualPairs[oldId] = sub
       })
       const nowISO = new Date().toISOString()
-      const next = applySourceAlignment(proxies, source, alignment, manualPairs, nowISO, nextProxyID)
-      await saveBrowserProxies(next)
-      setProxies(next)
+      const next = applySourceAlignment(sourceRows, source, alignment, manualPairs, nowISO, nextProxyID)
+      await saveBrowserProxies(subscriptionSnapshot, next, source.sourceId)
+      setProxies(await fetchBrowserProxies())
       const nameOf = (proxyId: string) => sourceRows.find(row => row.proxyId === proxyId)?.proxyName || proxyId
       writeSourceAlignRecord(source.sourceId, {
         at: nowISO,
@@ -255,7 +258,7 @@ export function ProxySourceAlignPage() {
       })
       toast.success(`对齐已应用：合并 ${pairCount} 对、新增 ${addedPreview.length} 个、异常保留 ${keptMissing} 个`)
     } catch (e: any) {
-      toast.error(e?.message || '应用对齐失败')
+      setFetchError(e?.message || '应用对齐失败')
     } finally {
       setApplying(false)
     }
@@ -317,7 +320,11 @@ export function ProxySourceAlignPage() {
             {fetchError && (
               <div className='flex items-center justify-between rounded-lg border border-[var(--color-error)] bg-red-500/5 px-3 py-2'>
                 <span className='text-sm text-red-500'>{fetchError}</span>
-                <Button size='sm' variant='secondary' onClick={() => setRetryTick(tick => tick + 1)}>
+                <Button size='sm' variant='secondary' onClick={() => {
+                  void loadPool()
+                    .then(() => setRetryTick(tick => tick + 1))
+                    .catch((error: Error) => setFetchError(error.message || '加载代理池失败'))
+                }}>
                   <RefreshCw className='h-3.5 w-3.5' />重试
                 </Button>
               </div>

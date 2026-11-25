@@ -25,17 +25,27 @@ const SETTINGS_KEY = 'app_settings'
 const NOTIFICATION_TYPES: readonly NotificationType[] = ['info', 'success', 'warning', 'error']
 const NOTIFICATION_SOURCES: readonly NotificationSource[] = ['operation', 'runtime', 'frontend', 'system']
 
-export function isNotificationHistoryEnabled() {
-  if (typeof localStorage === 'undefined') return true
-
+function readNotificationSettings(): Record<string, unknown> {
   try {
     const stored = localStorage.getItem(SETTINGS_KEY)
-    if (!stored) return true
-    const settings = JSON.parse(stored) as { enableNotifications?: unknown }
-    return settings.enableNotifications !== false
+    const settings = stored ? JSON.parse(stored) : null
+    return settings && typeof settings === 'object' && !Array.isArray(settings) ? settings : {}
   } catch {
-    return true
+    return {}
   }
+}
+
+export function isNotificationHistoryEnabled() {
+  return readNotificationSettings().enableNotifications !== false
+}
+
+export function saveNotificationHistory(enabled: boolean) {
+  const settings = { ...readNotificationSettings(), enableNotifications: enabled }
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings))
+}
+
+export function resetNotificationHistory() {
+  localStorage.removeItem(SETTINGS_KEY)
 }
 
 function formatNotificationTime(date: Date) {

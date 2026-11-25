@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { toast } from '../../../../shared/components'
 import type { BrowserProxy } from '../../types'
-import { fetchClashImportFromURL, setSourceIgnoredProxyNames } from '../../api'
+import { fetchBrowserProxies, fetchClashImportFromURL, setSourceIgnoredProxyNames } from '../../api'
 import {
   CHAIN_QUICK_IMPORT_TEMPLATE,
   DIRECT_QUICK_IMPORT_TEMPLATE,
@@ -27,8 +27,7 @@ import {
 import { appendSourceIgnoredProxyNames } from './storage'
 
 interface UseProxyImportFlowOptions {
-  proxies: BrowserProxy[]
-  saveProxies: (list: BrowserProxy[]) => Promise<void>
+  saveProxies: (base: BrowserProxy[], edited: BrowserProxy[], sourceId?: string) => Promise<void>
 }
 
 function createInitialChainImportForm(): ChainImportForm {
@@ -40,7 +39,6 @@ function createInitialChainImportForm(): ChainImportForm {
 }
 
 export function useProxyImportFlow({
-  proxies,
   saveProxies,
 }: UseProxyImportFlowOptions) {
   const [importModalOpen, setImportModalOpen] = useState(false)
@@ -52,6 +50,7 @@ export function useProxyImportFlow({
   const [importAutoRefresh, setImportAutoRefresh] = useState(false)
   const [importRefreshIntervalM, setImportRefreshIntervalM] = useState(1440)
   const [importResolvedUrl, setImportResolvedUrl] = useState('')
+  const [subscriptionSnapshot, setSubscriptionSnapshot] = useState<BrowserProxy[]>([])
   const [importText, setImportText] = useState('')
   const [importDnsServers, setImportDnsServers] = useState('')
   const [importNamePrefix, setImportNamePrefix] = useState('')
@@ -90,6 +89,7 @@ export function useProxyImportFlow({
     if (nextMode !== 'clash') {
       setImportUrl('')
       setImportFetchProxyId('')
+      setSubscriptionSnapshot([])
       setImportDnsServers('')
     }
   }
@@ -161,11 +161,13 @@ export function useProxyImportFlow({
 
     setFetchingImportUrl(true)
     try {
+      const snapshot = await fetchBrowserProxies()
       const result = await fetchClashImportFromURL(targetURL, importFetchProxyId)
       const content = (result?.content || '').trim()
       if (!content) throw new Error('订阅内容为空')
 
       setImportResolvedUrl((result?.url || targetURL).trim())
+      setSubscriptionSnapshot(snapshot)
       setImportText(content)
 
       if (!importDnsServers.trim() && typeof result?.dnsServers === 'string' && result.dnsServers.trim()) {
@@ -226,12 +228,12 @@ export function useProxyImportFlow({
       const sourceURL = importMode === 'clash' ? importResolvedUrl.trim() : ''
       const isURLImport = !!sourceURL
       const sourceNamePrefix = importMode === 'clash' ? importNamePrefix.trim() : ''
-      const sourceID = isURLImport ? resolveImportSourceID(proxies, sourceURL, sourceNamePrefix) : ''
+      const sourceID = isURLImport ? resolveImportSourceID(subscriptionSnapshot, sourceURL, sourceNamePrefix) : ''
       const sourceAutoRefresh = isURLImport ? importAutoRefresh : false
       const sourceRefreshIntervalM = sourceAutoRefresh ? importRefreshIntervalM : 0
       const sourceLastRefreshAt = isURLImport ? new Date().toISOString() : ''
       const oldSourceProxies = isURLImport
-        ? proxies.filter(item => (item.sourceId || '').trim() === sourceID)
+        ? subscriptionSnapshot.filter(item => (item.sourceId || '').trim() === sourceID)
         : []
       const pickExisting = createExistingProxyPicker(oldSourceProxies)
       // 持久化导入时选用的拉取代理：定时/手动刷新复用，避免被墙订阅导入后无法再刷新
@@ -266,10 +268,7 @@ export function useProxyImportFlow({
           sourceFetchProxyId,
         })
         : []
-      const allProxies = isURLImport
-        ? proxies.filter(item => (item.sourceId || '').trim() !== sourceID).concat(newProxies, keptMissing)
-        : [...proxies, ...newProxies]
-      await saveProxies(allProxies)
+      await saveProxies(oldSourceProxies, [...newProxies, ...keptMissing], sourceID)
       if (isURLImport && removedPreviewProxyNames.length > 0) {
         appendSourceIgnoredProxyNames(sourceID, removedPreviewProxyNames)
         try {
@@ -284,6 +283,7 @@ export function useProxyImportFlow({
       setImportAutoRefresh(false)
       setImportRefreshIntervalM(1440)
       setImportResolvedUrl('')
+      setSubscriptionSnapshot([])
       setImportText('')
       setImportDnsServers('')
       setImportNamePrefix('')

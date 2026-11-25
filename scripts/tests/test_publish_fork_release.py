@@ -45,6 +45,7 @@ class PublishForkReleaseTests(unittest.TestCase):
         self.write("wails.json", {"info": {"productVersion": "2.3.4"}})
         self.write("frontend/package.json", {"version": "2.3.4"})
         self.write("frontend/package-lock.json", {"version": "2.3.4", "packages": {"": {"version": "2.3.4"}}})
+        (self.root / "VERSION").write_text("2.3.4-27\n")
         self.asset = self.root / "release-artifacts/package.zip"
         self.asset.parent.mkdir()
         self.asset.write_text("asset")
@@ -101,6 +102,8 @@ class PublishForkReleaseTests(unittest.TestCase):
         self.assertNotIn("--target", calls[1])
         self.assertIn("release-artifacts/package.zip", calls[2])
         self.assertIn("--draft=false", calls[3])
+        self.assertIn("--generate-notes", calls[1])
+        self.assertIn("2.3.4-27", (self.root / "release-body").read_text())
 
     def test_retry_continues_draft_and_skips_published_release(self):
         self.assertNotEqual(self.publish(FAIL_UPLOAD="1").returncode, 0)
@@ -131,6 +134,7 @@ class PublishForkReleaseTests(unittest.TestCase):
         result = self.publish()
         self.assertEqual(result.returncode, 0, result.stderr)
         body = (self.root / "release-body").read_text()
+        self.assertIn("2.3.4-27", body)
         self.assertIn("Fork release notes", body)
         self.assertIn("refs/tags/v8.9.0", body)
         self.assertIn(sha, body)
