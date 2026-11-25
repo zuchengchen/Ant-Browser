@@ -2,12 +2,13 @@ import { Loader2, Upload } from 'lucide-react'
 import { create } from 'zustand'
 import { Button, toast } from '../../../shared/components'
 import { errorMessage } from '../../../utils/errors'
-import { cancelMofaImport, importMofaAccount, type MofaImportPhase, type MofaImportResult } from '../api/mofa'
+import { cancelMofaImport, importMofaAccount, showMofaImportAuthorization, type MofaImportPhase, type MofaImportResult } from '../api/mofa'
 import type { BrowserProfile } from '../types'
 
 interface PendingImport {
   phase: MofaImportPhase
   cancel?: Promise<void>
+  authorization?: Promise<void>
 }
 
 const useMofaImports = create<{ pending: Map<string, PendingImport> }>(() => ({ pending: new Map() }))
@@ -15,7 +16,12 @@ const useMofaImports = create<{ pending: Map<string, PendingImport> }>(() => ({ 
 const progressLabels: Record<MofaImportPhase, string> = {
   checking: '正在核对账号',
   waiting_for_oauth: '等待授权，如有提示请在该实例的 OpenAI 页面确认',
+  login_required: '请登录同一 ChatGPT 账号以继续导入',
   saving: '正在保存到 MOFA',
+}
+
+function canShowAuthorization(phase: MofaImportPhase) {
+  return phase === 'waiting_for_oauth' || phase === 'login_required'
 }
 
 function showImportResult(profileName: string, { status, accountId, schedulable }: MofaImportResult) {
@@ -73,22 +79,57 @@ function requestCancel(profileId: string) {
   if (!job || job.cancel) return
   const cancel = cancelMofaImport(profileId).catch(error => {
     const current = useMofaImports.getState().pending.get(profileId)
-    if (current) setPendingImport(profileId, { phase: current.phase })
+    if (current) setPendingImport(profileId, { ...current, cancel: undefined })
     toast.error(errorMessage(error, '发送 MOFA 导入取消请求失败，请重试。'))
   })
   setPendingImport(profileId, { ...job, cancel })
+}
+
+function requestShowAuthorization(profileId: string) {
+  const job = useMofaImports.getState().pending.get(profileId)
+  if (!job || job.cancel || job.authorization || !canShowAuthorization(job.phase)) return
+
+  const authorization = showMofaImportAuthorization(profileId).catch(error => {
+    const current = useMofaImports.getState().pending.get(profileId)
+    if (current?.authorization === authorization && !current.cancel && canShowAuthorization(current.phase)) {
+      toast.error(errorMessage(error, '切换失败，请在该实例中手动切到 OpenAI 授权页。'))
+    }
+  }).finally(() => {
+    const current = useMofaImports.getState().pending.get(profileId)
+    if (current?.authorization === authorization) {
+      setPendingImport(profileId, { ...current, authorization: undefined })
+    }
+  })
+  setPendingImport(profileId, { ...job, authorization })
 }
 
 export function MofaImportAction({ profile, disabled }: { profile: BrowserProfile; disabled: boolean }) {
   const job = useMofaImports(state => state.pending.get(profile.profileId))
   if (job) {
     return (
-      <div className="inline-flex min-h-7 max-w-full items-center gap-1.5 whitespace-normal">
-        <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-[var(--color-text-muted)]" aria-hidden="true" />
-        <span className="text-xs text-[var(--color-text-secondary)]" role="status">{job.cancel ? '取消中' : progressLabels[job.phase]}</span>
-        <Button type="button" size="sm" variant="ghost" className="shrink-0" onClick={() => requestCancel(profile.profileId)} disabled={!!job.cancel} aria-label={`取消「${profile.profileName}」的 MOFA 导入`}>
-          取消
-        </Button>
+      <div className="inline-flex min-h-7 max-w-full flex-wrap items-center gap-1.5 whitespace-normal">
+        <div className="flex min-w-0 items-center gap-1.5">
+          <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-[var(--color-text-muted)]" aria-hidden="true" />
+          <span className="text-xs text-[var(--color-text-secondary)]" role="status">{job.cancel ? '取消中' : progressLabels[job.phase]}</span>
+        </div>
+        <div className="flex shrink-0 items-center gap-1.5">
+          {canShowAuthorization(job.phase) && (
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              onClick={() => requestShowAuthorization(profile.profileId)}
+              disabled={!!job.cancel}
+              loading={!!job.authorization}
+              aria-label={`切到授权页，实例「${profile.profileName}」`}
+            >
+              切到授权页
+            </Button>
+          )}
+          <Button type="button" size="sm" variant="ghost" onClick={() => requestCancel(profile.profileId)} disabled={!!job.cancel} aria-label={`取消「${profile.profileName}」的 MOFA 导入`}>
+            取消
+          </Button>
+        </div>
       </div>
     )
   }

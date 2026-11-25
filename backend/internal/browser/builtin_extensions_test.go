@@ -179,10 +179,10 @@ func TestSyncRepairsIncompleteMofaAtTheInstalledVersion(t *testing.T) {
 	if err := manager.ExtensionDAO.SetDefaultInstall(MofaImportExtensionID, false); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Remove(filepath.Join(extension.InstallDir, "toolbar-v1-0-8.js")); err != nil {
+	if err := os.Remove(filepath.Join(extension.InstallDir, "toolbar-v1-0-9.js")); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(extension.InstallDir, "obsolete-worker.js"), []byte("old"), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(extension.InstallDir, "toolbar-v1-0-8.js"), []byte("old"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if err := manager.SyncBuiltinExtensions(); err != nil {

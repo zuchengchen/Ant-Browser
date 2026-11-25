@@ -214,6 +214,8 @@ export function BrowserMofaImport(arg1:string):Promise<Record<string, any>>;
 
 export function BrowserMofaImportCancel(arg1:string):Promise<void>;
 
+export function BrowserMofaImportShowAuthorization(arg1:string):Promise<void>;
+
 export function BrowserProfileBatchRemoveTags(arg1:Array<string>,arg2:Array<string>):Promise<void>;
 
 export function BrowserProfileBatchSetTags(arg1:Array<string>,arg2:Array<string>,arg3:boolean):Promise<void>;

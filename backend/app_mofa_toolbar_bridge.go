@@ -22,13 +22,15 @@ import (
 )
 
 const (
-	mofaToolbarPath    = "/mofa/import"
-	mofaToolbarVersion = "1.0.8"
+	mofaToolbarPath        = "/mofa/import"
+	mofaToolbarVersion     = "1.0.9"
+	mofaToolbarStream      = "application/x-ndjson"
+	mofaToolbarFocusAction = "focus_oauth"
 )
 
 type mofaToolbarSource struct {
-	site, profileDir, socket string
-	port                     int
+	site, profileDir, socket, digest string
+	port                             int
 }
 
 type mofaToolbarBridge struct {
@@ -136,6 +138,14 @@ func (b *mofaToolbarBridge) handle(a *App, w http.ResponseWriter, r *http.Reques
 		writeMofaToolbarReply(w, http.StatusServiceUnavailable, mofaToolbarReply{Error: "请等待 Ant 浏览器启动完成后重试。"})
 		return
 	}
+	if request.Action == mofaToolbarFocusAction {
+		if err := a.showMofaToolbarAuthorization(r.Context(), request.Site, digest); err != nil {
+			writeMofaToolbarReply(w, http.StatusConflict, mofaToolbarReply{Error: err.Error()})
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
 	select {
 	case b.claims <- struct{}{}:
 	default:
@@ -148,9 +158,47 @@ func (b *mofaToolbarBridge) handle(a *App, w http.ResponseWriter, r *http.Reques
 		writeMofaToolbarReply(w, http.StatusForbidden, mofaToolbarReply{Error: "无法确认 MOFA 工具栏所属的运行实例，请重开工具栏后重试。"})
 		return
 	}
-	result, err := a.browserMofaImport(profileID, &source)
+	w.Header().Add("Vary", "Accept")
+	serveMofaToolbarImport(w, r.Header.Get("Accept") == mofaToolbarStream, func(progress func(string)) (map[string]interface{}, error) {
+		return a.browserMofaImport(profileID, &source, progress)
+	})
+}
+
+func serveMofaToolbarImport(w http.ResponseWriter, stream bool, run func(func(string)) (map[string]interface{}, error)) {
+	var send func(mofaToolbarReply)
+	var progress func(string)
+	if stream {
+		w.Header().Set("Content-Type", mofaToolbarStream)
+		controller := http.NewResponseController(w)
+		encoder := json.NewEncoder(w)
+		disconnected := false
+		send = func(reply mofaToolbarReply) {
+			if disconnected {
+				return
+			}
+			// A closed or stalled status tab must not hold up the import.
+			_ = controller.SetWriteDeadline(time.Now().Add(2 * time.Second))
+			disconnected = encoder.Encode(reply) != nil || controller.Flush() != nil
+			if !disconnected {
+				_ = controller.SetWriteDeadline(time.Time{})
+			}
+		}
+		progress = func(phase string) {
+			switch phase {
+			case "checking", mofaOAuthWaitingPhase, mofaOAuthLoginRequiredPhase, "saving":
+				send(mofaToolbarReply{Phase: phase})
+			}
+		}
+	}
+
+	result, err := run(progress)
 	if err != nil {
-		writeMofaToolbarReply(w, http.StatusConflict, mofaToolbarReply{Error: err.Error()})
+		reply := mofaToolbarReply{Error: err.Error()}
+		if stream {
+			send(reply)
+		} else {
+			writeMofaToolbarReply(w, http.StatusConflict, reply)
+		}
 		return
 	}
 	response := map[string]interface{}{
@@ -160,12 +208,18 @@ func (b *mofaToolbarBridge) handle(a *App, w http.ResponseWriter, r *http.Reques
 	if schedulable, ok := result["schedulable"].(bool); ok {
 		response["schedulable"] = schedulable
 	}
-	writeMofaToolbarReply(w, http.StatusOK, mofaToolbarReply{Result: response})
+	reply := mofaToolbarReply{Result: response}
+	if stream {
+		send(reply)
+	} else {
+		writeMofaToolbarReply(w, http.StatusOK, reply)
+	}
 }
 
 type mofaToolbarRequest struct {
-	Site  string `json:"site"`
-	Proof string `json:"proof"`
+	Site   string `json:"site"`
+	Proof  string `json:"proof"`
+	Action string `json:"action"`
 }
 
 func readMofaToolbarRequest(w http.ResponseWriter, r *http.Request) (mofaToolbarRequest, string, bool) {
@@ -177,6 +231,9 @@ func readMofaToolbarRequest(w http.ResponseWriter, r *http.Request) (mofaToolbar
 	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 2<<10))
 	decoder.DisallowUnknownFields()
 	if decoder.Decode(&request) != nil || decoder.Decode(new(json.RawMessage)) != io.EOF || len(request.Proof) != 64 {
+		return request, "", false
+	}
+	if request.Action != "" && request.Action != mofaToolbarFocusAction {
 		return request, "", false
 	}
 	site, err := normalizeMofaSite(request.Site)
@@ -192,6 +249,7 @@ func readMofaToolbarRequest(w http.ResponseWriter, r *http.Request) (mofaToolbar
 }
 
 type mofaToolbarReply struct {
+	Phase  string                 `json:"phase,omitempty"`
 	Result map[string]interface{} `json:"result,omitempty"`
 	Error  string                 `json:"error,omitempty"`
 }
@@ -264,7 +322,7 @@ func (b *mofaToolbarBridge) claim(parent context.Context, a *App, site, digest s
 	if err != nil || !b.claimDocument(ctx, instance, target.tabID, tabURL, digest) {
 		return "", mofaToolbarSource{}
 	}
-	return target.profileID, mofaToolbarSource{site: site, port: target.port, profileDir: target.profileDir, socket: instance.socket}
+	return target.profileID, mofaToolbarSource{site: site, port: target.port, profileDir: target.profileDir, socket: instance.socket, digest: digest}
 }
 
 func (b *mofaToolbarBridge) claimDocument(ctx context.Context, instance mofaBrowser, tabID, tabURL, digest string) bool {

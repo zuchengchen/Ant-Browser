@@ -14,8 +14,9 @@ import (
 )
 
 var (
-	mofaTargetID   = regexp.MustCompile(`^[A-Fa-f0-9]{32}$`)
-	errMofaBrowser = errors.New("无法连接所选实例，请确认浏览器窗口仍然打开")
+	mofaTargetID                = regexp.MustCompile(`^[A-Fa-f0-9]{32}$`)
+	errMofaBrowser              = errors.New("无法连接所选实例，请确认浏览器窗口仍然打开")
+	errMofaBrowserLoginRequired = errors.New("请在所选浏览器实例中登录 ChatGPT 后重新导入")
 )
 
 type mofaBrowser struct {
@@ -70,6 +71,24 @@ func (b mofaBrowser) openBackgroundTab(ctx context.Context) (chatGPTPageTarget, 
 	return chatGPTPageTarget{ID: id, Socket: "ws://" + b.address + "/devtools/page/" + id}, closeTab, nil
 }
 
+func (b mofaBrowser) activateOAuthTab(ctx context.Context, targetID string) error {
+	call, closeCDP, err := chatGPTCDP(ctx, chatGPTPageTarget{Socket: b.socket})
+	if err != nil {
+		return errMofaOAuthClosed
+	}
+	defer closeCDP()
+	params := map[string]any{"targetId": targetID}
+	result, err := call("Target.getTargetInfo", params)
+	info, _ := result["targetInfo"].(map[string]any)
+	if err != nil || info["targetId"] != targetID || info["type"] != "page" || ctx.Err() != nil {
+		return errMofaOAuthClosed
+	}
+	if _, err := call("Target.activateTarget", params); err != nil {
+		return errMofaOAuthClosed
+	}
+	return nil
+}
+
 func (b mofaBrowser) signedInEmail(ctx context.Context, profileDir string) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, 25*time.Second)
 	defer cancel()
@@ -98,6 +117,9 @@ func (b mofaBrowser) signedInEmail(ctx context.Context, profileDir string) (stri
 	defer ticker.Stop()
 	for {
 		result, err := evaluateMofaEmail(page)
+		if errors.Is(err, errMofaBrowserLoginRequired) {
+			return "", err
+		}
 		if err == nil {
 			switch result["status"] {
 			case "verified":
@@ -127,6 +149,10 @@ func evaluateMofaEmail(page gptSessionCall) (map[string]any, error) {
 	frameID, _ := frame["id"].(string)
 	if frameID == "" {
 		return nil, errMofaBrowser
+	}
+	address, _ := frame["url"].(string)
+	if mofaAuthPagePhase(address) == mofaOAuthLoginRequiredPhase {
+		return nil, errMofaBrowserLoginRequired
 	}
 	world, err := page("Page.createIsolatedWorld", map[string]any{"frameId": frameID, "worldName": "ant-mofa-account"})
 	if err != nil {

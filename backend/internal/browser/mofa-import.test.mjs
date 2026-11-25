@@ -14,6 +14,7 @@ const bridgePort = 19441
 const healthy = {status: 'skipped', accountId: 42, groupId: 7, inTargetGroup: true}
 const permitKey = 'mofa-toolbar-permit'
 const importTab = {id: 50, windowId: 4, incognito: false}
+const importURL = `http://127.0.0.1:${bridgePort}/mofa/import`
 
 function mockGlobals(t, values) {
   for (const [key, value] of Object.entries(values)) {
@@ -83,8 +84,9 @@ test('the import only contacts the local bridge and accepts confirmed results', 
   const proof = '42'.repeat(32)
   let response = Response.json({result: healthy})
   t.mock.method(globalThis, 'fetch', async (url, options) => {
-    assert.equal(url, `http://127.0.0.1:${bridgePort}/mofa/import`)
+    assert.equal(url, importURL)
     assert.equal(options.method, 'POST')
+    assert.equal(options.headers.Accept, 'application/x-ndjson')
     assert.equal(options.credentials, 'omit')
     assert.equal(options.redirect, 'error')
     assert.equal(options.referrerPolicy, 'no-referrer')
@@ -98,6 +100,49 @@ test('the import only contacts the local bridge and accepts confirmed results', 
   await assert.rejects(requestMofaImport({site, bridgePort}, proof), /未收到 Ant 的导入结果/)
   response = Response.json({result: healthy}, {status: 500})
   await assert.rejects(requestMofaImport({site, bridgePort}, proof), /未收到 Ant 的导入结果/)
+  assert.equal(fetch.mock.callCount(), 4)
+})
+
+function importStream() {
+  const encoder = new TextEncoder()
+  let stream
+  const body = new ReadableStream({start(controller) { stream = controller }})
+  return {
+    response: new Response(body, {headers: {'Content-Type': 'application/x-ndjson; charset=utf-8'}}),
+    write(text) { stream.enqueue(typeof text === 'string' ? encoder.encode(text) : text) },
+    close() { stream.close() },
+  }
+}
+
+test('the import stream reports complete phase records before a result arrives', async t => {
+  const stream = importStream()
+  t.mock.method(globalThis, 'fetch', async () => stream.response)
+  const phases = []
+  const result = requestMofaImport({site, bridgePort}, '42'.repeat(32), phase => phases.push(phase))
+  stream.write('{"phase":"checking"}\n{"phase":"waiting_for_o')
+  await setImmediate()
+  assert.deepEqual(phases, ['checking'])
+  stream.write('auth"}\r\n{"phase":"saving"}\n')
+  await setImmediate()
+  assert.deepEqual(phases, ['checking', 'waiting_for_oauth', 'saving'])
+  stream.write(JSON.stringify({result: healthy}) + '\n')
+  assert.deepEqual(await result, healthy)
+})
+
+test('the import stream preserves a split UTF-8 error and rejects a stream without a result', async t => {
+  let stream = importStream()
+  t.mock.method(globalThis, 'fetch', async () => stream.response)
+  const proof = '42'.repeat(32)
+  const error = new TextEncoder().encode('{"error":"授权页已关闭"}\n')
+  const failed = requestMofaImport({site, bridgePort}, proof)
+  stream.write(error.slice(0, 11))
+  stream.write(error.slice(11))
+  await assert.rejects(failed, /授权页已关闭/)
+  stream = importStream()
+  const disconnected = requestMofaImport({site, bridgePort}, proof)
+  stream.write('{"phase":"checking"}\n{"result":')
+  stream.close()
+  await assert.rejects(disconnected, /未收到 Ant 的导入结果/)
 })
 
 test('only the authorized background tab can claim its permit after the worker restarts', async t => {
@@ -141,7 +186,7 @@ test('only the authorized background tab can claim its permit after the worker r
   const extensionDir = new URL('./builtinassets/mofa-import/', import.meta.url)
   const manifest = JSON.parse(await readFile(new URL('manifest.json', extensionDir), 'utf8'))
   const worker = manifest.background.service_worker
-  assert.notEqual(worker, 'toolbar.js')
+  assert.equal(worker, `toolbar-v${manifest.version.replaceAll('.', '-')}.js`)
   await import(new URL(worker, extensionDir).href)
   await events.action({...launch, incognito: true})
   assert.equal(created.length, 0)
@@ -171,7 +216,11 @@ test('only the authorized background tab can claim its permit after the worker r
 })
 
 function mockImportPage(t, {href = importPage, incognito = false, child = false, permit = false} = {}) {
-  const labels = {site: {textContent: ''}, status: {textContent: ''}}
+  const button = Object.assign(new EventTarget(), {hidden: true, disabled: false})
+  const labels = {
+    site: {textContent: ''}, status: {textContent: ''},
+    'show-authorization': button, 'authorization-status': {textContent: ''},
+  }
   const view = {}
   view.top = child ? {} : view
   const location = {href}
@@ -184,7 +233,7 @@ function mockImportPage(t, {href = importPage, incognito = false, child = false,
     history: {replaceState: (_, __, value) => { location.href = value }},
     chrome: {extension: {inIncognitoContext: incognito}, runtime: {getURL: path => base + path}, storage: {session}, tabs: {getCurrent}},
   })
-  return {view, labels, location, getCurrent, session, clock}
+  return {view, labels, button, location, getCurrent, session, clock}
 }
 
 for (const [name, options, tabReads] of [
@@ -202,8 +251,77 @@ for (const [name, options, tabReads] of [
     assert.equal(fetch.mock.callCount(), 0)
     assert.equal(page.view.antMofaClaimBridge, undefined)
     assert.match(page.labels.status.textContent, /请点击浏览器工具栏/)
+    assert.equal(page.button.hidden, true)
   })
 }
+
+test('only an explicit click during this import can focus its authorization tab', async t => {
+  const {view, labels, button, location} = mockImportPage(t, {permit: true})
+  const stream = importStream()
+  let opened, completeFocus
+  const requested = new Promise(resolve => { opened = resolve })
+  const focusRequests = []
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    if (url === base + 'site.json') return Response.json({site, bridgePort})
+    assert.equal(url, importURL)
+    const body = JSON.parse(options.body)
+    if (body.action) {
+      focusRequests.push(body)
+      if (focusRequests.length === 1) return new Promise(resolve => { completeFocus = resolve })
+      return new Response(null, {status: 204})
+    }
+    opened(body.proof)
+    return stream.response
+  })
+  const click = (trusted = true) => {
+    const event = new Event('click')
+    Object.defineProperty(event, 'isTrusted', {value: trusted})
+    button.dispatchEvent(event)
+  }
+  const phase = async name => {
+    stream.write(JSON.stringify({phase: name}) + '\n')
+    await setImmediate()
+  }
+  await import('./builtinassets/mofa-import/page.js?stream-with-authorization')
+  const proof = await requested
+  const digest = location.href.split('#ant-mofa-')[1]
+  assert.ok(view.antMofaClaimBridge(digest))
+  assert.equal(button.hidden, true)
+  click()
+  await phase('waiting_for_oauth')
+  assert.match(labels.status.textContent, /正在等待 OpenAI 授权/)
+  assert.equal(button.hidden, false)
+  await phase('constructor')
+  assert.match(labels.status.textContent, /正在等待 OpenAI 授权/)
+  await phase('login_required')
+  assert.match(labels.status.textContent, /登录同一个 ChatGPT 账号/)
+  click(false)
+  assert.equal(focusRequests.length, 0)
+  click()
+  click()
+  assert.deepEqual(focusRequests, [{site, proof, action: 'focus_oauth'}])
+  assert.equal(button.disabled, true)
+  completeFocus(Response.json({error: '暂时无法切到授权页'}, {status: 409}))
+  await setImmediate()
+  assert.equal(labels['authorization-status'].textContent, '暂时无法切到授权页')
+  assert.equal(button.disabled, false)
+  click()
+  await setImmediate()
+  assert.deepEqual(focusRequests[1], focusRequests[0])
+  assert.equal(labels['authorization-status'].textContent, '')
+  await phase('waiting_for_oauth')
+  assert.match(labels.status.textContent, /正在等待 OpenAI 授权/)
+  assert.equal(button.hidden, false)
+  await phase('saving')
+  assert.match(labels.status.textContent, /正在保存到 MOFA/)
+  assert.equal(button.hidden, true)
+  stream.write(JSON.stringify({result: healthy}) + '\n')
+  await setImmediate()
+  assert.match(labels.status.textContent, /本次跳过/)
+  assert.equal(location.href, importPage)
+  click()
+  assert.equal(focusRequests.length, 2)
+})
 
 test('an unavailable permit store is reported and no import starts', async t => {
   const {labels, session} = mockImportPage(t, {permit: true})

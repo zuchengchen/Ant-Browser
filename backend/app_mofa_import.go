@@ -9,27 +9,39 @@ import (
 
 const mofaImportTimeout = 8 * time.Minute
 
-func (a *App) BrowserMofaImport(profileID string) (map[string]interface{}, error) {
-	return a.browserMofaImport(profileID, nil)
+var errMofaNoAuthorization = errors.New("本次导入没有可打开的 OpenAI 授权页")
+
+type mofaImportJob struct {
+	ctx               context.Context
+	cancel            context.CancelFunc
+	toolbar           *mofaToolbarSource
+	showAuthorization func(context.Context) error
 }
 
-func (a *App) browserMofaImport(profileID string, source *mofaToolbarSource) (map[string]interface{}, error) {
+func (a *App) BrowserMofaImport(profileID string) (map[string]interface{}, error) {
+	return a.browserMofaImport(profileID, nil, nil)
+}
+
+func (a *App) browserMofaImport(profileID string, source *mofaToolbarSource, notify func(string)) (map[string]interface{}, error) {
 	profileID = strings.TrimSpace(profileID)
 	if a.browserMgr == nil || profileID == "" {
 		return nil, errors.New("请选择一个运行中的实例")
 	}
-	ctx, finish, err := a.beginMofaImport(profileID)
+	job, finish, err := a.beginMofaImport(profileID, source)
 	if err != nil {
 		return nil, err
 	}
 	defer finish()
 	progress := func(phase string) {
 		a.emitRuntimeEvent("browser:mofa-import:progress", map[string]string{"profileId": profileID, "phase": phase})
+		if notify != nil {
+			notify(phase)
+		}
 	}
 	progress("checking")
-	result, err := a.importMofaProfile(ctx, profileID, source, progress)
+	result, err := a.importMofaProfile(job, profileID, progress)
 	if err != nil {
-		switch ctx.Err() {
+		switch job.ctx.Err() {
 		case context.Canceled:
 			return nil, errors.New("已取消 MOFA 导入")
 		case context.DeadlineExceeded:
@@ -47,7 +59,7 @@ func (a *App) browserMofaImport(profileID string, source *mofaToolbarSource) (ma
 	return response, nil
 }
 
-func (a *App) beginMofaImport(profileID string) (context.Context, func(), error) {
+func (a *App) beginMofaImport(profileID string, source *mofaToolbarSource) (*mofaImportJob, func(), error) {
 	a.mofaImportMu.Lock()
 	defer a.mofaImportMu.Unlock()
 	if a.mofaImportJobs[profileID] != nil {
@@ -59,10 +71,11 @@ func (a *App) beginMofaImport(profileID string) (context.Context, func(), error)
 	}
 	ctx, cancel := context.WithTimeout(parent, mofaImportTimeout)
 	if a.mofaImportJobs == nil {
-		a.mofaImportJobs = make(map[string]context.CancelFunc)
+		a.mofaImportJobs = make(map[string]*mofaImportJob)
 	}
-	a.mofaImportJobs[profileID] = cancel
-	return ctx, func() {
+	job := &mofaImportJob{ctx: ctx, cancel: cancel, toolbar: source}
+	a.mofaImportJobs[profileID] = job
+	return job, func() {
 		cancel()
 		a.mofaImportMu.Lock()
 		delete(a.mofaImportJobs, profileID)
@@ -74,9 +87,42 @@ func (a *App) beginMofaImport(profileID string) (context.Context, func(), error)
 func (a *App) BrowserMofaImportCancel(profileID string) {
 	a.mofaImportMu.Lock()
 	defer a.mofaImportMu.Unlock()
-	if cancel := a.mofaImportJobs[strings.TrimSpace(profileID)]; cancel != nil {
-		cancel()
+	if job := a.mofaImportJobs[strings.TrimSpace(profileID)]; job != nil {
+		job.cancel()
 	}
+}
+
+func (a *App) BrowserMofaImportShowAuthorization(profileID string) error {
+	a.mofaImportMu.Lock()
+	job := a.mofaImportJobs[strings.TrimSpace(profileID)]
+	a.mofaImportMu.Unlock()
+	return a.showMofaImportAuthorization(context.Background(), job)
+}
+
+func (a *App) showMofaToolbarAuthorization(ctx context.Context, site, digest string) error {
+	var job *mofaImportJob
+	a.mofaImportMu.Lock()
+	for _, current := range a.mofaImportJobs {
+		if current.toolbar != nil && current.toolbar.site == site && current.toolbar.digest == digest {
+			job = current
+			break
+		}
+	}
+	a.mofaImportMu.Unlock()
+	return a.showMofaImportAuthorization(ctx, job)
+}
+
+func (a *App) showMofaImportAuthorization(ctx context.Context, job *mofaImportJob) error {
+	if job == nil || job.ctx.Err() != nil {
+		return errMofaNoAuthorization
+	}
+	a.mofaImportMu.Lock()
+	show := job.showAuthorization
+	a.mofaImportMu.Unlock()
+	if show == nil {
+		return errMofaNoAuthorization
+	}
+	return show(ctx)
 }
 
 func (a *App) claimMofaImportAccount(site, email string) (func(), error) {
@@ -97,7 +143,8 @@ func (a *App) claimMofaImportAccount(site, email string) (func(), error) {
 	}, nil
 }
 
-func (a *App) importMofaProfile(ctx context.Context, profileID string, source *mofaToolbarSource, progress func(string)) (mofaStockResult, error) {
+func (a *App) importMofaProfile(job *mofaImportJob, profileID string, progress func(string)) (mofaStockResult, error) {
+	ctx, source := job.ctx, job.toolbar
 	settings, err := a.readMofaImportSettings()
 	if err != nil {
 		return mofaStockResult{}, err
@@ -181,13 +228,14 @@ func (a *App) importMofaProfile(ctx context.Context, profileID string, source *m
 		progress("saving")
 		return client.addStockTargetGroup(ctx, email, result)
 	case "creation_required", "reauthorization_required":
-		return runMofaOAuth(ctx, &client, instance, email, result, checkOperation, progress)
+		return a.runMofaOAuth(job, &client, instance, email, result, checkOperation, progress)
 	default:
 		return mofaStockResult{}, errors.New("MOFA 未返回可处理的账号状态")
 	}
 }
 
-func runMofaOAuth(ctx context.Context, client *mofaClient, instance mofaBrowser, email string, result mofaStockResult, checkOperation func() error, progress func(string)) (mofaStockResult, error) {
+func (a *App) runMofaOAuth(job *mofaImportJob, client *mofaClient, instance mofaBrowser, email string, result mofaStockResult, checkOperation func() error, progress func(string)) (mofaStockResult, error) {
+	ctx := job.ctx
 	proxyID, err := client.stockOAuthProxyID(ctx, email, result)
 	if err != nil {
 		return mofaStockResult{}, err
@@ -199,7 +247,13 @@ func runMofaOAuth(ctx context.Context, client *mofaClient, instance mofaBrowser,
 	if err := checkOperation(); err != nil {
 		return mofaStockResult{}, err
 	}
-	code, state, err := instance.waitMofaOAuth(ctx, flow, email, func() { progress("waiting_for_oauth") })
+	setShowAuthorization := func(show func(context.Context) error) {
+		a.mofaImportMu.Lock()
+		job.showAuthorization = show
+		a.mofaImportMu.Unlock()
+	}
+	code, state, err := instance.waitMofaOAuth(ctx, flow, email, setShowAuthorization, progress)
+	setShowAuthorization(nil)
 	if err != nil {
 		return mofaStockResult{}, err
 	}

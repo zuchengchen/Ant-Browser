@@ -410,6 +410,10 @@ export function BrowserMofaImportCancel(arg1) {
   return window['go']['main']['App']['BrowserMofaImportCancel'](arg1);
 }
 
+export function BrowserMofaImportShowAuthorization(arg1) {
+  return window['go']['main']['App']['BrowserMofaImportShowAuthorization'](arg1);
+}
+
 export function BrowserProfileBatchRemoveTags(arg1, arg2) {
   return window['go']['main']['App']['BrowserProfileBatchRemoveTags'](arg1, arg2);
 }

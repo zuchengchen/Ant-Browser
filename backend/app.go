@@ -91,7 +91,7 @@ type App struct {
 	keyPouchRuntimeActive         bool
 	mofaSiteMu                    sync.Mutex
 	mofaImportMu                  sync.Mutex
-	mofaImportJobs                map[string]context.CancelFunc
+	mofaImportJobs                map[string]*mofaImportJob
 	mofaImportAccounts            map[string]struct{}
 	mofaToolbarBridge             *mofaToolbarBridge
 	backupLocalConfigPathOverride string

@@ -42,3 +42,17 @@ p {
 #status:empty {
   margin: 0;
 }
+
+#show-authorization {
+  margin: 0.9rem 0 0;
+  padding: 0.4rem 0.8rem;
+  font: inherit;
+}
+
+#authorization-status {
+  margin: 0.5rem 0 0;
+}
+
+#authorization-status:empty {
+  margin: 0;
+}

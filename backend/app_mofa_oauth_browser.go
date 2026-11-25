@@ -12,10 +12,16 @@ import (
 )
 
 var (
-	errMofaOAuthPage     = errors.New("无法打开或连接本实例的 OpenAI 授权页，请重试")
-	errMofaOAuthClosed   = errors.New("OpenAI 授权页已关闭或连接中断，请重新发起导入")
-	errMofaOAuthCallback = errors.New("OpenAI 授权回调与当前导入不匹配，请重新发起导入")
-	errMofaOAuthDenied   = errors.New("OpenAI 未授予授权，请在同一实例重新发起并完成授权")
+	errMofaOAuthPage          = errors.New("无法打开或连接本实例的 OpenAI 授权页，请重试")
+	errMofaOAuthClosed        = errors.New("OpenAI 授权页已关闭或连接中断，请重新发起导入")
+	errMofaOAuthCallback      = errors.New("OpenAI 授权回调与当前导入不匹配，请重新发起导入")
+	errMofaOAuthDenied        = errors.New("OpenAI 未授予授权，请在同一实例重新发起并完成授权")
+	errMofaOAuthLoginRequired = errors.New("OpenAI 授权需要登录，请在所选浏览器实例中登录后重新导入")
+)
+
+const (
+	mofaOAuthWaitingPhase       = "waiting_for_oauth"
+	mofaOAuthLoginRequiredPhase = "login_required"
 )
 
 type mofaOAuthCDPEvent struct {
@@ -39,14 +45,17 @@ type mofaOAuthCDPEvent struct {
 	} `json:"params"`
 }
 
-func (b mofaBrowser) waitMofaOAuth(ctx context.Context, flow mofaStockOAuth, email string, opened func()) (code, state string, err error) {
+func (b mofaBrowser) waitMofaOAuth(ctx context.Context, flow mofaStockOAuth, email string, opened func(show func(context.Context) error), progress func(string)) (code, state string, err error) {
 	ctx, cancel := context.WithTimeout(ctx, 6*time.Minute)
-	defer cancel()
 	tab, closeTab, err := b.openBackgroundTab(ctx)
 	if err != nil {
+		cancel()
 		return "", "", err
 	}
-	defer closeTab()
+	defer func() {
+		cancel()
+		closeTab()
+	}()
 	conn, err := cdpDialWebSocket(tab.Socket)
 	if err != nil {
 		return "", "", errMofaOAuthPage
@@ -102,19 +111,34 @@ func (b mofaBrowser) waitMofaOAuth(ctx context.Context, flow mofaStockOAuth, ema
 		return "", "", errMofaOAuthPage
 	}
 	chooser := mofaOAuthChooser{frameID: frameID, email: mofaStockEmail(email), state: flow.State}
-	if chooser.email != "" {
+	if chooser.email != "" || progress != nil {
 		observe, err := send("Page.enable", nil)
 		if err != nil {
 			return "", "", errMofaOAuthPage
 		}
 		_, err = readResult(observe)
-		chooser.observing = err == nil
+		chooser.observing = err == nil && chooser.email != ""
 	}
 	navigate, err := send("Page.navigate", map[string]any{"url": flow.AuthURL})
 	if err != nil {
 		return "", "", errMofaOAuthPage
 	}
-	opened()
+	if opened != nil {
+		opened(func(requestCtx context.Context) error {
+			if ctx.Err() != nil || requestCtx.Err() != nil {
+				return errMofaOAuthClosed
+			}
+			showCtx, cancel := context.WithTimeout(requestCtx, 3*time.Second)
+			defer cancel()
+			stop := context.AfterFunc(ctx, cancel)
+			defer stop()
+			return b.activateOAuthTab(showCtx, tab.ID)
+		})
+	}
+	phase := mofaOAuthWaitingPhase
+	if progress != nil {
+		progress(phase)
+	}
 	for {
 		var msg mofaOAuthCDPEvent
 		if err := conn.ReadJSON(&msg); err != nil {
@@ -127,6 +151,13 @@ func (b mofaBrowser) waitMofaOAuth(ctx context.Context, flow mofaStockOAuth, ema
 			return "", "", errMofaOAuthPage
 		}
 		if msg.Method != "Fetch.requestPaused" || msg.Params.RequestID == "" {
+			if progress != nil {
+				next := mofaAuthPagePhase(mofaOAuthMainFrameURL(msg, frameID))
+				if next != "" && next != phase {
+					phase = next
+					progress(phase)
+				}
+			}
 			if err := chooser.handle(msg, send); err != nil {
 				return "", "", errMofaOAuthClosed
 			}
@@ -155,6 +186,35 @@ func (b mofaBrowser) waitMofaOAuth(ctx context.Context, flow mofaStockOAuth, ema
 	}
 }
 
+func mofaOAuthMainFrameURL(msg mofaOAuthCDPEvent, frameID string) string {
+	switch {
+	case msg.Method == "Page.frameNavigated" && msg.Params.Frame.ID == frameID && msg.Params.Frame.ParentID == "":
+		return msg.Params.Frame.URL
+	case msg.Method == "Page.navigatedWithinDocument" && msg.Params.FrameID == frameID:
+		return msg.Params.URL
+	default:
+		return ""
+	}
+}
+
+func mofaAuthPagePhase(address string) string {
+	if address == "" {
+		return ""
+	}
+	u, err := url.Parse(address)
+	if err != nil || u.Scheme != "https" || u.Host != "auth.openai.com" || u.User != nil {
+		return ""
+	}
+	switch u.EscapedPath() {
+	case "/log-in", "/log-in/password":
+		return mofaOAuthLoginRequiredPhase
+	case "/oauth/authorize", "/choose-an-account", "/consent", "/sign-in-with-chatgpt/codex/consent":
+		return mofaOAuthWaitingPhase
+	default:
+		return ""
+	}
+}
+
 func parseMofaOAuthCallback(address, expectedState string) (code, state string, err error) {
 	if len(address) > 8192 || !strings.HasPrefix(address, mofaOAuthRedirectURI+"?") || strings.Contains(address, "#") {
 		return "", "", errMofaOAuthCallback
@@ -164,7 +224,10 @@ func parseMofaOAuthCallback(address, expectedState string) (code, state string, 
 	if err != nil || expectedState == "" || len(states) != 1 || subtle.ConstantTimeCompare([]byte(states[0]), []byte(expectedState)) != 1 {
 		return "", "", errMofaOAuthCallback
 	}
-	if values.Has("error") {
+	if errs := values["error"]; len(errs) != 0 {
+		if len(errs) == 1 && errs[0] == "login_required" {
+			return "", "", errMofaOAuthLoginRequired
+		}
 		return "", "", errMofaOAuthDenied
 	}
 	codes := values["code"]

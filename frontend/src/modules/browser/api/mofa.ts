@@ -2,7 +2,7 @@ import { EventsOn } from '../../../wailsjs/runtime/runtime'
 import { getBindings, getGoApp } from './runtime'
 
 const importStatuses = ['skipped', 'imported', 'reauthorized', 'group_added'] as const
-const importPhases = ['checking', 'waiting_for_oauth', 'saving'] as const
+const importPhases = ['checking', 'waiting_for_oauth', 'login_required', 'saving'] as const
 
 export type MofaImportPhase = typeof importPhases[number]
 
@@ -54,4 +54,12 @@ export async function cancelMofaImport(profileId: string): Promise<void> {
     throw new Error('当前桌面应用无法取消 MOFA 导入')
   }
   await bindings.BrowserMofaImportCancel(profileId)
+}
+
+export async function showMofaImportAuthorization(profileId: string): Promise<void> {
+  const bindings = await getBindings()
+  if (!bindings?.BrowserMofaImportShowAuthorization || !getGoApp()?.BrowserMofaImportShowAuthorization) {
+    throw new Error('请在已更新的 Ant Browser 桌面应用中切到授权页')
+  }
+  await bindings.BrowserMofaImportShowAuthorization(profileId)
 }
